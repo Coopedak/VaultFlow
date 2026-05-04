@@ -1,0 +1,27 @@
+# dependencies
+node_modules/
+
+# generated dashboard output
+.claude/helpers/dashboard/dashboard.html
+
+# vaultflow runtime data (lives in metrics_root, not the repo)
+*.db
+*.db-shm
+*.db-wal
+*.parquet
+watcher.pid
+watcher.log
+pending-insights.jsonl
+ranked-context.json
+discoveries/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# env / secrets
+.env
+.env.*

@@ -1,0 +1,696 @@
+# =============================================================================
+# vaultflow — Codex CLI Configuration
+# =============================================================================
+# Derived from ruflo's Claude Flow V3 config.
+# Stripped: fake Ed25519 signing, auto-push, swarm/neural infra, MCP claude-flow.
+# Kept: 15 adopted dev/analysis skills, sensible approval policy, security rules.
+#
+# Model: claude-sonnet (Mid tier — matches dev-team default)
+# Usage: codex --config .agents/config.toml <task>
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Core
+# -----------------------------------------------------------------------------
+
+model           = "claude-sonnet"
+approval_policy = "on-failure"
+sandbox_mode    = "workspace-write"
+web_search      = "cached"
+
+# -----------------------------------------------------------------------------
+# Project Documentation
+# -----------------------------------------------------------------------------
+
+project_doc_max_bytes = 65536
+
+project_doc_fallback_filenames = [
+  "AGENTS.md",
+  "CLAUDE.md",
+  ".agents.md"
+]
+
+# -----------------------------------------------------------------------------
+# Features
+# -----------------------------------------------------------------------------
+
+[features]
+child_agents_md   = true
+shell_snapshot    = true
+request_rule      = true
+remote_compaction = false   # vaultflow uses its own SQLite/Parquet pipeline
+
+# -----------------------------------------------------------------------------
+# Profiles
+# -----------------------------------------------------------------------------
+
+# Standard interactive work
+[profiles.dev]
+approval_policy = "on-failure"
+sandbox_mode    = "workspace-write"
+web_search      = "live"
+
+# Locked-down read-only analysis
+[profiles.safe]
+approval_policy = "untrusted"
+sandbox_mode    = "read-only"
+web_search      = "disabled"
+
+# Automated CI — no human in the loop
+[profiles.ci]
+approval_policy = "never"
+sandbox_mode    = "workspace-write"
+web_search      = "cached"
+
+# -----------------------------------------------------------------------------
+# History
+# -----------------------------------------------------------------------------
+
+[history]
+persistence = "save-all"
+
+# -----------------------------------------------------------------------------
+# Shell Environment
+# -----------------------------------------------------------------------------
+
+[shell_environment_policy]
+inherit = "core"
+exclude = ["*_KEY", "*_SECRET", "*_TOKEN", "*_PASSWORD", "*_CREDENTIAL"]
+
+# -----------------------------------------------------------------------------
+# Sandbox
+# -----------------------------------------------------------------------------
+
+[sandbox_workspace_write]
+writable_roots    = []
+network_access    = true
+exclude_slash_tmp = false
+
+# -----------------------------------------------------------------------------
+# Security
+# -----------------------------------------------------------------------------
+
+[security]
+input_validation          = true
+path_traversal_prevention = true
+secret_scanning           = true
+cve_scanning              = true
+max_file_size             = 10485760
+allowed_extensions        = []
+blocked_patterns          = ["\\.env$", "credentials\\.json$", "\\.pem$", "\\.key$", "\\.masterkey$", "\\.recovery$"]
+
+# -----------------------------------------------------------------------------
+# Performance
+# -----------------------------------------------------------------------------
+
+[performance]
+max_agents         = 4
+task_timeout       = 300
+memory_limit       = "512MB"
+cache_enabled      = true
+cache_ttl          = 3600
+parallel_execution = true
+
+# -----------------------------------------------------------------------------
+# Logging
+# -----------------------------------------------------------------------------
+
+[logging]
+level       = "info"
+format      = "pretty"
+destination = "stdout"
+
+# =============================================================================
+# Skills — 15 Adopted  (119 disabled)
+# =============================================================================
+# Adopted: practical dev/analysis agents that work without swarm infra.
+# Disabled: swarm coordinators, neural/SONA layers, payments, GitHub automation,
+#           V3 infra, ruflo-specific memory management.
+#
+# Trigger keywords used by vaultflow router for auto-spawn routing.
+# =============================================================================
+
+# ── ADOPTED ──────────────────────────────────────────────────────────────────
+
+[[skills.config]]
+path     = ".agents/skills/agent-coder"
+enabled  = true
+triggers = ["implement", "code", "write", "build", "create function", "add method"]
+
+[[skills.config]]
+path     = ".agents/skills/agent-researcher"
+enabled  = true
+triggers = ["research", "investigate", "find options", "compare", "what is", "how does"]
+
+[[skills.config]]
+path     = ".agents/skills/agent-reviewer"
+enabled  = true
+triggers = ["review", "check", "validate", "quality", "feedback on", "is this correct"]
+
+[[skills.config]]
+path     = ".agents/skills/agent-security-manager"
+enabled  = true
+triggers = ["security", "vulnerability", "auth", "injection", "CVE", "pentest", "owasp"]
+
+[[skills.config]]
+path     = ".agents/skills/agent-tester"
+enabled  = true
+triggers = ["test", "unit test", "integration test", "coverage", "TDD", "assert"]
+
+[[skills.config]]
+path     = ".agents/skills/agent-planner"
+enabled  = true
+triggers = ["plan", "roadmap", "strategy", "approach", "how should", "what steps"]
+
+[[skills.config]]
+path     = ".agents/skills/agent-architecture"
+enabled  = true
+triggers = ["architecture", "design", "system design", "structure", "patterns", "diagram"]
+
+[[skills.config]]
+path     = ".agents/skills/agent-code-analyzer"
+enabled  = true
+triggers = ["analyze", "analyse", "code quality", "complexity", "tech debt", "smell"]
+
+[[skills.config]]
+path     = ".agents/skills/agent-performance-analyzer"
+enabled  = true
+triggers = ["performance", "slow", "bottleneck", "optimize", "latency", "throughput"]
+
+[[skills.config]]
+path     = ".agents/skills/agent-docs-api-openapi"
+enabled  = true
+triggers = ["openapi", "swagger", "api docs", "document api", "endpoint docs"]
+
+[[skills.config]]
+path     = ".agents/skills/agent-dev-backend-api"
+enabled  = true
+triggers = ["backend", "api", "endpoint", "REST", "service layer", "controller"]
+
+[[skills.config]]
+path     = ".agents/skills/agent-code-review-swarm"
+enabled  = true
+triggers = ["code review", "deep review", "review all files", "review this PR"]
+
+[[skills.config]]
+path     = ".agents/skills/agent-migration-plan"
+enabled  = true
+triggers = ["migrate", "migration", "upgrade", "convert", "port to", "move from"]
+
+[[skills.config]]
+path     = ".agents/skills/agent-specification"
+enabled  = true
+triggers = ["spec", "specification", "requirements", "acceptance criteria", "define"]
+
+[[skills.config]]
+path     = ".agents/skills/agent-goal-planner"
+enabled  = true
+triggers = ["goal", "objective", "achieve", "action plan", "work backwards", "GOAP"]
+
+# ── DISABLED — swarm / coordination infra ────────────────────────────────────
+
+[[skills.config]]
+path    = ".agents/skills/agent-adaptive-coordinator"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-byzantine-coordinator"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-collective-intelligence-coordinator"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-consensus-coordinator"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-coordination"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-coordinator-swarm-init"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-crdt-synchronizer"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-gossip-coordinator"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-hierarchical-coordinator"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-load-balancer"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-matrix-optimizer"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-memory-coordinator"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-mesh-coordinator"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-multi-repo-swarm"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-orchestrator-task"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-queen-coordinator"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-quorum-manager"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-raft-manager"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-resource-allocator"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-scout-explorer"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-sparc-coordinator"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-swarm"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-swarm-issue"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-swarm-memory-manager"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-swarm-pr"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-sync-coordinator"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-topology-optimizer"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-v3-queen-coordinator"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-worker-specialist"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/swarm-orchestration"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/swarm-advanced"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/hive-mind"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/hive-mind-advanced"
+enabled = false
+
+# ── DISABLED — neural / ML / SONA infra ──────────────────────────────────────
+
+[[skills.config]]
+path    = ".agents/skills/agent-neural-network"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-safla-neural"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-sona-learning-optimizer"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/neural-training"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/embeddings"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/reasoningbank-agentdb"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/reasoningbank-intelligence"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agentdb-advanced"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agentdb-learning"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agentdb-memory-patterns"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agentdb-optimization"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agentdb-vector-search"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/flow-nexus-neural"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/flow-nexus-platform"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/flow-nexus-swarm"
+enabled = false
+
+# ── DISABLED — GitHub automation ──────────────────────────────────────────────
+
+[[skills.config]]
+path    = ".agents/skills/agent-github-modes"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-github-pr-manager"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-ops-cicd-github"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-pr-manager"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-project-board-sync"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-release-manager"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-release-swarm"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/github-automation"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/github-code-review"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/github-multi-repo"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/github-project-management"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/github-release-management"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/github-workflow-automation"
+enabled = false
+
+# ── DISABLED — payments / domain-specific ────────────────────────────────────
+
+[[skills.config]]
+path    = ".agents/skills/agent-agentic-payments"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-app-store"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-payments"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-trading-predictor"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/claims"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agentic-jujutsu"
+enabled = false
+
+# ── DISABLED — V3 infra (ruflo-specific rebuilds) ────────────────────────────
+
+[[skills.config]]
+path    = ".agents/skills/agent-v3-integration-architect"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-v3-memory-specialist"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-v3-performance-engineer"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-v3-security-architect"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/v3-cli-modernization"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/v3-core-implementation"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/v3-ddd-architecture"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/v3-integration-deep"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/v3-mcp-optimization"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/v3-memory-unification"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/v3-performance-optimization"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/v3-security-overhaul"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/v3-swarm-coordination"
+enabled = false
+
+# ── DISABLED — ruflo infrastructure / misc ───────────────────────────────────
+
+[[skills.config]]
+path    = ".agents/skills/agent-agent"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-automation-smart-agent"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-base-template-generator"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-benchmark-suite"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-challenges"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-code-goal-planner"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-implementer-sparc-coder"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-issue-tracker"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-pagerank-analyzer"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-production-validator"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-pseudocode"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-repo-architect"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-sandbox"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-tdd-london-swarm"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-test-long-runner"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-user-tools"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-workflow"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-workflow-automation"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/hooks-automation"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/memory-management"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/pair-programming"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/performance-analysis"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/security-audit"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/skill-builder"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/sparc-methodology"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/stream-chain"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/verification-quality"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/worker-benchmarks"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/worker-integration"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/workflow-automation"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-analyze-code-quality"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-arch-system-design"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-authentication"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-data-ml-model"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-performance-benchmarker"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-performance-monitor"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-performance-optimizer"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-refinement"
+enabled = false
+
+[[skills.config]]
+path    = ".agents/skills/agent-spec-mobile-react-native"
+enabled = false

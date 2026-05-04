@@ -1,0 +1,36 @@
+{
+  "name": "vaultflow",
+  "version": "1.0.0",
+  "description": "Claude Code intelligence layer — merges ruflo hooks with ai-optimization vault architecture",
+  "type": "module",
+  "bin": {
+    "vaultflow": "./scripts/backfill.mjs"
+  },
+  "scripts": {
+    "audit": "node .claude/helpers/audit.mjs",
+    "audit:fix": "node .claude/helpers/audit.mjs --fix",
+    "backfill": "node .claude/helpers/backfill.mjs",
+    "flush": "node .claude/helpers/flush-parquet.mjs",
+    "status": "node .claude/helpers/hook-handler.cjs status",
+    "dashboard": "node .claude/helpers/dashboard/gen.mjs",
+    "dashboard:open": "node .claude/helpers/dashboard/gen.mjs --open",
+    "dashboard:serve": "node .claude/helpers/dashboard/server.mjs",
+    "watcher": "node .claude/helpers/watcher.mjs",
+    "watcher:stop": "node .claude/helpers/watcher.mjs --stop",
+    "dict": "node .claude/helpers/dict.mjs",
+    "dict:import": "node .claude/helpers/dict.mjs --import",
+    "gen-context": "node .claude/helpers/gen-context.mjs",
+    "install-hooks": "node .claude/helpers/install-git-hooks.mjs"
+  },
+  "dependencies": {
+    "@duckdb/node-api": "^1.5.2-r.1",
+    "chokidar": "^3.6.0",
+    "express": "^4.18.2",
+    "glob": "^10.3.10",
+    "js-yaml": "^4.1.0"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "license": "MIT"
+}

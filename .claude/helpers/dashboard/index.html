@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>vaultflow dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0f1117;
+      --surface:  #1a1d27;
+      --border:   #2a2d3a;
+      --text:     #e2e8f0;
+      --muted:    #8892a4;
+      --accent:   #6366f1;
+      --accent2:  #22d3ee;
+      --green:    #4ade80;
+      --yellow:   #facc15;
+      --red:      #f87171;
+      --radius:   8px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    /* ── header ── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 24px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    header h1 {
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      color: var(--accent);
+    }
+    #status-badge {
+      font-size: 12px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      background: var(--border);
+      color: var(--muted);
+    }
+    #status-badge.ok { background: #14532d; color: var(--green); }
+    #status-badge.err { background: #7f1d1d; color: var(--red); }
+
+    /* ── nav tabs ── */
+    nav {
+      display: flex;
+      gap: 4px;
+      padding: 12px 24px 0;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+    }
+    nav button {
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 13px;
+      padding: 6px 14px 10px;
+      white-space: nowrap;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    nav button:hover { color: var(--text); }
+    nav button.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    /* ── main ── */
+    main {
+      padding: 24px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    /* ── sections ── */
+    .section { display: none; }
+    .section.active { display: block; }
+
+    /* ── stat row ── */
+    .stat-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+    }
+    .stat-card .label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-card .value { font-size: 28px; font-weight: 700; margin-top: 4px; }
+
+    /* ── chart grid ── */
+    .chart-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+      gap: 20px;
+    }
+    .chart-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+    .chart-card h2 {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 16px;
+    }
+    .chart-card canvas { max-height: 260px; }
+
+    /* ── full-width chart ── */
+    .chart-full {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .chart-full h2 {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 16px;
+    }
+    .chart-full canvas { max-height: 220px; }
+
+    /* ── tables ── */
+    .table-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 20px;
+      overflow-x: auto;
+    }
+    .table-card h2 {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 14px;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { text-align: left; padding: 6px 10px; color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--border); }
+    td { padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,0.02); }
+
+    /* ── badge ── */
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge-green  { background: #14532d; color: var(--green); }
+    .badge-blue   { background: #1e3a5f; color: var(--accent2); }
+    .badge-yellow { background: #78350f; color: var(--yellow); }
+    .badge-gray   { background: var(--border); color: var(--muted); }
+    .badge-purple { background: #2e1065; color: #a78bfa; }
+
+    /* ── promote button ── */
+    .btn-promote {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 11px;
+      padding: 2px 8px;
+      transition: all 0.15s;
+    }
+    .btn-promote:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-promote:disabled { opacity: 0.4; cursor: default; }
+
+    /* ── search ── */
+    .search-row { display: flex; gap: 10px; margin-bottom: 16px; }
+    .search-row input {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 13px;
+      padding: 7px 12px;
+      flex: 1;
+      outline: none;
+    }
+    .search-row input:focus { border-color: var(--accent); }
+    .search-row button {
+      background: var(--accent);
+      border: none;
+      border-radius: 6px;
+      color: white;
+      cursor: pointer;
+      font-size: 13px;
+      padding: 7px 16px;
+    }
+
+    /* ── stacks grid ── */
+    .stacks-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 14px;
+    }
+    .stack-project-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+    }
+    .stack-project-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent2);
+      margin-bottom: 10px;
+      word-break: break-all;
+    }
+    .stack-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+    .stack-tag {
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 10px;
+      background: var(--border);
+      color: var(--text);
+    }
+    .stack-tag.hi { background: #1e3a5f; color: var(--accent2); }
+
+    /* ── loading ── */
+    .loading { color: var(--muted); padding: 32px; text-align: center; font-size: 13px; }
+
+    /* ── mono ── */
+    .mono { font-family: 'Cascadia Code', 'Consolas', monospace; font-size: 12px; }
+
+    /* ── responsive ── */
+    @media (max-width: 600px) {
+      .chart-grid { grid-template-columns: 1fr; }
+      main { padding: 14px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>vaultflow</h1>
+  <span id="status-badge">connecting…</span>
+</header>
+
+<nav>
+  <button class="active" data-tab="overview">Overview</button>
+  <button data-tab="sessions">Sessions</button>
+  <button data-tab="edits">Edits</button>
+  <button data-tab="patterns">Patterns</button>
+  <button data-tab="tools">Tool Calls</button>
+  <button data-tab="prompts">Prompts</button>
+  <button data-tab="stacks">Stacks</button>
+  <button data-tab="dictionary">Dictionary</button>
+  <button data-tab="agents">Agents</button>
+  <button data-tab="discoveries">Discoveries</button>
+</nav>
+
+<main>
+
+  <!-- ── Overview ── -->
+  <section class="section active" id="tab-overview">
+    <div class="stat-row" id="stat-row"></div>
+    <div class="chart-full">
+      <h2>Session Activity — last 30 days</h2>
+      <canvas id="chart-sessions-daily"></canvas>
+    </div>
+    <div class="chart-grid">
+      <div class="chart-card">
+        <h2>Sessions by Project</h2>
+        <canvas id="chart-by-project"></canvas>
+      </div>
+      <div class="chart-card">
+        <h2>DB Table Row Counts</h2>
+        <canvas id="chart-table-counts"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Sessions ── -->
+  <section class="section" id="tab-sessions">
+    <div class="table-card">
+      <h2>Recent Sessions (last 50)</h2>
+      <table id="sessions-table">
+        <thead><tr>
+          <th>Started</th><th>Project</th><th>Duration</th>
+          <th>Edits</th><th>Commands</th><th>Errors</th><th>Platform</th>
+        </tr></thead>
+        <tbody id="sessions-body"><tr><td colspan="7" class="loading">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── Edits ── -->
+  <section class="section" id="tab-edits">
+    <div class="chart-card" style="margin-bottom:20px">
+      <h2>Most Edited Files — last 30 days</h2>
+      <canvas id="chart-hot-files" style="max-height:360px"></canvas>
+    </div>
+  </section>
+
+  <!-- ── Patterns ── -->
+  <section class="section" id="tab-patterns">
+    <div class="chart-card" style="margin-bottom:20px">
+      <h2>Pattern Fire Counts</h2>
+      <canvas id="chart-patterns" style="max-height:320px"></canvas>
+    </div>
+    <div class="table-card">
+      <h2>All Patterns</h2>
+      <table id="patterns-table">
+        <thead><tr>
+          <th>Pattern</th><th>Agent</th><th>Fires</th><th>Confidence</th><th>Last Fired</th><th>Promoted</th><th></th>
+        </tr></thead>
+        <tbody id="patterns-body"><tr><td colspan="7" class="loading">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── Tool Calls ── -->
+  <section class="section" id="tab-tools">
+    <div class="chart-grid" style="margin-bottom:20px">
+      <div class="chart-card">
+        <h2>Call Distribution</h2>
+        <canvas id="chart-tools-doughnut"></canvas>
+      </div>
+      <div class="chart-card">
+        <h2>Dupe Rate by Tool</h2>
+        <canvas id="chart-dupe-rate"></canvas>
+      </div>
+    </div>
+    <div class="table-card">
+      <h2>Recent Tool Calls</h2>
+      <table id="toolcalls-table">
+        <thead><tr><th>Time</th><th>Tool</th><th>Input Hash</th><th>Session</th></tr></thead>
+        <tbody id="toolcalls-body"><tr><td colspan="4" class="loading">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── Prompts ── -->
+  <section class="section" id="tab-prompts">
+    <div class="chart-card" style="margin-bottom:20px">
+      <h2>Skill Routing — last 7 days</h2>
+      <canvas id="chart-routing"></canvas>
+    </div>
+    <div class="table-card">
+      <h2>Recent Prompts</h2>
+      <table id="prompts-table">
+        <thead><tr><th>Time</th><th>Preview</th><th>Skill Routed</th></tr></thead>
+        <tbody id="prompts-body"><tr><td colspan="3" class="loading">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── Stacks ── -->
+  <section class="section" id="tab-stacks">
+    <div id="stacks-grid" class="stacks-grid"><div class="loading">Loading…</div></div>
+  </section>
+
+  <!-- ── Dictionary ── -->
+  <section class="section" id="tab-dictionary">
+    <div class="search-row">
+      <input id="dict-search-input" placeholder="Search dictionary…" />
+      <button id="dict-search-btn">Search</button>
+    </div>
+    <div class="chart-card" style="margin-bottom:20px" id="dict-chart-wrap">
+      <h2>Terms by Category</h2>
+      <canvas id="chart-dict-categories"></canvas>
+    </div>
+    <div class="table-card">
+      <h2 id="dict-table-title">Recent Terms</h2>
+      <table id="dict-table">
+        <thead><tr><th>Term</th><th>Category</th><th>Definition</th></tr></thead>
+        <tbody id="dict-body"><tr><td colspan="3" class="loading">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── Agents ── -->
+  <section class="section" id="tab-agents">
+    <div class="chart-card" style="margin-bottom:20px">
+      <h2>Agent Use Counts</h2>
+      <canvas id="chart-agents" style="max-height:320px"></canvas>
+    </div>
+    <div class="table-card">
+      <h2>Registered Agents</h2>
+      <table id="agents-table">
+        <thead><tr><th>Name</th><th>Source</th><th>Uses</th><th>Last Used</th><th>Trigger Pattern</th></tr></thead>
+        <tbody id="agents-body"><tr><td colspan="5" class="loading">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── Discoveries ── -->
+  <section class="section" id="tab-discoveries">
+    <div class="table-card">
+      <h2>Recent Discoveries</h2>
+      <table id="discoveries-table">
+        <thead><tr><th>File</th><th>Pattern</th><th>Agent</th><th>Date</th><th>Fires</th><th>Promoted</th><th>Preview</th></tr></thead>
+        <tbody id="discoveries-body"><tr><td colspan="7" class="loading">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
