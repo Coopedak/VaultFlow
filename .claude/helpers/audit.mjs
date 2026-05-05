@@ -83,7 +83,7 @@ function checkConfig() {
   if (!fs.existsSync(CONFIG_PATH)) {
     check('vaultflow config exists', 'fail',
       `Not found at ${CONFIG_PATH}`,
-      `Copy config/vaultflow.yaml to config/vaultflow.local.yaml and fill in your paths`);
+      `Copy config/vaultflow.example.yaml to config/vaultflow.yaml and fill in your paths`);
     return false;
   }
   check('vaultflow config exists', 'pass');

@@ -39,11 +39,13 @@ npm install
 
 ### 2. Configure paths
 
-`config/vaultflow.yaml` ships with placeholder paths (`YOU`). Copy it to `config/vaultflow.local.yaml` and fill in your real paths — the local file is gitignored so your paths stay private:
+`config/vaultflow.yaml` is gitignored — it never ships in the repo. Create it from the example:
 
 ```bash
-copy config\vaultflow.yaml config\vaultflow.local.yaml
+copy config\vaultflow.example.yaml config\vaultflow.yaml
 ```
+
+Then fill in your real paths. At minimum set `paths.metrics_root`.
 
 At minimum set `paths.metrics_root` — everything else uses that as a base:
 
@@ -459,9 +461,10 @@ vaultflow/
 │           ├── index.html      SPA for Express server mode
 │           └── app.js          Chart.js frontend for Express server mode
 ├── config/
-│   ├── vaultflow.yaml          Example config with placeholder paths (committed)
-│   ├── vaultflow.local.yaml    Your real config — gitignored, never leaves your machine
-│   └── resolve.cjs             Picks vaultflow.local.yaml over vaultflow.yaml at runtime
+│   ├── vaultflow.example.yaml  Template — copy this to vaultflow.yaml and fill in paths
+│   ├── vaultflow.yaml          Your working config — gitignored, never committed
+│   ├── vaultflow.local.yaml    Optional machine-specific override — also gitignored
+│   └── resolve.cjs             Picks local → yaml → example at runtime
 ├── scripts/
 │   └── backfill.mjs            CLI entry point (aliased as `vaultflow` bin)
 ├── .gitignore
