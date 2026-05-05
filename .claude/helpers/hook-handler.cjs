@@ -74,6 +74,21 @@ async function dispatch(event) {
           db.recordPrompt(sessionId, prompt, routing.skill);
           toolSummary = db.getSessionToolSummary(sessionId);
         }
+
+        // ── vault tool usage tracking ───────────────────────────────────
+        // FTS search the prompt against registered vault tools. Any match
+        // (above a BM25 rank threshold) increments that tool's use_count
+        // so the auto-promotion pipeline can surface frequently-needed tools.
+        try {
+          const matches = db.searchVaultTools(prompt, 3);
+          for (const t of matches) {
+            // bm25() returns negative values; closer to 0 = better match
+            if (t.rank < -0.5) {
+              db.incrementVaultToolUse(t.tool_id);
+              process.stderr.write(`[vaultflow] route: tool match "${t.name}" (rank ${t.rank.toFixed(2)})\n`);
+            }
+          }
+        } catch (_) {}
       } catch (_) {}
 
       // ── skill auto-injection ────────────────────────────────────────────
@@ -103,12 +118,17 @@ async function dispatch(event) {
         `entries=${entries.length} tools=${toolSummary.length}\n`
       );
 
-      const response = { decision: 'continue' };
+      const response = {};
       if (injectionContent) {
-        response.content = injectionContent;
+        response.hookSpecificOutput = {
+          hookEventName: 'UserPromptSubmit',
+          additionalContext: injectionContent,
+        };
       }
 
-      process.stdout.write(JSON.stringify(response));
+      if (Object.keys(response).length > 0) {
+        process.stdout.write(JSON.stringify(response));
+      }
       break;
     }
 
