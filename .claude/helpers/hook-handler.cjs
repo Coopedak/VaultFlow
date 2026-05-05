@@ -96,14 +96,14 @@ async function dispatch(event) {
         process.stderr.write(`[vaultflow] route: skill-loader error — ${err.message}\n`);
       }
 
-      const response = {
-        decision:     'continue',
-        routing,
-        context:      entries,
-        tool_summary: toolSummary,
-      };
+      // Only decision + optional content are valid UserPromptSubmit output fields.
+      // routing/context/tool_summary are internal — log to stderr for diagnostics.
+      process.stderr.write(
+        `[vaultflow] route: skill=${routing.skill} conf=${routing.confidence} ` +
+        `entries=${entries.length} tools=${toolSummary.length}\n`
+      );
 
-      // When we have injected content, replace the prompt via the content field
+      const response = { decision: 'continue' };
       if (injectionContent) {
         response.content = injectionContent;
       }
