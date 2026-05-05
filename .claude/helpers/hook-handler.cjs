@@ -23,6 +23,50 @@ process.on('unhandledRejection', (reason) => {
   process.exit(1);
 });
 
+// ── review flag helpers ───────────────────────────────────────────────────
+// When a sub-agent completes, a pending-review.json flag is written to
+// METRICS. The route hook reads it and injects a blocking notice into every
+// UserPromptSubmit until the PM calls clear-review (after voice-of-reason
+// returns its verdict). Voice-of-reason is excluded from triggering a new
+// flag (detected by presence of 'voice-of-reason' in the payload description).
+
+function getMetricsRoot() {
+  try {
+    const yaml    = require('js-yaml');
+    const cfgPath = require('../../config/resolve.cjs');
+    const cfg     = yaml.load(_fs.readFileSync(cfgPath, 'utf8'));
+    return (cfg.paths && cfg.paths.metrics_root) || '';
+  } catch (_) { return ''; }
+}
+
+function reviewFlagPath() {
+  return _path.join(getMetricsRoot(), 'pending-review.json');
+}
+
+function writeReviewFlag(agentInfo) {
+  const p = reviewFlagPath();
+  if (!p || !getMetricsRoot()) return;
+  try {
+    _fs.writeFileSync(p, JSON.stringify({
+      flagged_at:  new Date().toISOString(),
+      agent:       agentInfo || 'unknown',
+      cleared:     false,
+    }, null, 2), 'utf8');
+  } catch (_) {}
+}
+
+function clearReviewFlag() {
+  try { _fs.unlinkSync(reviewFlagPath()); } catch (_) {}
+}
+
+function readReviewFlag() {
+  try {
+    const p = reviewFlagPath();
+    if (!_fs.existsSync(p)) return null;
+    return JSON.parse(_fs.readFileSync(p, 'utf8'));
+  } catch (_) { return null; }
+}
+
 const DANGEROUS_PATTERNS = [
   /rm\s+-rf\s+\/(?:\s|$)/,
   /rm\s+-rf\s+\/\*/,
@@ -139,6 +183,21 @@ async function dispatch(event) {
         `entries=${entries.length} tools=${toolSummary.length}\n`
       );
 
+      // ── review gate injection ───────────────────────────────────────────
+      // If a sub-agent completed without voice-of-reason review, prepend a
+      // blocking notice to every prompt until the PM clears the flag.
+      const pendingReview = readReviewFlag();
+      if (pendingReview) {
+        const reviewNotice =
+          `\n\n⚠️ PIPELINE GATE — VOICE OF REASON REQUIRED\n` +
+          `A sub-agent ("${pendingReview.agent}") completed at ${pendingReview.flagged_at} ` +
+          `without a voice-of-reason review.\n` +
+          `You MUST dispatch the voice-of-reason agent before responding or continuing the pipeline.\n` +
+          `After voice-of-reason returns its verdict, run:\n` +
+          `  node C:/GIT/vaultflow/.claude/helpers/hook-handler.cjs clear-review\n`;
+        additionalContext = reviewNotice + (additionalContext || '');
+      }
+
       // UserPromptSubmit hook output: {"additionalContext": "..."} at top level.
       // The hookSpecificOutput wrapper is NOT the correct format for this hook.
       if (additionalContext) {
@@ -213,6 +272,12 @@ async function dispatch(event) {
     case 'session-restore': {
       const session = require('./session.cjs');
       await session.restore();
+      break;
+    }
+
+    case 'clear-review': {
+      clearReviewFlag();
+      process.stderr.write('[vaultflow] clear-review: pending review flag cleared\n');
       break;
     }
 
@@ -335,6 +400,25 @@ async function dispatch(event) {
     }
 
     case 'post-subagent': {
+      const raw = await readStdin();
+      let subagentPayload = {};
+      try { subagentPayload = JSON.parse(raw); } catch (_) {}
+
+      // Write review flag unless this was voice-of-reason itself completing
+      const agentDesc = (
+        (subagentPayload.tool_input && subagentPayload.tool_input.description) ||
+        (subagentPayload.subagent_type) ||
+        ''
+      ).toLowerCase();
+      if (!agentDesc.includes('voice-of-reason') && !agentDesc.includes('clear-review')) {
+        const agentLabel = agentDesc || 'sub-agent';
+        writeReviewFlag(agentLabel);
+        process.stderr.write(`[vaultflow] post-subagent: review flag set for "${agentLabel}"\n`);
+      } else {
+        clearReviewFlag();
+        process.stderr.write(`[vaultflow] post-subagent: voice-of-reason completed — review flag cleared\n`);
+      }
+
       const intelligence = require('./intelligence.cjs');
       const result = await intelligence.feedback(true);
       const promoted = (result && result.promoted) || 0;
