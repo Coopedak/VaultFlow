@@ -17,6 +17,7 @@ Every Claude Code session automatically:
 - **Tool usage tracking** — vault tools matched in prompts have their `use_count` incremented; tools reaching threshold are auto-promoted to DISCOVERY.md
 - **Discovers patterns** — file-type/directory patterns that fire repeatedly are promoted to `DISCOVERY.md` stubs for conversion to vault skills
 - **Archives to Parquet** — SQLite hot store drains to Parquet nightly; DuckDB UNIONs both for analytical queries that span weeks
+- **Shell tracking** — captures commands from every PowerShell session (timestamps + CWD) via profile hook and PSReadLine history tail; zero Claude tokens consumed
 
 ---
 
@@ -212,6 +213,28 @@ node .claude/helpers/watcher.mjs --daemon C:\GIT   # background daemon
 node .claude/helpers/watcher.mjs --stop            # stop daemon
 node .claude/helpers/watcher.mjs --status          # check daemon
 ```
+
+The watcher daemon also captures shell commands from your terminal sessions — no tokens consumed, data goes straight to SQLite.
+
+### Shell Tracking
+
+Every command you run in PowerShell is recorded to the `tool_calls` table with `tool_name = 'ShellHistory'`. Two capture paths run in parallel:
+
+| Path | Source | Metadata |
+|------|--------|----------|
+| **A — PSReadLine history tail** | `ConsoleHost_history.txt` polled every 3s | command only |
+| **B — Profile hook** | `shell-commands.jsonl` written by `$PROFILE` | command + timestamp + CWD |
+
+**Setup (one time):**
+
+Add this line to your PowerShell `$PROFILE`:
+```powershell
+. "C:\GIT\vaultflow\config\vaultflow-shell-tracker.ps1"
+```
+
+The script reads `metrics_root` from `vaultflow.yaml` automatically — no hardcoded paths. Path A (PSReadLine tail) requires no setup and is active whenever the watcher daemon is running.
+
+The watcher persists its read position in `metrics_root/shell-jsonl.pos` so commands written while the watcher was down are captured on next start.
 
 ### Dictionary
 

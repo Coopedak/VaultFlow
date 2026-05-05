@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node C:\\GIT\\vaultflow\\.claude\\helpers\\hook-handler.cjs pre-bash"
+            "command": "node C:/GIT/vaultflow/.claude/helpers/hook-handler.cjs pre-bash"
           }
         ]
       }
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node C:\\GIT\\vaultflow\\.claude\\helpers\\post-edit.cjs"
+            "command": "node C:/GIT/vaultflow/.claude/helpers/post-edit.cjs"
           }
         ]
       }
@@ -27,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node C:\\GIT\\vaultflow\\.claude\\helpers\\hook-handler.cjs route"
+            "command": "node C:/GIT/vaultflow/.claude/helpers/hook-handler.cjs route"
           }
         ]
       }
@@ -37,7 +37,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node C:\\GIT\\vaultflow\\.claude\\helpers\\hook-handler.cjs session-start"
+            "command": "node C:/GIT/vaultflow/.claude/helpers/hook-handler.cjs session-start"
           }
         ]
       }
@@ -47,7 +47,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node C:\\GIT\\vaultflow\\.claude\\helpers\\hook-handler.cjs session-end"
+            "command": "node C:/GIT/vaultflow/.claude/helpers/hook-handler.cjs session-end"
           }
         ]
       }
@@ -57,7 +57,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node C:\\GIT\\vaultflow\\.claude\\helpers\\hook-handler.cjs post-task"
+            "command": "node C:/GIT/vaultflow/.claude/helpers/hook-handler.cjs post-task"
           }
         ]
       }
@@ -67,7 +67,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node C:\\GIT\\vaultflow\\.claude\\helpers\\hook-handler.cjs compact-manual"
+            "command": "node C:/GIT/vaultflow/.claude/helpers/hook-handler.cjs compact-manual"
           }
         ]
       }
@@ -77,7 +77,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node C:\\GIT\\vaultflow\\.claude\\helpers\\hook-handler.cjs post-subagent"
+            "command": "node C:/GIT/vaultflow/.claude/helpers/hook-handler.cjs post-subagent"
           }
         ]
       }

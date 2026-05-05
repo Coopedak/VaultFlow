@@ -115,6 +115,7 @@ function parseMemoryFile(filePath, content) {
  */
 function reindexMemoryFile(db, filePath) {
   const fs = require('fs');
+  db.initialize(null, null);
   let content;
   try { content = fs.readFileSync(filePath, 'utf8'); } catch (_) { return; }
 

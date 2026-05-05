@@ -1,5 +1,28 @@
 'use strict';
 
+// ── debug logging ─────────────────────────────────────────────────────────
+// Captures errors that escape the main try/catch (module load failures,
+// unhandled rejections) to a log file so the full error is visible.
+const _fs   = require('fs');
+const _path = require('path');
+const DEBUG_LOG = _path.join(__dirname, '..', '..', '.debug-hook.log');
+
+function _debugLog(label, err) {
+  const line = `${new Date().toISOString()} [${label}] ${err && err.stack ? err.stack : err}\n`;
+  try { _fs.appendFileSync(DEBUG_LOG, line); } catch (_) {}
+  process.stderr.write(`[vaultflow] ${label}: ${err && err.message ? err.message : err}\n`);
+}
+
+process.on('uncaughtException', (err) => {
+  _debugLog('uncaughtException', err);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason) => {
+  _debugLog('unhandledRejection', reason instanceof Error ? reason : new Error(String(reason)));
+  process.exit(1);
+});
+
 const DANGEROUS_PATTERNS = [
   /rm\s+-rf\s+\/(?:\s|$)/,
   /rm\s+-rf\s+\/\*/,
@@ -397,7 +420,7 @@ async function dispatch(event) {
   try {
     await dispatch(event);
   } catch (err) {
-    process.stderr.write(`[vaultflow] hook-handler error (${event}): ${err.message}\n`);
+    _debugLog(`hook-handler error (${event})`, err);
   }
   process.exit(0);
 })();

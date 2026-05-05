@@ -155,6 +155,97 @@ function deriveProject(filePath) {
   return path.basename(path.dirname(filePath)) || 'unknown';
 }
 
+// ── shell history tracking (Option A + B) ────────────────────────────────
+
+const PSREADLINE_HISTORY = path.join(
+  process.env.APPDATA || os.homedir(),
+  'Microsoft', 'Windows', 'PowerShell', 'PSReadLine', 'ConsoleHost_history.txt'
+);
+const SHELL_JSONL = path.join(METRICS, 'shell-commands.jsonl');
+
+let _historyPos = -1; // -1 = not yet initialized
+let _jsonlPos   = -1;
+
+const JSONL_POS_FILE = path.join(METRICS, 'shell-jsonl.pos');
+
+// PSReadLine history: always start from end (old history = noise).
+// JSONL: persist position so commands written while watcher was down are not lost.
+function initHistoryPos() {
+  try { return fs.statSync(PSREADLINE_HISTORY).size; } catch (_) { return 0; }
+}
+
+function loadJsonlPos() {
+  try { return parseInt(fs.readFileSync(JSONL_POS_FILE, 'utf8').trim(), 10) || 0; } catch (_) { return 0; }
+}
+
+function saveJsonlPos(pos) {
+  try { fs.writeFileSync(JSONL_POS_FILE, String(pos), 'utf8'); } catch (_) {}
+}
+
+// Read bytes appended to a file since last known position.
+// Returns array of non-empty trimmed lines.
+function readNewLines(filePath, posRef) {
+  try {
+    if (!fs.existsSync(filePath)) return [];
+    const size = fs.statSync(filePath).size;
+    if (size <= posRef.pos) return [];
+    const len = size - posRef.pos;
+    const buf = Buffer.alloc(len);
+    const fd  = fs.openSync(filePath, 'r');
+    fs.readSync(fd, buf, 0, len, posRef.pos);
+    fs.closeSync(fd);
+    posRef.pos = size;
+    return buf.toString('utf8').split('\n').map(l => l.trim()).filter(Boolean);
+  } catch (_) { return []; }
+}
+
+function pollShellHistory(db) {
+  const posRef = { pos: _historyPos };
+  const lines  = readNewLines(PSREADLINE_HISTORY, posRef);
+  _historyPos  = posRef.pos;
+  if (lines.length === 0) return;
+
+  const sessionId = ensureSession(db);
+  for (const cmd of lines) {
+    try {
+      db.recordToolCall(
+        sessionId,
+        'ShellHistory',
+        JSON.stringify({ command: cmd, shell: 'powershell', source: 'psreadline-history' })
+      );
+    } catch (_) {}
+  }
+  log(`shell-history: recorded ${lines.length} command(s)`);
+}
+
+function pollShellJsonl(db) {
+  const posRef = { pos: _jsonlPos };
+  const lines  = readNewLines(SHELL_JSONL, posRef);
+  _jsonlPos    = posRef.pos;
+  if (lines.length > 0) saveJsonlPos(_jsonlPos);
+  if (lines.length === 0) return;
+
+  const sessionId = ensureSession(db);
+  for (const line of lines) {
+    try {
+      const entry = JSON.parse(line);
+      db.recordToolCall(
+        sessionId,
+        'ShellHistory',
+        JSON.stringify({
+          command:   entry.cmd,
+          shell:     entry.shell || 'powershell',
+          cwd:       entry.cwd   || null,
+          exit_code: entry.exit  != null ? entry.exit : null,
+          ts:        entry.ts    || null,
+          source:    'profile-hook',
+        })
+      );
+    } catch (_) {}
+  }
+  log(`shell-jsonl: recorded ${lines.length} command(s)`);
+}
+
 // ── watcher core ──────────────────────────────────────────────────────────
 
 let _chokidar = null;
@@ -201,6 +292,17 @@ async function startWatcher(watchDir) {
     .on('add',    f => handleChange(f, 'create'))
     .on('unlink', f => handleChange(f, 'delete'))
     .on('error',  err => log(`watcher error: ${err.message}`));
+
+  // PSReadLine: start from end (don't replay old history)
+  // JSONL: resume from persisted position (catch commands written while watcher was down)
+  _historyPos = initHistoryPos();
+  _jsonlPos   = loadJsonlPos();
+  log(`Shell history tail: pos ${_historyPos}`);
+  log(`Shell JSONL tail:   pos ${_jsonlPos} (persisted)`);
+  setInterval(() => {
+    pollShellHistory(db);
+    pollShellJsonl(db);
+  }, 3000);
 
   log('Watcher running. Press Ctrl+C to stop.');
 

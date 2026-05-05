@@ -199,8 +199,10 @@ export function listSkills() {
         names.add(entry.name.replace(/\.md$/, ''));
       } else if (entry.isDirectory()) {
         const sub = path.join(root, entry.name);
-        const subFiles = fs.readdirSync(sub).filter(f => f.endsWith('.md'));
-        if (subFiles.length > 0) names.add(entry.name);
+        try {
+          const subFiles = fs.readdirSync(sub).filter(f => f.endsWith('.md'));
+          if (subFiles.length > 0) names.add(entry.name);
+        } catch (_) {}
       }
     }
   } catch (_) {}

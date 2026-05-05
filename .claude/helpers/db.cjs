@@ -24,6 +24,14 @@ function sha256(str) {
   return createHash('sha256').update(str || '').digest('hex');
 }
 
+// Wrap raw text in FTS5 double-quote phrase syntax, escaping embedded quotes.
+// Prevents FTS5 syntax errors when the query contains operators like OR, AND, *, -.
+function ftsPhrase(raw) {
+  if (!raw || typeof raw !== 'string') return '""';
+  const escaped = raw.replace(/"/g, '""').slice(0, 500);
+  return `"${escaped}"`;
+}
+
 // ── lazy-loaded heavy deps ────────────────────────────────────────────────
 let _DatabaseSync = null;  // node:sqlite DatabaseSync
 let _DuckDBInst   = null;  // @duckdb/node-api DuckDBInstance
@@ -857,7 +865,7 @@ function searchMemory(query, limit) {
     WHERE  memory_fts MATCH ?
     ORDER  BY rank
     LIMIT  ?
-  `).all(query, limit || 10);
+  `).all(ftsPhrase(query), limit || 10);
 }
 
 /**
@@ -878,7 +886,7 @@ function searchPatterns(query, limit) {
     WHERE  patterns_fts MATCH ?
     ORDER  BY rank
     LIMIT  ?
-  `).all(query, limit || 10);
+  `).all(ftsPhrase(query), limit || 10);
 }
 
 // ── tool call telemetry ───────────────────────────────────────────────────
@@ -968,7 +976,7 @@ function searchSimilarPrompts(query, limit) {
     WHERE  prompts_fts MATCH ?
     ORDER  BY rank
     LIMIT  ?
-  `).all(query, limit || 5);
+  `).all(ftsPhrase(query), limit || 5);
 }
 
 // ── tech stack detection ──────────────────────────────────────────────────
@@ -1063,7 +1071,7 @@ function searchDictionary(query, limit) {
     WHERE  dictionary_fts MATCH ?
     ORDER  BY rank
     LIMIT  ?
-  `).all(query, limit || 10);
+  `).all(ftsPhrase(query), limit || 10);
 }
 
 /**
@@ -1152,7 +1160,7 @@ function searchVaultTools(query, limit) {
     WHERE  vault_tools_fts MATCH ?
     ORDER  BY rank
     LIMIT  ?
-  `).all(query, limit || 10);
+  `).all(ftsPhrase(query), limit || 10);
 }
 
 // ── agent registry ────────────────────────────────────────────────────────
