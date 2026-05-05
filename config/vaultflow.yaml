@@ -23,6 +23,11 @@ paths:
   # Glob pattern for all project CLAUDE.md files
   claude_glob: "C:/GIT/*/CLAUDE.md"
 
+  # Projects to exclude from wiki/CLAUDE.md backfill (folder name matching)
+  exclude_projects:
+    - "PSI.All"
+    - "PSI-Wiki-Site"
+
   # Vault tool registry
   vault_tools_index: "C:/Users/YOU/vault/tools/index.md"
 

@@ -75,9 +75,20 @@ async function collectFiles(cfg) {
   const seen = new Set();
   const files = [];
 
+  // Build exclusion set from config (matched against path segments)
+  const excludeProjects = new Set(
+    (cfg.paths.exclude_projects || []).map(p => p.toLowerCase())
+  );
+
+  function isExcluded(absPath) {
+    if (excludeProjects.size === 0) return false;
+    const normalized = absPath.replace(/\\/g, '/');
+    return normalized.split('/').some(seg => excludeProjects.has(seg.toLowerCase()));
+  }
+
   function add(p) {
     const abs = path.resolve(p);
-    if (!seen.has(abs)) {
+    if (!seen.has(abs) && !isExcluded(abs)) {
       seen.add(abs);
       files.push(abs);
     }
