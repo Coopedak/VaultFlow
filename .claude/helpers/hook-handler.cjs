@@ -139,7 +139,7 @@ async function dispatch(event) {
       const raw = await readStdin();
       let input = {};
       try { input = JSON.parse(raw); } catch (_) {}
-      const prompt = sanitizeString((input.tool_input && input.tool_input.prompt) || '', 8000);
+      const prompt = sanitizeString(input.prompt || (input.tool_input && input.tool_input.prompt) || '', 8000);
 
       const router      = require('./router.cjs');
       const intelligence = require('./intelligence.cjs');
@@ -149,7 +149,6 @@ async function dispatch(event) {
 
       // ── record prompt in DB ─────────────────────────────────────────────
       let sessionId  = null;
-      let toolSummary = [];
       try {
         const db      = require('./db.cjs');
         const session = require('./session.cjs');
@@ -158,7 +157,6 @@ async function dispatch(event) {
         if (sess) {
           sessionId = sess.id;
           db.recordPrompt(sessionId, prompt, routing.skill);
-          toolSummary = db.getSessionToolSummary(sessionId);
         }
 
         // ── vault tool usage tracking ───────────────────────────────────
@@ -199,22 +197,30 @@ async function dispatch(event) {
 
       process.stderr.write(
         `[vaultflow] route: skill=${routing.skill} conf=${routing.confidence} ` +
-        `entries=${entries.length} tools=${toolSummary.length}\n`
+        `entries=${entries.length}\n`
       );
 
       // ── review gate injection ───────────────────────────────────────────
       // If a sub-agent completed without voice-of-reason review, prepend a
       // blocking notice to every prompt until the PM clears the flag.
+      // Flags older than 2 hours are auto-expired to avoid blocking forever.
       const pendingReview = readReviewFlag();
       if (pendingReview) {
-        const reviewNotice =
-          `\n\n⚠️ PIPELINE GATE — VOICE OF REASON REQUIRED\n` +
-          `A sub-agent ("${pendingReview.agent}") completed at ${pendingReview.flagged_at} ` +
-          `without a voice-of-reason review.\n` +
-          `You MUST dispatch the voice-of-reason agent before responding or continuing the pipeline.\n` +
-          `After voice-of-reason returns its verdict, run:\n` +
-          `  node C:/GIT/vaultflow/.claude/helpers/hook-handler.cjs clear-review\n`;
-        additionalContext = reviewNotice + (additionalContext || '');
+        const ageMs = pendingReview.flagged_at
+          ? Date.now() - new Date(pendingReview.flagged_at).getTime()
+          : 0;
+        if (ageMs > 2 * 3600 * 1000) {
+          clearReviewFlag(); // stale — auto-expire, don't block
+        } else {
+          const reviewNotice =
+            `\n\n⚠️ PIPELINE GATE — VOICE OF REASON REQUIRED\n` +
+            `A sub-agent ("${pendingReview.agent}") completed at ${pendingReview.flagged_at} ` +
+            `without a voice-of-reason review.\n` +
+            `You MUST dispatch the voice-of-reason agent before responding or continuing the pipeline.\n` +
+            `After voice-of-reason returns its verdict, run:\n` +
+            `  node C:/GIT/vaultflow/.claude/helpers/hook-handler.cjs clear-review\n`;
+          additionalContext = reviewNotice + (additionalContext || '');
+        }
       }
 
       // UserPromptSubmit hook output: {"additionalContext": "..."} at top level.
@@ -362,21 +368,6 @@ async function dispatch(event) {
           process.stderr.write(`[vaultflow] session-end: auto-promoted vault_tool "${tool.name}" (use_count=${tool.use_count})\n`);
         }
 
-        // ── dictionary term frequency ─────────────────────────────────
-        // Terms appearing >= 3 times in session prompts get auto-added.
-        const STOP_WORDS = new Set(['this','that','with','from','have','been','will','when','then','what','into','over','also','some','they','them','than','each','more','like','just','even','most','such','only','both','very','here','where','which','your','their','there','these','those','about','after','before','between','should','could','would','other','first','second','third']);
-        const termFreq   = {};
-        for (const row of db.getLastSessionPrompts()) {
-          const words = (row.prompt_text || '').toLowerCase().match(/\b[a-z][a-z0-9_-]{3,}\b/g) || [];
-          for (const w of words) { termFreq[w] = (termFreq[w] || 0) + 1; }
-        }
-        const knownTerms = db.getDictionaryTermSet();
-        for (const [term, count] of Object.entries(termFreq)) {
-          if (count >= 3 && !knownTerms.has(term) && !STOP_WORDS.has(term) && term.length >= 5) {
-            db.upsertDictionaryEntry(term, 'pattern', `Auto-detected: appeared ${count}x in session prompts. Review and update definition.`, 'session-auto');
-            process.stderr.write(`[vaultflow] session-end: auto-added dictionary term "${term}" (${count}x in prompts)\n`);
-          }
-        }
       } catch (err) {
         process.stderr.write(`[vaultflow] session-end: auto-promotion error — ${err.message}\n`);
       }
@@ -391,6 +382,31 @@ async function dispatch(event) {
       if (promoted > 0) {
         process.stderr.write(`[vaultflow] post-task: ${promoted} entries promoted\n`);
       }
+
+      // ── dictionary term frequency ─────────────────────────────────────────
+      // Terms appearing >= 3 times in session prompts get auto-added.
+      // Runs after the model responds (Stop hook) rather than at session shutdown
+      // to avoid heavy synchronous I/O during process exit.
+      try {
+        const db = require('./db.cjs');
+        db.initialize(null, null);
+        const STOP_WORDS = new Set(['this','that','with','from','have','been','will','when','then','what','into','over','also','some','they','them','than','each','more','like','just','even','most','such','only','both','very','here','where','which','your','their','there','these','those','about','after','before','between','should','could','would','other','first','second','third']);
+        const termFreq   = {};
+        for (const row of db.getLastSessionPrompts()) {
+          const words = (row.prompt_text || '').toLowerCase().match(/\b[a-z][a-z0-9_-]{3,}\b/g) || [];
+          for (const w of words) { termFreq[w] = (termFreq[w] || 0) + 1; }
+        }
+        const knownTerms = db.getDictionaryTermSet();
+        for (const [term, count] of Object.entries(termFreq)) {
+          if (count >= 3 && !knownTerms.has(term) && !STOP_WORDS.has(term) && term.length >= 5) {
+            db.upsertDictionaryEntry(term, 'pattern', `Auto-detected: appeared ${count}x in session prompts. Review and update definition.`, 'session-auto');
+            process.stderr.write(`[vaultflow] post-task: auto-added dictionary term "${term}" (${count}x in prompts)\n`);
+          }
+        }
+      } catch (err) {
+        process.stderr.write(`[vaultflow] post-task: dict term freq error — ${err.message}\n`);
+      }
+
       try {
         const { doSync } = await import('./auto-memory-hook.mjs');
         const syncResult = await doSync();

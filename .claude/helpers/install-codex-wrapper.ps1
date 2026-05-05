@@ -1,31 +1,33 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-    Installs the vaultflow Copilot CLI wrapper into your PowerShell profile.
+    Installs the vaultflow Codex CLI wrapper into your PowerShell profile.
 
 .DESCRIPTION
-    Adds a 'ghcopilot' function to your $PROFILE that wraps 'gh copilot' with
-    vaultflow session tracking, without hijacking the real GitHub Copilot CLI.
+    Adds a 'vaultflow-codex' function to your $PROFILE that wraps 'codex' with
+    vaultflow session tracking, without shadowing the real Codex CLI.
     After installation:
 
-        ghcopilot suggest "how do I tar a directory?"
-        ghcopilot explain "find . -name '*.log' -mtime +7 -delete"
+        vaultflow-codex "refactor this function to be async"
+        vaultflow-codex --help
+
+    The real 'codex' command remains fully available and is never overridden.
 
     To uninstall: run with -Uninstall flag, or remove the marked block
     from your PowerShell profile manually.
 
 .PARAMETER Uninstall
-    Remove the copilot wrapper from the profile instead of installing.
+    Remove the codex wrapper from the profile instead of installing.
 
 .PARAMETER ProfilePath
     Override the profile file to modify (default: $PROFILE).
 
 .EXAMPLE
     # Install
-    powershell -File install-copilot-wrapper.ps1
+    powershell -File install-codex-wrapper.ps1
 
     # Uninstall
-    powershell -File install-copilot-wrapper.ps1 -Uninstall
+    powershell -File install-codex-wrapper.ps1 -Uninstall
 #>
 
 param(
@@ -33,16 +35,16 @@ param(
     [string]$ProfilePath = $PROFILE
 )
 
-$GUARD_START = '# ── vaultflow copilot wrapper (start) ──'
-$GUARD_END   = '# ── vaultflow copilot wrapper (end) ──'
-$WRAPPER     = Join-Path $PSScriptRoot 'copilot-wrapper.ps1'
+$GUARD_START = '# ── vaultflow codex wrapper (start) ──'
+$GUARD_END   = '# ── vaultflow codex wrapper (end) ──'
+$WRAPPER     = Join-Path $PSScriptRoot 'codex-wrapper.ps1'
 
 $BLOCK = @"
 
 $GUARD_START
-# Installed by: $PSScriptRoot\install-copilot-wrapper.ps1
+# Installed by: $PSScriptRoot\install-codex-wrapper.ps1
 # To uninstall: run the installer with -Uninstall
-function ghcopilot {
+function vaultflow-codex {
     & '$WRAPPER' @args
 }
 $GUARD_END
@@ -65,14 +67,14 @@ if ($null -eq $current) { $current = '' }
 
 if ($Uninstall) {
     if ($current -notmatch [regex]::Escape($GUARD_START)) {
-        Write-Host 'vaultflow copilot wrapper not found in profile — nothing to remove.'
+        Write-Host 'vaultflow codex wrapper not found in profile — nothing to remove.'
         exit 0
     }
     # Remove the block between the guards (inclusive)
     $pattern = "(?s)\r?\n$([regex]::Escape($GUARD_START)).*?$([regex]::Escape($GUARD_END))\r?\n?"
     $cleaned = $current -replace $pattern, ''
     Set-Content $ProfilePath $cleaned -NoNewline
-    Write-Host "Removed copilot wrapper from: $ProfilePath"
+    Write-Host "Removed codex wrapper from: $ProfilePath"
     exit 0
 }
 
@@ -90,20 +92,20 @@ if (-not (Test-Path $WRAPPER)) {
     exit 1
 }
 
-# Verify gh copilot is available
-if (-not (Get-Command gh -ErrorAction SilentlyContinue)) {
-    Write-Warning "'gh' (GitHub CLI) not found in PATH. Install it from https://cli.github.com before using 'copilot'."
+# Verify codex is available
+if (-not (Get-Command codex -ErrorAction SilentlyContinue)) {
+    Write-Warning "'codex' not found in PATH. Install it before using 'vaultflow-codex'."
 }
 
 Add-Content $ProfilePath $BLOCK
-Write-Host "Installed copilot wrapper in: $ProfilePath"
+Write-Host "Installed codex wrapper in: $ProfilePath"
 Write-Host ""
 Write-Host "Reload your profile with:"
 Write-Host "    . `$PROFILE"
 Write-Host ""
 Write-Host "Then use:"
-Write-Host "    ghcopilot suggest `"how do I list all git branches?`""
-Write-Host "    ghcopilot explain `"git rebase -i HEAD~3`""
+Write-Host "    vaultflow-codex `"refactor this function to be async`""
+Write-Host "    vaultflow-codex --help"
 Write-Host ""
-Write-Host "The real GitHub Copilot CLI remains available as:"
-Write-Host "    copilot"
+Write-Host "The real Codex CLI remains available as:"
+Write-Host "    codex"
