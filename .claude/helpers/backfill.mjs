@@ -218,13 +218,19 @@ function parseMemoryFile(filePath, content) {
 // ── registry backfill helpers ─────────────────────────────────────────────
 
 /**
- * Parse a markdown index file (table or list format) into [{name, desc}].
- * Reuses the same three formats supported by router.cjs.
+ * Parse a markdown index file into [{name, desc}].
+ *
+ * Handles four formats:
+ *   1. Table row:    | [name](path) | ... | description |
+ *   2. List + link:  - [name](path) — description
+ *   3. Bold list:    - **name** — description
+ *   4. H3 section:   ### name\n...\ndescription paragraph  (vault tools format)
  */
 function parseIndexFile(content) {
   const entries = [];
   const seen    = new Set();
 
+  // ── pass 1: line-by-line formats (table / list) ──────────────────────────
   for (const raw of content.split('\n')) {
     const line = raw.trim();
     if (!line) continue;
@@ -262,6 +268,27 @@ function parseIndexFile(content) {
       seen.add(name);
       entries.push({ name, desc });
     }
+  }
+
+  // ── pass 2: H3 section format (### tool-name + description paragraph) ───
+  // Used by vault/tools/index.md — each tool is a ### heading with
+  // metadata bullets followed by a free-text description paragraph.
+  const h3Sections = content.split(/^(?=### )/m);
+  for (const section of h3Sections) {
+    const firstLine = section.split('\n')[0];
+    if (!firstLine.startsWith('### ')) continue;
+
+    const name = firstLine.slice(4).trim();
+    if (!name || seen.has(name)) continue;
+
+    // Description: last non-empty, non-bullet, non-metadata line in the section
+    const bodyLines = section.split('\n').slice(1)
+      .map(l => l.trim())
+      .filter(l => l && !l.startsWith('-') && !l.startsWith('*') && !l.startsWith('`') && !l.startsWith('#') && l !== '---');
+
+    const desc = bodyLines[bodyLines.length - 1] || '';
+    seen.add(name);
+    entries.push({ name, desc });
   }
 
   return entries;
