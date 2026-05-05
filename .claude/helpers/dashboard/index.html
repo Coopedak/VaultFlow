@@ -251,6 +251,70 @@
     }
     .stack-tag.hi { background: #1e3a5f; color: var(--accent2); }
 
+    /* ── control panel ── */
+    .control-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .control-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+    .control-card h2 {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 14px;
+    }
+    .control-card p {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 12px;
+      line-height: 1.6;
+    }
+    .btn-action {
+      background: var(--accent);
+      border: none;
+      border-radius: 6px;
+      color: white;
+      cursor: pointer;
+      font-size: 13px;
+      padding: 8px 18px;
+      margin-right: 8px;
+      margin-bottom: 8px;
+      transition: opacity 0.15s;
+    }
+    .btn-action:hover { opacity: 0.85; }
+    .btn-action:disabled { opacity: 0.4; cursor: default; }
+    .btn-action.danger { background: #dc2626; }
+    .btn-action.secondary { background: var(--border); color: var(--text); }
+    .ctrl-status {
+      font-size: 12px;
+      margin-top: 10px;
+      color: var(--muted);
+      min-height: 18px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .ctrl-status.ok   { color: var(--green); }
+    .ctrl-status.err  { color: var(--red); }
+    .watcher-badge {
+      display: inline-block;
+      padding: 2px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 12px;
+    }
+    .watcher-badge.running { background: #14532d; color: var(--green); }
+    .watcher-badge.stopped { background: #7f1d1d; color: var(--red); }
+
     /* ── loading ── */
     .loading { color: var(--muted); padding: 32px; text-align: center; font-size: 13px; }
 
@@ -278,10 +342,12 @@
   <button data-tab="patterns">Patterns</button>
   <button data-tab="tools">Tool Calls</button>
   <button data-tab="prompts">Prompts</button>
+  <button data-tab="memory">Memory</button>
   <button data-tab="stacks">Stacks</button>
   <button data-tab="dictionary">Dictionary</button>
   <button data-tab="agents">Agents</button>
   <button data-tab="discoveries">Discoveries</button>
+  <button data-tab="control">⚙ Control</button>
 </nav>
 
 <main>
@@ -427,6 +493,80 @@
         <thead><tr><th>File</th><th>Pattern</th><th>Agent</th><th>Date</th><th>Fires</th><th>Promoted</th><th>Preview</th></tr></thead>
         <tbody id="discoveries-body"><tr><td colspan="7" class="loading">Loading…</td></tr></tbody>
       </table>
+    </div>
+  </section>
+
+  <!-- ── Memory ── -->
+  <section class="section" id="tab-memory">
+    <div class="search-row">
+      <input id="memory-search-input" placeholder="Search memory (FTS5 BM25)…" />
+      <button id="memory-search-btn">Search</button>
+    </div>
+    <div class="table-card">
+      <h2 id="memory-table-title">Memory Search Results</h2>
+      <table id="memory-table">
+        <thead><tr><th>Title</th><th>Source</th><th>Body preview</th><th>Tags</th><th>Rank</th></tr></thead>
+        <tbody id="memory-body"><tr><td colspan="5" style="color:var(--muted);padding:20px">Enter a query to search memory.</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── Control ── -->
+  <section class="section" id="tab-control">
+    <div class="control-grid">
+
+      <!-- Parquet Flush -->
+      <div class="control-card">
+        <h2>Parquet Flush</h2>
+        <p>Archive SQLite edit_events, sessions, tool_calls, and prompts to Parquet. Run nightly via Ralph Loop 18 or manually here.</p>
+        <button class="btn-action" id="btn-flush">Flush Now</button>
+        <div class="ctrl-status" id="status-flush"></div>
+      </div>
+
+      <!-- Backfill -->
+      <div class="control-card">
+        <h2>Memory Backfill</h2>
+        <p>Re-index vault root + all project wikis + CLAUDE.md files into FTS5 memory. Also re-registers vault_agents and vault_tools.</p>
+        <button class="btn-action" id="btn-backfill">Full Backfill</button>
+        <button class="btn-action secondary" id="btn-backfill-skills">Skills Only</button>
+        <div class="ctrl-status" id="status-backfill"></div>
+      </div>
+
+      <!-- Dictionary Import -->
+      <div class="control-card">
+        <h2>Dictionary Import</h2>
+        <p>Re-import domain knowledge from vault/domain/ into the structured dictionary. Runs automatically on session start when dictionary_auto_populate is true.</p>
+        <button class="btn-action" id="btn-dict-import">Import Now</button>
+        <div class="ctrl-status" id="status-dict"></div>
+      </div>
+
+      <!-- Watcher Daemon -->
+      <div class="control-card">
+        <h2>File Watcher</h2>
+        <p>Monitors C:/GIT for edits by Copilot, Codex, Cursor, or any tool that doesn't fire Claude Code hooks. Auto-started on SessionStart.</p>
+        <span class="watcher-badge stopped" id="watcher-badge">checking…</span>
+        <br>
+        <button class="btn-action" id="btn-watcher-start">Start</button>
+        <button class="btn-action danger" id="btn-watcher-stop">Stop</button>
+        <div class="ctrl-status" id="status-watcher"></div>
+      </div>
+
+      <!-- Config View -->
+      <div class="control-card">
+        <h2>Active Config</h2>
+        <p>Current vaultflow configuration (paths.*, storage.*, intelligence.* — no secrets).</p>
+        <button class="btn-action secondary" id="btn-load-config">Load Config</button>
+        <pre class="ctrl-status mono" id="status-config" style="font-size:11px;max-height:200px;overflow:auto"></pre>
+      </div>
+
+      <!-- Audit -->
+      <div class="control-card">
+        <h2>Health Audit</h2>
+        <p>Run the full vaultflow audit: config, DB integrity, Parquet freshness, hook wiring, and discovery pipeline.</p>
+        <button class="btn-action" id="btn-audit">Run Audit</button>
+        <div class="ctrl-status mono" id="status-audit" style="white-space:pre-wrap;max-height:300px;overflow:auto"></div>
+      </div>
+
     </div>
   </section>
 

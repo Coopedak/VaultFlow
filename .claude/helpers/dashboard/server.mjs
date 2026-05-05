@@ -399,6 +399,229 @@ app.get('/api/discoveries', (_req, res) => {
   } catch (err) { apiErr(res, err); }
 });
 
+// ── 13. POST /api/flush ───────────────────────────────────────────────────
+
+app.post('/api/flush', async (_req, res) => {
+  try {
+    ensureDb();
+    const [main, telemetry] = await Promise.all([
+      db.flushToParquet(METRICS, PARQUET_DIR),
+      db.flushTelemetryToParquet(METRICS, PARQUET_DIR),
+    ]);
+    res.json({ ok: true, main, telemetry });
+  } catch (err) { apiErr(res, err); }
+});
+
+// ── 14. POST /api/backfill ────────────────────────────────────────────────
+
+app.post('/api/backfill', (req, res) => {
+  try {
+    const { spawn } = require('child_process');
+    const scriptPath = path.resolve(__dirname, '..', 'backfill.mjs');
+    const args = ['--no-warnings', scriptPath];
+    if (req.body && req.body.skillsOnly) args.push('--skills-only');
+    if (req.body && req.body.toolsOnly)  args.push('--tools-only');
+    if (req.body && req.body.dryRun)     args.push('--dry-run');
+
+    const child = spawn(process.execPath, args, { stdio: ['ignore','pipe','pipe'] });
+    let stdout = '', stderr = '';
+    child.stdout.on('data', d => { stdout += d; });
+    child.stderr.on('data', d => { stderr += d; });
+    child.on('close', code => {
+      res.json({ ok: code === 0, exitCode: code, stdout: stdout.trim(), stderr: stderr.trim() });
+    });
+    child.on('error', err => apiErr(res, err));
+  } catch (err) { apiErr(res, err); }
+});
+
+// ── 15. GET /api/watcher/status ───────────────────────────────────────────
+
+app.get('/api/watcher/status', (_req, res) => {
+  const pidFile = path.join(METRICS, 'watcher.pid');
+  if (!fs.existsSync(pidFile)) {
+    return res.json({ running: false, pid: null });
+  }
+  try {
+    const pid = parseInt(fs.readFileSync(pidFile, 'utf8').trim(), 10);
+    if (!pid) return res.json({ running: false, pid: null });
+    // Check if process is alive (signal 0 = no-op)
+    try {
+      process.kill(pid, 0);
+      res.json({ running: true, pid });
+    } catch (_) {
+      res.json({ running: false, pid, stale: true });
+    }
+  } catch (err) { apiErr(res, err); }
+});
+
+// ── 16. POST /api/watcher/start ───────────────────────────────────────────
+
+app.post('/api/watcher/start', (_req, res) => {
+  try {
+    const { spawn } = require('child_process');
+    const watcherPath = path.resolve(__dirname, '..', 'watcher.mjs');
+    const watchDir    = cfg.paths && cfg.paths.watcher_watch_dir || '';
+    if (!watchDir || !fs.existsSync(watchDir)) {
+      return res.status(400).json({ error: 'watcher_watch_dir not configured or does not exist' });
+    }
+    const child = spawn(
+      process.execPath,
+      ['--no-warnings', watcherPath, '--daemon', watchDir],
+      { detached: true, stdio: 'ignore' }
+    );
+    child.unref();
+    res.json({ ok: true, message: `Watcher daemon started for ${watchDir}` });
+  } catch (err) { apiErr(res, err); }
+});
+
+// ── 17. POST /api/watcher/stop ────────────────────────────────────────────
+
+app.post('/api/watcher/stop', (_req, res) => {
+  try {
+    const { spawn } = require('child_process');
+    const watcherPath = path.resolve(__dirname, '..', 'watcher.mjs');
+    const child = spawn(process.execPath, ['--no-warnings', watcherPath, '--stop'], { stdio: ['ignore','pipe','pipe'] });
+    let out = '';
+    child.stdout.on('data', d => { out += d; });
+    child.stderr.on('data', d => { out += d; });
+    child.on('close', code => res.json({ ok: code === 0, message: out.trim() }));
+    child.on('error', err => apiErr(res, err));
+  } catch (err) { apiErr(res, err); }
+});
+
+// ── 18. POST /api/dict/import ─────────────────────────────────────────────
+
+app.post('/api/dict/import', async (_req, res) => {
+  try {
+    const domainDir = cfg.paths && cfg.paths.vault_domain_dir;
+    if (!domainDir || !fs.existsSync(domainDir)) {
+      return res.status(400).json({ error: 'vault_domain_dir not configured or does not exist' });
+    }
+    const { importFromDirectory } = await import('../dict.mjs');
+    const result = await importFromDirectory(domainDir);
+    res.json({ ok: true, ...result });
+  } catch (err) { apiErr(res, err); }
+});
+
+// ── 19. GET /api/memory ───────────────────────────────────────────────────
+
+app.get('/api/memory', (req, res) => {
+  try {
+    const query = (req.query.q || '').trim();
+    if (!query) return res.status(400).json({ error: 'q parameter required' });
+    ensureDb();
+    let rows;
+    try {
+      rows = db.searchMemory(query, 20);
+    } catch (ftsErr) {
+      return res.status(400).json({ error: `FTS query error: ${ftsErr.message}` });
+    }
+    res.json({ results: rows });
+  } catch (err) { apiErr(res, err); }
+});
+
+// ── 20. GET /api/config ───────────────────────────────────────────────────
+
+app.get('/api/config', (_req, res) => {
+  try {
+    const safeCfg = {
+      paths: {
+        vault_root:         cfg.paths && cfg.paths.vault_root,
+        metrics_root:       cfg.paths && cfg.paths.metrics_root,
+        watcher_watch_dir:  cfg.paths && cfg.paths.watcher_watch_dir,
+        wiki_glob:          cfg.paths && cfg.paths.wiki_glob,
+      },
+      storage: cfg.storage,
+      intelligence: cfg.intelligence,
+      dashboard: cfg.dashboard,
+    };
+    res.json(safeCfg);
+  } catch (err) { apiErr(res, err); }
+});
+
+// ── 21. POST /api/audit ───────────────────────────────────────────────────
+// Runs db.cjs health checks: FTS5 integrity, orphaned FTS rows, schema index
+// presence, memory duplicate count, and session file vs DB consistency.
+// Returns JSON array of {check, status, detail} rows.
+
+app.post('/api/audit', (_req, res) => {
+  try {
+    ensureDb();
+    const results = [];
+
+    // 1. FTS5 integrity checks
+    const ftsNames = ['memory_fts', 'prompts_fts', 'dictionary_fts', 'vault_tools_fts'];
+    for (const fts of ftsNames) {
+      try {
+        const row = db.raw().prepare(`INSERT INTO ${fts}(${fts}) VALUES('integrity-check')`).run();
+        results.push({ check: `FTS5 ${fts}`, status: 'ok', detail: 'integrity-check passed' });
+      } catch (e) {
+        results.push({ check: `FTS5 ${fts}`, status: 'fail', detail: e.message });
+      }
+    }
+
+    // 2. memory_entries duplicate count (should be 0 after dedup migration)
+    try {
+      const { dupes } = db.raw().prepare(
+        `SELECT COUNT(*) - COUNT(DISTINCT source || '||' || title) AS dupes FROM memory_entries`
+      ).get();
+      results.push({ check: 'memory duplicates', status: dupes === 0 ? 'ok' : 'warn',
+        detail: `${dupes} duplicate (source,title) pairs` });
+    } catch (e) {
+      results.push({ check: 'memory duplicates', status: 'fail', detail: e.message });
+    }
+
+    // 3. idx_memory_uniq present (dedup migration ran)
+    try {
+      const idx = db.raw().prepare(
+        `SELECT name FROM sqlite_master WHERE type='index' AND name='idx_memory_uniq'`
+      ).get();
+      results.push({ check: 'idx_memory_uniq', status: idx ? 'ok' : 'warn',
+        detail: idx ? 'UNIQUE index present' : 'missing — dedup migration not yet applied' });
+    } catch (e) {
+      results.push({ check: 'idx_memory_uniq', status: 'fail', detail: e.message });
+    }
+
+    // 4. Performance indexes present
+    const perfIdxs = [
+      'idx_edit_events_session', 'idx_edit_events_timestamp',
+      'idx_tool_calls_session', 'idx_prompts_session',
+      'idx_memory_source', 'idx_patterns_fire',
+    ];
+    for (const ix of perfIdxs) {
+      const found = db.raw().prepare(
+        `SELECT name FROM sqlite_master WHERE type='index' AND name=?`
+      ).get(ix);
+      results.push({ check: ix, status: found ? 'ok' : 'warn',
+        detail: found ? 'present' : 'missing — schema may need reinitialize()' });
+    }
+
+    // 5. Orphaned FTS rows (memory_fts rows whose rowid has no backing row)
+    try {
+      const { orphans } = db.raw().prepare(`
+        SELECT COUNT(*) AS orphans FROM memory_fts f
+        WHERE NOT EXISTS (SELECT 1 FROM memory_entries m WHERE m.id = f.rowid)
+      `).get();
+      results.push({ check: 'memory_fts orphans', status: orphans === 0 ? 'ok' : 'warn',
+        detail: `${orphans} orphaned FTS rows` });
+    } catch (e) {
+      results.push({ check: 'memory_fts orphans', status: 'fail', detail: e.message });
+    }
+
+    // 6. DB file size
+    try {
+      const dbPath = path.join(METRICS, DB_FILE);
+      const { size } = fs.statSync(dbPath);
+      const mb = (size / 1024 / 1024).toFixed(2);
+      results.push({ check: 'db file size', status: 'ok', detail: `${mb} MB` });
+    } catch (e) {
+      results.push({ check: 'db file size', status: 'fail', detail: e.message });
+    }
+
+    res.json(results);
+  } catch (err) { apiErr(res, err); }
+});
+
 // ── root → dashboard ──────────────────────────────────────────────────────
 
 app.get('/', (_req, res) => {

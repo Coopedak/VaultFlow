@@ -148,9 +148,10 @@ export function installHooks(projectPath) {
     }
 
     if (status === 'foreign') {
-      // Append our hook to the existing file
-      const existing = fs.readFileSync(hookPath, 'utf8');
-      const appended = existing.trimEnd() + '\n\n' + hookContent.trimStart();
+      // Append our hook to the existing file, stripping the #!/bin/sh shebang
+      const existing  = fs.readFileSync(hookPath, 'utf8');
+      const hookBody  = hookContent.replace(/^#!\/bin\/sh\n/, '');
+      const appended  = existing.trimEnd() + '\n\n' + hookBody.trimStart();
       fs.writeFileSync(hookPath, appended, 'utf8');
     } else {
       fs.writeFileSync(hookPath, hookContent, 'utf8');
@@ -186,27 +187,14 @@ export function removeHooks(projectPath) {
     const hookPath = path.join(hooksDir, hookName);
     if (!isVaultflowHook(hookPath)) continue;
 
-    const content = fs.readFileSync(hookPath, 'utf8');
-    // If the file is ONLY our hook, delete it. Otherwise, strip our section.
-    const withoutOurs = content
-      .split('\n')
-      .filter((line, i, arr) => {
-        // Remove lines that are part of a vaultflow block
-        // Simple approach: if the file ONLY contains our guard, delete entirely
-        return true;
-      })
-      .join('\n');
-
-    // Check if anything meaningful remains after removing vaultflow content
+    const content    = fs.readFileSync(hookPath, 'utf8');
     const allContent = content.trim();
-    const ourContent = hookName === 'post-commit'
-      ? POST_COMMIT_HOOK('').trim()
-      : hookName === 'post-merge'
-        ? POST_MERGE_HOOK('').trim()
-        : PRE_PUSH_HOOK('').trim();
 
-    // If the entire file is only our hook (allow for different vaultflow root paths)
-    if (allContent.includes(HOOK_GUARD) && allContent.split('\n').length <= 20) {
+    // If the entire file is only our hook (allow for different vaultflow root paths):
+    // count non-blank, non-comment lines — our hook is pure shell comments + a few cmds
+    const meaningfulLines = allContent.split('\n')
+      .filter(l => l.trim() && !l.trim().startsWith('#') && l.trim() !== 'exit 0');
+    if (allContent.includes(HOOK_GUARD) && meaningfulLines.length <= 8) {
       fs.unlinkSync(hookPath);
     } else {
       // Strip our section — find the guard line and remove until next blank+exit block

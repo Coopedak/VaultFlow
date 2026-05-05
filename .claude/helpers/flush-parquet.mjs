@@ -134,35 +134,23 @@ export async function flushTelemetry() {
  * }[]}
  */
 export function queryToolCallSummary(days = 30) {
-  const cfg        = loadConfig();
+  const cfg         = loadConfig();
   const metricsRoot = cfg?.paths?.metrics_root;
   if (!metricsRoot) throw new Error('[flush-parquet] metrics_root not configured');
-  const dbFile      = cfg?.storage?.db_file || 'vaultflow.db';
+  const dbFile = cfg?.storage?.db_file || 'vaultflow.db';
 
   db.initialize(metricsRoot, dbFile);
 
-  try {
-    const { DatabaseSync } = require('node:sqlite');
-    const dbPath   = path.join(metricsRoot, dbFile);
-    const conn     = new DatabaseSync(dbPath, { readOnly: true });
-
-    try {
-      return conn.prepare(`
-        SELECT   tool_name,
-                 COUNT(*)                   AS call_count,
-                 COUNT(DISTINCT input_hash) AS unique_calls,
-                 MAX(timestamp)             AS last_called
-        FROM     tool_calls
-        WHERE    timestamp >= datetime('now', ? || ' days')
-        GROUP BY tool_name
-        ORDER BY call_count DESC
-      `).all(`-${days}`);
-    } finally {
-      conn.close();
-    }
-  } finally {
-    db.close();
-  }
+  return db.raw().prepare(`
+    SELECT   tool_name,
+             COUNT(*)                   AS call_count,
+             COUNT(DISTINCT input_hash) AS unique_calls,
+             MAX(timestamp)             AS last_called
+    FROM     tool_calls
+    WHERE    timestamp >= datetime('now', ? || ' days')
+    GROUP BY tool_name
+    ORDER BY call_count DESC
+  `).all(`-${days}`);
 }
 
 /**
@@ -177,41 +165,29 @@ export function queryToolCallSummary(days = 30) {
  * }}
  */
 export function querySessionSummary() {
-  const cfg        = loadConfig();
+  const cfg         = loadConfig();
   const metricsRoot = cfg.paths.metrics_root;
   const dbFile      = cfg.storage.db_file || 'vaultflow.db';
 
   db.initialize(metricsRoot, dbFile);
 
-  try {
-    const { DatabaseSync } = require('node:sqlite');
-    const dbPath   = path.join(metricsRoot, dbFile);
-    const conn     = new DatabaseSync(dbPath, { readOnly: true });
+  const row = db.raw().prepare(`
+    SELECT COUNT(*)          AS total_sessions,
+           SUM(edits)        AS total_edits,
+           SUM(commands)     AS total_commands,
+           AVG(duration_ms)  AS avg_duration_ms,
+           MAX(started_at)   AS last_session
+    FROM   sessions
+    WHERE  started_at >= datetime('now', '-30 days')
+  `).get();
 
-    try {
-      const row = conn.prepare(`
-        SELECT COUNT(*)          AS total_sessions,
-               SUM(edits)        AS total_edits,
-               SUM(commands)     AS total_commands,
-               AVG(duration_ms)  AS avg_duration_ms,
-               MAX(started_at)   AS last_session
-        FROM   sessions
-        WHERE  started_at >= datetime('now', '-30 days')
-      `).get();
-
-      return {
-        total_sessions:  row.total_sessions  ?? 0,
-        total_edits:     row.total_edits     ?? 0,
-        total_commands:  row.total_commands  ?? 0,
-        avg_duration_ms: row.avg_duration_ms ?? null,
-        last_session:    row.last_session    ?? null,
-      };
-    } finally {
-      conn.close();
-    }
-  } finally {
-    db.close();
-  }
+  return {
+    total_sessions:  row?.total_sessions  ?? 0,
+    total_edits:     row?.total_edits     ?? 0,
+    total_commands:  row?.total_commands  ?? 0,
+    avg_duration_ms: row?.avg_duration_ms ?? null,
+    last_session:    row?.last_session    ?? null,
+  };
 }
 
 // ── main (CLI entry point) ────────────────────────────────────────────────────

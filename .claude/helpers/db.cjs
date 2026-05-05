@@ -1356,10 +1356,13 @@ function close() {
 }
 
 // ── exports ───────────────────────────────────────────────────────────────
+function raw() { return _db; }
+
 module.exports = {
   // core
   initialize,
   close,
+  raw,
   // edit + session telemetry
   recordEdit,
   upsertSession,

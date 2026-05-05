@@ -18,16 +18,18 @@ process.stdin.on('end', () => {
 // ── helpers ───────────────────────────────────────────────────────────────
 
 /**
- * Resolve the edited file path from the tool_input regardless of tool variant.
+ * Resolve all edited file paths from the tool_input regardless of tool variant.
  * MultiEdit uses edits[].file_path; Write and Edit use file_path directly.
+ * Returns an array of unique non-empty paths.
  */
-function resolveFilePath(toolName, toolInput) {
+function resolveFilePaths(toolName, toolInput) {
   if (toolName === 'MultiEdit') {
-    return toolInput.edits && toolInput.edits[0] && toolInput.edits[0].file_path
-      ? toolInput.edits[0].file_path
-      : null;
+    const paths = (toolInput.edits || [])
+      .map(e => e.file_path)
+      .filter(Boolean);
+    return [...new Set(paths)];
   }
-  return toolInput.file_path || null;
+  return toolInput.file_path ? [toolInput.file_path] : [];
 }
 
 /**
@@ -241,10 +243,8 @@ function run(input) {
     const toolName  = input.tool_name  || '';
     const toolInput = input.tool_input || {};
 
-    const filePath   = resolveFilePath(toolName, toolInput);
-    const project    = deriveProject(filePath);
+    const filePaths  = resolveFilePaths(toolName, toolInput);
     const changeType = toolName === 'Write' ? 'create' : 'edit';
-    const patternKey = buildPatternKey(filePath);
 
     const db      = require('./db.cjs');
     const session = require('./session.cjs');
@@ -258,33 +258,34 @@ function run(input) {
     }
     const sessionId = sess.id;
 
-    if (filePath) {
+    // Record all edited files (MultiEdit may touch multiple paths)
+    for (const filePath of filePaths) {
+      const project    = deriveProject(filePath);
+      const patternKey = buildPatternKey(filePath);
+
       db.recordEdit(sessionId, filePath, project, changeType);
+      db.upsertPattern(patternKey, null);
+
+      const regKind = classifyRegistryFile(filePath);
+      if (regKind === 'agent' || regKind === 'user-skill') {
+        upsertAgentFromFile(db, filePath, regKind);
+      } else if (regKind === 'tool-index') {
+        refreshToolIndex(db, filePath);
+      }
+
+      if (isMemoryFile(filePath)) {
+        reindexMemoryFile(db, filePath);
+      }
     }
 
-    session.metric('edits');
-
-    db.upsertPattern(patternKey, null);
-
-    const toolCallInput = JSON.stringify({ file_path: filePath, tool: toolName });
+    // Record one tool call entry for the overall operation
+    const toolCallInput = JSON.stringify({
+      file_paths: filePaths,
+      tool: toolName,
+    });
     db.recordToolCall(sessionId, toolName, toolCallInput);
 
-    // ── live registry updates ───────────────────────────────────────────
-    // When a registry-relevant file is edited, re-register it immediately
-    // so vault_agents / vault_tools stay current without a manual backfill.
-    const regKind = classifyRegistryFile(filePath);
-    if (regKind === 'agent' || regKind === 'user-skill') {
-      upsertAgentFromFile(db, filePath, regKind);
-    } else if (regKind === 'tool-index') {
-      refreshToolIndex(db, filePath);
-    }
-
-    // ── live memory re-index ────────────────────────────────────────────
-    // When a wiki or vault .md file is edited, update its memory_entries
-    // immediately so FTS5 search reflects the latest content.
-    if (isMemoryFile(filePath)) {
-      reindexMemoryFile(db, filePath);
-    }
+    session.metric('edits');
 
   } catch (err) {
     process.stderr.write(`post-edit: error: ${err.message}\n`);

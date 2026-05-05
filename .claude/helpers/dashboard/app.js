@@ -509,6 +509,211 @@ async function loadDiscoveries() {
   `).join('');
 }
 
+// ── Memory ────────────────────────────────────────────────────────────────────
+
+function renderMemoryResults(rows) {
+  const body = document.getElementById('memory-body');
+  const title = document.getElementById('memory-table-title');
+  if (!rows.length) {
+    body.innerHTML = '<tr><td colspan="5" style="color:var(--muted);padding:20px">No results.</td></tr>';
+    title.textContent = 'Memory Search Results';
+    return;
+  }
+  title.textContent = `${rows.length} result${rows.length !== 1 ? 's' : ''}`;
+  body.innerHTML = rows.map(r => `
+    <tr>
+      <td><strong>${r.title || '—'}</strong></td>
+      <td class="mono">${r.source || '—'}</td>
+      <td>${trunc(r.body, 140)}</td>
+      <td>${r.tags ? `<span class="badge badge-gray">${r.tags}</span>` : '—'}</td>
+      <td class="mono">${r.rank != null ? r.rank.toFixed(3) : '—'}</td>
+    </tr>
+  `).join('');
+}
+
+async function doMemorySearch() {
+  const q = document.getElementById('memory-search-input').value.trim();
+  if (!q) { renderMemoryResults([]); return; }
+  const data = await api(`/api/memory?q=${encodeURIComponent(q)}`).catch(() => ({ results: [] }));
+  renderMemoryResults(data.results || []);
+}
+
+document.getElementById('memory-search-btn').addEventListener('click', doMemorySearch);
+document.getElementById('memory-search-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doMemorySearch();
+});
+
+function loadMemory() { /* no-op: memory is search-driven */ }
+
+// ── Control Panel ─────────────────────────────────────────────────────────────
+
+function ctrlStatus(id, html, cls = '') {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.innerHTML = html;
+  el.className = `ctrl-status${cls ? ' ' + cls : ''}`;
+}
+
+function setWatcherBadge(running) {
+  const badge = document.getElementById('watcher-badge');
+  if (!badge) return;
+  badge.textContent = running ? 'running' : 'stopped';
+  badge.className = `watcher-badge ${running ? 'running' : 'stopped'}`;
+}
+
+async function refreshWatcherStatus() {
+  try {
+    const data = await api('/api/watcher/status');
+    setWatcherBadge(data.running);
+    if (data.pid) ctrlStatus('status-watcher', `PID ${data.pid}`);
+  } catch (_) {
+    setWatcherBadge(false);
+  }
+}
+
+async function loadControl() {
+  await refreshWatcherStatus();
+}
+
+// Parquet flush
+document.getElementById('btn-flush').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-flush');
+  btn.disabled = true;
+  ctrlStatus('status-flush', 'Flushing…');
+  try {
+    const r = await fetch('/api/flush', { method: 'POST' });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || r.statusText);
+    const lines = [];
+    if (data.parquet) lines.push(`parquet: ${JSON.stringify(data.parquet)}`);
+    if (data.telemetry) lines.push(`telemetry: ${JSON.stringify(data.telemetry)}`);
+    ctrlStatus('status-flush', lines.join('\n') || 'Done', 'ok');
+  } catch (e) {
+    ctrlStatus('status-flush', `Error: ${e.message}`, 'err');
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// Full backfill
+document.getElementById('btn-backfill').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-backfill');
+  btn.disabled = true;
+  document.getElementById('btn-backfill-skills').disabled = true;
+  ctrlStatus('status-backfill', 'Running full backfill… (this may take 30-60s)');
+  try {
+    const r = await fetch('/api/backfill', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || r.statusText);
+    const out = data.stdout ? data.stdout.slice(-800) : '';
+    ctrlStatus('status-backfill', `Exit ${data.exitCode ?? 0}\n${out}`, data.exitCode === 0 ? 'ok' : 'err');
+  } catch (e) {
+    ctrlStatus('status-backfill', `Error: ${e.message}`, 'err');
+  } finally {
+    btn.disabled = false;
+    document.getElementById('btn-backfill-skills').disabled = false;
+  }
+});
+
+// Skills-only backfill
+document.getElementById('btn-backfill-skills').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-backfill-skills');
+  btn.disabled = true;
+  document.getElementById('btn-backfill').disabled = true;
+  ctrlStatus('status-backfill', 'Running skills backfill…');
+  try {
+    const r = await fetch('/api/backfill', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ skillsOnly: true }) });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || r.statusText);
+    const out = data.stdout ? data.stdout.slice(-800) : '';
+    ctrlStatus('status-backfill', `Exit ${data.exitCode ?? 0}\n${out}`, data.exitCode === 0 ? 'ok' : 'err');
+  } catch (e) {
+    ctrlStatus('status-backfill', `Error: ${e.message}`, 'err');
+  } finally {
+    btn.disabled = false;
+    document.getElementById('btn-backfill').disabled = false;
+  }
+});
+
+// Dictionary import
+document.getElementById('btn-dict-import').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-dict-import');
+  btn.disabled = true;
+  ctrlStatus('status-dict', 'Importing…');
+  try {
+    const r = await fetch('/api/dict/import', { method: 'POST' });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || r.statusText);
+    ctrlStatus('status-dict', data.message || JSON.stringify(data), 'ok');
+  } catch (e) {
+    ctrlStatus('status-dict', `Error: ${e.message}`, 'err');
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// Watcher start
+document.getElementById('btn-watcher-start').addEventListener('click', async () => {
+  ctrlStatus('status-watcher', 'Starting…');
+  try {
+    const r = await fetch('/api/watcher/start', { method: 'POST' });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || r.statusText);
+    setWatcherBadge(true);
+    ctrlStatus('status-watcher', data.message || 'Started', 'ok');
+  } catch (e) {
+    ctrlStatus('status-watcher', `Error: ${e.message}`, 'err');
+  }
+});
+
+// Watcher stop
+document.getElementById('btn-watcher-stop').addEventListener('click', async () => {
+  ctrlStatus('status-watcher', 'Stopping…');
+  try {
+    const r = await fetch('/api/watcher/stop', { method: 'POST' });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || r.statusText);
+    setWatcherBadge(false);
+    ctrlStatus('status-watcher', data.message || 'Stopped', 'ok');
+  } catch (e) {
+    ctrlStatus('status-watcher', `Error: ${e.message}`, 'err');
+  }
+});
+
+// Config viewer
+document.getElementById('btn-load-config').addEventListener('click', async () => {
+  const el = document.getElementById('status-config');
+  el.textContent = 'Loading…';
+  try {
+    const data = await api('/api/config');
+    el.textContent = JSON.stringify(data, null, 2);
+  } catch (e) {
+    el.textContent = `Error: ${e.message}`;
+  }
+});
+
+// Health audit
+document.getElementById('btn-audit').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-audit');
+  btn.disabled = true;
+  const el = document.getElementById('status-audit');
+  el.textContent = 'Running…';
+  try {
+    const r = await fetch('/api/audit', { method: 'POST' });
+    const rows = await r.json();
+    if (!r.ok) throw new Error(rows.error || r.statusText);
+    el.textContent = rows.map(row => {
+      const icon = row.status === 'ok' ? '✓' : row.status === 'warn' ? '⚠' : '✗';
+      return `${icon} [${row.status.toUpperCase().padEnd(4)}] ${row.check.padEnd(35)} ${row.detail}`;
+    }).join('\n');
+  } catch (e) {
+    el.textContent = `Error: ${e.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 // ── loader map ────────────────────────────────────────────────────────────────
 
 const LOADERS = {
@@ -522,6 +727,8 @@ const LOADERS = {
   dictionary:  loadDictionary,
   agents:      loadAgents,
   discoveries: loadDiscoveries,
+  memory:      loadMemory,
+  control:     loadControl,
 };
 
 // ── boot ──────────────────────────────────────────────────────────────────────

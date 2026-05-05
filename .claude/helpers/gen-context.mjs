@@ -193,17 +193,9 @@ export async function generateForProject(projectPath) {
 
   // Get registered agents (Claude + Codex, sorted by use_count)
   try {
-    const { DatabaseSync } = require('node:sqlite');
-    const cfg      = loadConfig();
-    const root     = cfg.paths && cfg.paths.metrics_root;
-    const file     = (cfg.storage && cfg.storage.db_file) || 'vaultflow.db';
-    if (root) {
-      const rawDb = new DatabaseSync(path.join(root, file), { readOnly: true });
-      agents = rawDb.prepare(
-        'SELECT name, source, description FROM vault_agents ORDER BY use_count DESC LIMIT 15'
-      ).all();
-      rawDb.close();
-    }
+    agents = db.raw().prepare(
+      'SELECT name, source, description FROM vault_agents ORDER BY use_count DESC LIMIT 15'
+    ).all();
   } catch (err) {
     process.stderr.write(`[gen-context] agent registry unavailable: ${err.message}\n`);
   }
@@ -256,8 +248,30 @@ if (process.argv[1] === thisPath) {
         }
         const result = await generateForProject(absTarget);
         result.generated.forEach(f => console.log(`  wrote: ${f}`));
+      } else if (target === '--all') {
+        const cfg     = loadConfig();
+        const gitRoot = (cfg.paths && cfg.paths.vault_root) ? null : null;
+        // Walk C:\GIT for directories with a CLAUDE.md or package.json
+        const searchRoot = path.resolve(__dirname, '..', '..', '..', '..');
+        let dirs = [];
+        try {
+          dirs = fs.readdirSync(searchRoot, { withFileTypes: true })
+            .filter(d => d.isDirectory())
+            .map(d => path.join(searchRoot, d.name))
+            .filter(d => fs.existsSync(path.join(d, 'CLAUDE.md')) || fs.existsSync(path.join(d, 'package.json')));
+        } catch (_) {}
+        if (!dirs.length) {
+          console.log(`No projects found under ${searchRoot}`);
+        } else {
+          for (const dir of dirs) {
+            const result = await generateForProject(dir);
+            result.generated.forEach(f => console.log(`  wrote: ${f}`));
+          }
+        }
       } else {
-        console.log('Usage: node gen-context.mjs [project-path]');
+        console.error(`Unknown argument: ${target}`);
+        console.error('Usage: node gen-context.mjs [project-path|--all]');
+        process.exit(1);
       }
     } catch (err) {
       console.error('Error:', err.message);

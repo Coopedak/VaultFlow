@@ -237,9 +237,16 @@ function startDaemon(watchDir) {
   fs.mkdirSync(path.dirname(PID_FILE), { recursive: true });
 
   if (fs.existsSync(PID_FILE)) {
-    const existing = fs.readFileSync(PID_FILE, 'utf8').trim();
-    console.log(`Daemon already running (PID ${existing}). Use --stop first.`);
-    process.exit(0);
+    const existing = parseInt(fs.readFileSync(PID_FILE, 'utf8').trim(), 10);
+    let alive = false;
+    try { process.kill(existing, 0); alive = true; } catch (_) {}
+    if (alive) {
+      console.log(`Daemon already running (PID ${existing}). Use --stop first.`);
+      process.exit(0);
+    }
+    // Stale PID file — remove it and continue
+    try { fs.unlinkSync(PID_FILE); } catch (_) {}
+    console.log(`Removed stale PID file (PID ${existing} no longer running).`);
   }
 
   const self = fileURLToPath(import.meta.url);
