@@ -206,8 +206,9 @@ function pollShellHistory(db) {
   if (lines.length === 0) return;
 
   const sessionId = ensureSession(db);
-  for (const cmd of lines) {
+  for (const rawCmd of lines) {
     try {
+      const cmd = rawCmd.slice(0, 1000); // guard against gigantic pastes
       db.recordToolCall(
         sessionId,
         'ShellHistory',
@@ -229,13 +230,15 @@ function pollShellJsonl(db) {
   for (const line of lines) {
     try {
       const entry = JSON.parse(line);
+      const cmd   = String(entry.cmd || '').slice(0, 1000); // guard against gigantic pastes
+      const cwd   = String(entry.cwd || '').slice(0, 500);
       db.recordToolCall(
         sessionId,
         'ShellHistory',
         JSON.stringify({
-          command:   entry.cmd,
+          command:   cmd,
           shell:     entry.shell || 'powershell',
-          cwd:       entry.cwd   || null,
+          cwd:       cwd || null,
           exit_code: entry.exit  != null ? entry.exit : null,
           ts:        entry.ts    || null,
           source:    'profile-hook',

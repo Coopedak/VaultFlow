@@ -103,6 +103,7 @@ function newSession() {
     // redundant injections within the same session.
     lastInjectedSkill:  null,
     lastInjectedAt:     null,
+    injectedSources:    [],
   };
 }
 
@@ -255,6 +256,22 @@ function getInjectedSkill() {
   };
 }
 
+function getInjectedSources() {
+  const s = _session || readCurrentJson();
+  return (s && Array.isArray(s.injectedSources)) ? s.injectedSources.slice(-3) : [];
+}
+
+function addInjectedSource(sourcePath) {
+  if (!_session) {
+    _session = readCurrentJson();
+    if (!_session) return;
+  }
+  if (!Array.isArray(_session.injectedSources)) _session.injectedSources = [];
+  _session.injectedSources.push(String(sourcePath || '').slice(0, 500));
+  if (_session.injectedSources.length > 10) _session.injectedSources = _session.injectedSources.slice(-10);
+  writeCurrentJson(_session);
+}
+
 // ── exports ───────────────────────────────────────────────────────────────
 module.exports = {
   start,
@@ -264,4 +281,6 @@ module.exports = {
   get,
   setInjectedSkill,
   getInjectedSkill,
+  getInjectedSources,
+  addInjectedSource,
 };

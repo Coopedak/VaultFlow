@@ -622,6 +622,29 @@ app.post('/api/audit', (_req, res) => {
   } catch (err) { apiErr(res, err); }
 });
 
+// ── 22. GET /api/verdicts ─────────────────────────────────────────────────
+// Returns voice-of-reason verdict summary grouped by agent_type + verdict.
+// Optional ?days=N (default 30, max 365).
+
+app.get('/api/verdicts', (req, res) => {
+  try {
+    const daysRaw = req.query.days ? parseInt(req.query.days, 10) : 30;
+    if (isNaN(daysRaw) || daysRaw < 1 || daysRaw > 365) {
+      return res.status(400).json({ error: 'days must be a number between 1 and 365' });
+    }
+    ensureDb();
+    const summary = db.getVerdictSummary(daysRaw);
+    const recent  = withRawDb(conn => conn.prepare(`
+      SELECT timestamp, session_id, agent_type, verdict, reason, flagged_at
+      FROM   agent_verdicts
+      WHERE  timestamp >= datetime('now', '-' || :days || ' days')
+      ORDER  BY timestamp DESC
+      LIMIT  20
+    `).all({ days: daysRaw }));
+    res.json({ summary, recent, days: daysRaw });
+  } catch (err) { apiErr(res, err); }
+});
+
 // ── root → dashboard ──────────────────────────────────────────────────────
 
 app.get('/', (_req, res) => {

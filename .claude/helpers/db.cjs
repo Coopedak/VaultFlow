@@ -302,6 +302,21 @@ const SCHEMA_SQL = `
     last_used       TEXT
   );
 
+  -- Agent verdict log. Records pass/fail/warn decisions from routing and
+  -- quality-gate agents so callers can query aggregate outcomes over time.
+  CREATE TABLE IF NOT EXISTS agent_verdicts (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp   TEXT    NOT NULL,
+    session_id  TEXT,
+    agent_type  TEXT    NOT NULL,
+    verdict     TEXT    NOT NULL,
+    reason      TEXT    DEFAULT '',
+    flagged_at  TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_verdicts_agent ON agent_verdicts(agent_type);
+  CREATE INDEX IF NOT EXISTS idx_verdicts_ts    ON agent_verdicts(timestamp);
+
   -- Performance indexes — queried on every hook fire
   CREATE INDEX IF NOT EXISTS idx_edit_events_session   ON edit_events(session_id);
   CREATE INDEX IF NOT EXISTS idx_edit_events_timestamp ON edit_events(timestamp);
@@ -1210,6 +1225,50 @@ function incrementAgentUse(agentId) {
   `).run(new Date().toISOString(), agentId);
 }
 
+// ── agent verdicts ────────────────────────────────────────────────────────
+
+/**
+ * Record an agent verdict (pass / fail / warn / skip / etc.).
+ *
+ * @param {string|null} sessionId   Active session ID (may be null for background agents).
+ * @param {string}      agentType   Agent identifier, e.g. 'developer-backend'.
+ * @param {string}      verdict     Short outcome label, e.g. 'pass', 'fail', 'warn'.
+ * @param {string}      [reason]    Human-readable explanation (max 500 chars).
+ * @param {string|null} [flaggedAt] ISO timestamp if the verdict was flagged for review.
+ */
+function recordVerdict(sessionId, agentType, verdict, reason, flaggedAt) {
+  if (!_db) throw new Error('db.recordVerdict: call initialize() first');
+  _db.prepare(
+    `INSERT INTO agent_verdicts (timestamp, session_id, agent_type, verdict, reason, flagged_at)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  ).run(
+    new Date().toISOString(),
+    sessionId  || null,
+    String(agentType  || '').slice(0, 100),
+    String(verdict    || '').slice(0, 50),
+    String(reason     || '').slice(0, 500),
+    flaggedAt  || null
+  );
+}
+
+/**
+ * Aggregate verdict counts grouped by agent_type and verdict over the last N days.
+ *
+ * @param {number} [days=30]  Lookback window in days.
+ * @returns {Array<{agent_type: string, verdict: string, count: number}>}
+ */
+function getVerdictSummary(days) {
+  if (!_db) throw new Error('db.getVerdictSummary: call initialize() first');
+  const d = Number(days) || 30;
+  return _db.prepare(
+    `SELECT agent_type, verdict, COUNT(*) AS count
+     FROM   agent_verdicts
+     WHERE  timestamp > datetime('now', '-' || ? || ' days')
+     GROUP  BY agent_type, verdict
+     ORDER  BY agent_type, verdict`
+  ).all(String(d));
+}
+
 // ── session-end helpers ───────────────────────────────────────────────────
 
 /**
@@ -1404,6 +1463,9 @@ module.exports = {
   // agent registry
   upsertVaultAgent,
   incrementAgentUse,
+  // agent verdicts
+  recordVerdict,
+  getVerdictSummary,
   // session-end helpers
   getUnpromotedVaultTools,
   promoteVaultTool,

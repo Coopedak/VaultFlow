@@ -67,6 +67,25 @@ function readReviewFlag() {
   } catch (_) { return null; }
 }
 
+// ── input sanitization ───────────────────────────────────────────────────
+function sanitizeString(val, maxLen) {
+  return String(val == null ? '' : val).trim().slice(0, maxLen);
+}
+
+function sanitizeFilePath(val) {
+  const s = sanitizeString(val, 2000);
+  if (/(\.\.[/\\])|(^\.\.)/.test(s)) return null;
+  return s || null;
+}
+
+function sanitizeSessionId(val) {
+  return sanitizeString(val, 100).replace(/[^a-zA-Z0-9_\-]/g, '');
+}
+
+function sanitizeToolName(val) {
+  return sanitizeString(val, 100);
+}
+
 const DANGEROUS_PATTERNS = [
   /rm\s+-rf\s+\/(?:\s|$)/,
   /rm\s+-rf\s+\/\*/,
@@ -89,7 +108,7 @@ async function dispatch(event) {
       const raw = await readStdin();
       let input = {};
       try { input = JSON.parse(raw); } catch (_) {}
-      const cmd = (input.tool_input && input.tool_input.command) || '';
+      const cmd = sanitizeString((input.tool_input && input.tool_input.command) || '', 1000);
 
       // Safety check — block destructive patterns
       for (const pattern of DANGEROUS_PATTERNS) {
@@ -120,7 +139,7 @@ async function dispatch(event) {
       const raw = await readStdin();
       let input = {};
       try { input = JSON.parse(raw); } catch (_) {}
-      const prompt = (input.tool_input && input.tool_input.prompt) || '';
+      const prompt = sanitizeString((input.tool_input && input.tool_input.prompt) || '', 8000);
 
       const router      = require('./router.cjs');
       const intelligence = require('./intelligence.cjs');
@@ -276,6 +295,23 @@ async function dispatch(event) {
     }
 
     case 'clear-review': {
+      const verdict   = sanitizeString(process.argv[3] || '', 50)  || 'UNSPECIFIED';
+      const agentType = sanitizeString(process.argv[4] || '', 100) || 'unknown';
+      const reason    = sanitizeString(process.argv[5] || '', 500);
+      const flag      = readReviewFlag();
+      const flaggedAt = flag ? flag.flagged_at : null;
+
+      try {
+        const db      = require('./db.cjs');
+        const session = require('./session.cjs');
+        db.initialize(null, null);
+        const sess = session.get();
+        db.recordVerdict(sess ? sess.id : null, agentType, verdict, reason, flaggedAt);
+        process.stderr.write(`[vaultflow] clear-review: verdict recorded — ${verdict} (${agentType})\n`);
+      } catch (err) {
+        process.stderr.write(`[vaultflow] clear-review: verdict record error — ${err.message}\n`);
+      }
+
       clearReviewFlag();
       process.stderr.write('[vaultflow] clear-review: pending review flag cleared\n');
       break;
@@ -411,7 +447,7 @@ async function dispatch(event) {
         ''
       ).toLowerCase();
       if (!agentDesc.includes('voice-of-reason') && !agentDesc.includes('clear-review')) {
-        const agentLabel = agentDesc || 'sub-agent';
+        const agentLabel = sanitizeString(agentDesc || 'sub-agent', 200);
         writeReviewFlag(agentLabel);
         process.stderr.write(`[vaultflow] post-subagent: review flag set for "${agentLabel}"\n`);
       } else {
@@ -469,8 +505,8 @@ async function dispatch(event) {
       let payload = {};
       try { payload = JSON.parse(raw); } catch (_) {}
 
-      const promptText = payload.prompt || '';
-      const subcommand = payload.subcommand || '';
+      const promptText = sanitizeString(payload.prompt || '', 8000);
+      const subcommand = sanitizeString(payload.subcommand || '', 200);
       if (!promptText) break;
 
       const db      = require('./db.cjs');

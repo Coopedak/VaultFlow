@@ -1,6 +1,6 @@
 {
   "name": "vaultflow",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Claude Code intelligence layer — session tracking, FTS5 memory, skill routing, DISCOVERY pipeline",
   "type": "module",
   "bin": {
@@ -9,6 +9,10 @@
   "scripts": {
     "audit": "node .claude/helpers/audit.mjs",
     "audit:fix": "node .claude/helpers/audit.mjs --fix",
+    "lint": "node .claude/helpers/lint.mjs",
+    "lint:fix": "node .claude/helpers/lint.mjs --fix",
+    "plan": "node .claude/helpers/plan-init.mjs",
+    "plan:dir": "node .claude/helpers/plan-init.mjs --list",
     "backfill": "node .claude/helpers/backfill.mjs",
     "flush": "node .claude/helpers/flush-parquet.mjs",
     "status": "node .claude/helpers/hook-handler.cjs status",

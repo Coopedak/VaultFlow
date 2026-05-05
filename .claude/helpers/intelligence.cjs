@@ -189,8 +189,42 @@ function feedback(success) {
 function getContext(prompt) {
   try {
     ensureDbOpen();
-    const results = getDb().searchMemory(prompt, 5);
-    return results.map((r) => ({
+    const session  = require('./session.cjs');
+    const fs       = require('fs');
+    const RANK_FLOOR  = -0.3;  // BM25 is negative; closer to 0 = worse match
+    const STALE_MS    = 90 * 24 * 60 * 60 * 1000;
+    const cutoff      = Date.now() - STALE_MS;
+    const recentSrcs  = new Set(session.getInjectedSources());
+
+    const results = getDb().searchMemory(prompt, 10); // fetch more, then filter down to 5
+    const filtered = [];
+
+    for (const r of results) {
+      // Relevance floor — skip poor BM25 matches
+      if (typeof r.rank === 'number' && r.rank >= RANK_FLOOR) continue;
+
+      // Staleness — skip if source file is missing or older than 90 days
+      if (r.source && (r.source.includes('/') || r.source.includes('\\'))) {
+        const filePath = r.source.split(':')[0];
+        try {
+          const stat = fs.statSync(filePath);
+          if (stat.mtimeMs < cutoff) continue;
+        } catch (_) { continue; } // missing file = skip
+      }
+
+      // Session dedup — skip source injected recently this session
+      if (r.source && recentSrcs.has(r.source)) continue;
+
+      filtered.push(r);
+      if (filtered.length >= 5) break;
+    }
+
+    // Record injected sources in session state
+    for (const r of filtered) {
+      if (r.source) session.addInjectedSource(r.source);
+    }
+
+    return filtered.map((r) => ({
       title:  r.title,
       body:   r.body,
       source: r.source,
