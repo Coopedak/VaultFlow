@@ -45,6 +45,10 @@ paths:
   # Glob for project-level .claude/agents/ markdown files
   project_agents_glob: "C:/GIT/*/.claude/agents/*.md"
 
+  # Root directory for the filesystem watcher daemon (captures background agent edits)
+  # Defaults to the parent of wiki_glob if not set
+  watcher_watch_dir: "C:/GIT"
+
 storage:
   db_file: "vaultflow.db"          # relative to metrics_root
   parquet_dir: "parquet"           # relative to metrics_root

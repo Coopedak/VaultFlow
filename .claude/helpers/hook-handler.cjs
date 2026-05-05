@@ -160,6 +160,34 @@ async function dispatch(event) {
             process.stderr.write(`[vaultflow] session-start: stacks detected — ${stacks.join(', ')}\n`);
           }
         }
+
+        // ── watcher daemon auto-start ─────────────────────────────────────
+        // Start the file-system watcher daemon if not already running.
+        // This captures edits from background agents, Copilot, Cursor, and
+        // any other tool that doesn't fire Claude Code hooks directly.
+        try {
+          const watchDir = (cfg.paths && cfg.paths.watcher_watch_dir)
+            || (() => {
+                 // Derive from wiki_glob: C:/GIT/*/wiki/... → C:/GIT
+                 const g = cfg.paths && cfg.paths.wiki_glob;
+                 if (g) return g.replace(/\\/g, '/').split('/').slice(0, -3).join('/');
+                 return null;
+               })();
+
+          if (watchDir && fs.existsSync(watchDir)) {
+            const { spawn } = require('child_process');
+            const watcherPath = require('path').resolve(__dirname, 'watcher.mjs');
+            const child = spawn(
+              process.execPath,
+              ['--no-warnings', watcherPath, '--daemon', watchDir],
+              { detached: true, stdio: 'ignore' }
+            );
+            child.unref();
+            process.stderr.write(`[vaultflow] session-start: watcher daemon ensured (${watchDir})\n`);
+          }
+        } catch (err) {
+          process.stderr.write(`[vaultflow] session-start: watcher start error — ${err.message}\n`);
+        }
       } catch (err) {
         process.stderr.write(`[vaultflow] session-start: stack-detector error — ${err.message}\n`);
       }
@@ -297,6 +325,44 @@ async function dispatch(event) {
       const promoted = (result && result.promoted) || 0;
       if (promoted > 0) {
         process.stderr.write(`[vaultflow] post-subagent: ${promoted} entries promoted\n`);
+      }
+
+      // ── write agent-context.json ──────────────────────────────────────
+      // Background agents read this file to get the vaultflow DB path,
+      // session ID, and top memory context so they can use FTS5 search
+      // and record their own tool calls without needing hook injection.
+      try {
+        const fs      = require('fs');
+        const path    = require('path');
+        const yaml    = require('js-yaml');
+        const db      = require('./db.cjs');
+        const session = require('./session.cjs');
+        const cfgPath = require('../../config/resolve.cjs');
+        const cfg     = fs.existsSync(cfgPath) ? yaml.load(fs.readFileSync(cfgPath, 'utf8')) : {};
+        const metricsRoot = (cfg.paths && cfg.paths.metrics_root) || '';
+        const dbFile      = (cfg.storage && cfg.storage.db_file) || 'vaultflow.db';
+
+        db.initialize(null, null);
+        const sess = session.get();
+
+        // Top 5 memory entries for generic "agent" context
+        let topMemory = [];
+        try { topMemory = db.searchMemory('agent task context project', 5); } catch (_) {}
+
+        const agentCtx = {
+          db_path:    path.join(metricsRoot, dbFile),
+          session_id: sess ? sess.id : null,
+          project:    sess ? sess.project : null,
+          helpers_dir: __dirname,
+          top_memory: topMemory.map(m => ({ title: m.title, source: m.source })),
+          updated_at: new Date().toISOString(),
+        };
+
+        const ctxPath = path.join(metricsRoot, 'agent-context.json');
+        fs.writeFileSync(ctxPath, JSON.stringify(agentCtx, null, 2), 'utf8');
+        process.stderr.write(`[vaultflow] post-subagent: agent-context.json updated\n`);
+      } catch (err) {
+        process.stderr.write(`[vaultflow] post-subagent: agent-context error — ${err.message}\n`);
       }
       break;
     }

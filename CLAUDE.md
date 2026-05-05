@@ -71,7 +71,7 @@ node .claude/helpers/stack-detector.mjs [project-path]
   db.cjs                  — SQLite + DuckDB/Parquet core (28 exports)
   hook-handler.cjs        — main event dispatcher (all hook events)
   session.cjs             — session lifecycle (start/end/restore)
-  post-edit.cjs           — edit event recorder
+  post-edit.cjs           — edit event recorder + live FTS5 re-index for wiki/vault files
   router.cjs              — skill/agent routing
   intelligence.cjs        — memory + pattern matching
   auto-memory-hook.mjs    — vault/domain/ import → FTS memory
@@ -79,7 +79,7 @@ node .claude/helpers/stack-detector.mjs [project-path]
   stack-detector.mjs      — 22-rule tech stack detector
   skill-loader.mjs        — skill content loader + injection builder
   dict.mjs                — dictionary import/search/CLI
-  watcher.mjs             — chokidar daemon (Copilot/Codex tracking)
+  watcher.mjs             — chokidar daemon (Copilot/Codex/background agent tracking)
   gen-context.mjs         — context file generator
   install-git-hooks.mjs   — git hook installer
   backfill.mjs            — vault index → DB backfill
@@ -89,13 +89,41 @@ node .claude/helpers/stack-detector.mjs [project-path]
     app.js                — Chart.js dashboard
 
 config/
-  vaultflow.yaml          — all config (paths, storage, intelligence, dashboard)
+  resolve.cjs             — config resolution (local → yaml → example)
+  vaultflow.local.yaml    — your real paths (gitignored — create from example)
+  vaultflow.yaml          — alternate name (gitignored)
+  vaultflow.example.yaml  — committed template with YOU placeholder paths
 
 .agents/
   config.toml             — Codex CLI config (15 enabled / 119 disabled)
   skills/                 — 134 skill directories
   README.md               — agent docs + trigger table
 ```
+
+## Background Agent Integration
+
+When vaultflow spawns a sub-agent (SubagentStop hook fires), it writes
+`{metrics_root}/agent-context.json` with:
+
+```json
+{
+  "db_path": "/abs/path/to/vaultflow.db",
+  "session_id": 42,
+  "project": "PRGJSMES",
+  "helpers_dir": "/abs/path/to/.claude/helpers",
+  "top_memory": [{ "title": "...", "source": "..." }],
+  "updated_at": "2026-01-01T00:00:00Z"
+}
+```
+
+Background agents (Codex, Cursor, Copilot) can read this file to:
+- Connect to the shared DB and log their own tool calls / prompts
+- Search FTS5 memory: `node {helpers_dir}/db.cjs --search "query"`
+- Know the current session ID for cross-session attribution
+
+The watcher daemon (auto-started on SessionStart) catches filesystem edits from
+any tool that doesn't fire Claude Code hooks, so all file activity is recorded
+regardless of which agent made the edit.
 
 ## Knowledge Hierarchy
 
