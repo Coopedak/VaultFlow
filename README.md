@@ -12,6 +12,9 @@ Every Claude Code session automatically:
 - **Sessions** — start/end times, duration, edit counts, command counts, and errors per session
 - **Routes prompts** — matches each prompt to the best skill + model tier using BM25 keyword overlap against your skills index
 - **Injects memory** — top-5 relevant chunks from your vault and project wikis are surfaced at `UserPromptSubmit` via FTS5 BM25 ranking
+- **Live re-index** — editing any wiki or vault `.md` file updates the FTS5 index immediately; no manual backfill required
+- **Live registry** — editing `.claude/agents/` or `vault/tools/index.md` auto-upserts vault_agents / vault_tools instantly
+- **Tool usage tracking** — vault tools matched in prompts have their `use_count` incremented; tools reaching threshold are auto-promoted to DISCOVERY.md
 - **Discovers patterns** — file-type/directory patterns that fire repeatedly are promoted to `DISCOVERY.md` stubs for conversion to vault skills
 - **Archives to Parquet** — SQLite hot store drains to Parquet nightly; DuckDB UNIONs both for analytical queries that span weeks
 
@@ -36,14 +39,20 @@ npm install
 
 ### 2. Configure paths
 
-Edit `config/vaultflow.yaml` to match your machine. At minimum set `paths.metrics_root` — everything else will use that as a base:
+`config/vaultflow.yaml` ships with placeholder paths (`YOU`). Copy it to `config/vaultflow.local.yaml` and fill in your real paths — the local file is gitignored so your paths stay private:
+
+```bash
+copy config\vaultflow.yaml config\vaultflow.local.yaml
+```
+
+At minimum set `paths.metrics_root` — everything else uses that as a base:
 
 ```yaml
 paths:
   vault_root:       "C:/Users/YOU/vault"
   metrics_root:     "C:/Users/YOU/vault/methodology/.metrics"
   projects_memory:  "C:/Users/YOU/.claude/projects"
-  skills_index:     "C:/GIT/ai-optimization/skills/index.md"
+  skills_index:     "C:/Users/YOU/.claude/skills/index.md"
   wiki_glob:        "C:/GIT/*/wiki/**/*.md"
   claude_glob:      "C:/GIT/*/CLAUDE.md"
 
@@ -55,7 +64,7 @@ storage:
 intelligence:
   pattern_fire_threshold: 3         # subagent completions before DISCOVERY.md is written
   skill_inject_high_threshold: 0.6  # confidence >= this → inject full skill instructions
-  skill_inject_low_threshold:  0.3  # confidence >= this → inject skill description only
+  skill_inject_low_thickness:  0.3  # confidence >= this → inject skill description only
 ```
 
 `metrics_root` is the only directory vaultflow writes to. It is created automatically on first run.
@@ -113,7 +122,9 @@ Claude Code session
       │
       ├── PostToolUse      → post-edit.cjs → SQLite edit_events + session.metric()
       │   (Write|Edit|     → pattern key recorded (ext::parent-dir)
-      │    MultiEdit)
+      │    MultiEdit)      → wiki/vault .md edits → FTS5 re-indexed immediately
+      │                    → .claude/agents/ edits → vault_agents upserted
+      │                    → vault/tools/index.md → vault_tools refreshed
       │
       ├── SubagentStop     → intelligence.feedback() → consolidate insights
       │                      patterns crossing fire threshold → DISCOVERY.md stub
@@ -296,7 +307,7 @@ PostToolUse fires
 
 Ralph is the nightly AI maintenance pipeline. The orchestrator (`ralph-daily.ps1`) runs all loops sequentially each night at 03:00 via Windows Task Scheduler. Loops are ordered by **priority number** — lower runs first. Loops with interval guards self-skip if run recently.
 
-> Source of truth: `C:\GIT\ai-optimization\maintenance\loops-config.json`
+> Source of truth: `vault/maintenance/loops-config.json`
 > Full loop documentation: `vault/methodology/ralph-loop-catalog.md`
 
 ### All Loops (by execution order)
@@ -448,7 +459,9 @@ vaultflow/
 │           ├── index.html      SPA for Express server mode
 │           └── app.js          Chart.js frontend for Express server mode
 ├── config/
-│   └── vaultflow.yaml          All configuration (paths, storage, intelligence thresholds)
+│   ├── vaultflow.yaml          Example config with placeholder paths (committed)
+│   ├── vaultflow.local.yaml    Your real config — gitignored, never leaves your machine
+│   └── resolve.cjs             Picks vaultflow.local.yaml over vaultflow.yaml at runtime
 ├── scripts/
 │   └── backfill.mjs            CLI entry point (aliased as `vaultflow` bin)
 ├── .gitignore
