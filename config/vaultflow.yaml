@@ -40,6 +40,12 @@ paths:
   # ruflo .agents/ directory (Codex CLI skills)
   agents_dir: "C:/GIT/vaultflow/.agents"
 
+  # User-level Claude Code skills (C:\Users\YOU\.claude\skills\)
+  user_skills_dir: "C:/Users/YOU/.claude/skills"
+
+  # Glob for project-level .claude/agents/ markdown files
+  project_agents_glob: "C:/GIT/*/.claude/agents/*.md"
+
 storage:
   # SQLite write buffer
   db_file: "vaultflow.db"          # relative to metrics_root

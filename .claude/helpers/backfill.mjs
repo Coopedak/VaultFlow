@@ -347,7 +347,7 @@ function parseCodexConfig(configPath) {
  * @param {boolean} dryRun
  * @returns {{ registered: number }}
  */
-function backfillAgents(cfg, dryRun) {
+async function backfillAgents(cfg, dryRun) {
   let registered = 0;
 
   // ── Claude skills from skills_index ──────────────────────────────────
@@ -392,6 +392,109 @@ function backfillAgents(cfg, dryRun) {
     console.log(`[backfill] Codex agents registered: ${codexSkills.length}${dryRun ? ' (dry-run)' : ''}`);
   } else {
     process.stderr.write('[backfill] .agents/config.toml not found — skipping codex agent backfill\n');
+  }
+
+  // ── User skills from .claude/skills/ ─────────────────────────────────
+  const userSkillsDir = cfg.paths && cfg.paths.user_skills_dir;
+  if (userSkillsDir && existsSync(userSkillsDir)) {
+    const require = createRequire(import.meta.url);
+    const fs = require('fs');
+    let userCount = 0;
+    for (const entry of fs.readdirSync(userSkillsDir, { withFileTypes: true })) {
+      let skillName = null;
+      let descText  = '';
+
+      if (entry.isFile() && entry.name.endsWith('.md') && entry.name !== 'index.md') {
+        skillName = entry.name.replace(/\.md$/, '');
+        try {
+          const raw   = readFileSync(path.join(userSkillsDir, entry.name), 'utf8');
+          const lines = raw.split('\n').filter(l => l.trim() && !l.startsWith('#'));
+          descText    = lines[0] ? lines[0].slice(0, 120) : '';
+        } catch (_) {}
+      } else if (entry.isDirectory()) {
+        skillName = entry.name;
+        const indexFile = path.join(userSkillsDir, entry.name, 'index.md');
+        if (existsSync(indexFile)) {
+          try {
+            const raw   = readFileSync(indexFile, 'utf8');
+            const lines = raw.split('\n').filter(l => l.trim() && !l.startsWith('#'));
+            descText    = lines[0] ? lines[0].slice(0, 120) : '';
+          } catch (_) {}
+        }
+      }
+
+      if (!skillName) continue;
+      if (!dryRun) {
+        try {
+          db.upsertVaultAgent(skillName, skillName, 'user-skill', descText, null);
+          registered++;
+          userCount++;
+        } catch (err) {
+          process.stderr.write(`[backfill] user-skill upsert error '${skillName}': ${err.message}\n`);
+        }
+      } else {
+        registered++;
+        userCount++;
+      }
+    }
+    console.log(`[backfill] User skills registered: ${userCount}${dryRun ? ' (dry-run)' : ''}`);
+  }
+
+  // ── Project agents from C:/GIT/*/.claude/agents/*.md ─────────────────
+  const projectAgentsGlob = cfg.paths && cfg.paths.project_agents_glob;
+  if (projectAgentsGlob) {
+    let agentFiles = [];
+    try {
+      agentFiles = await glob(projectAgentsGlob, { nodir: true, absolute: true, windowsPathsNoEscape: true });
+    } catch (err) {
+      process.stderr.write(`[backfill] project_agents_glob error: ${err.message}\n`);
+    }
+
+    // Build exclude set from config
+    const excludeProjects = new Set((cfg.paths.exclude_projects || []).map(p => p.toLowerCase()));
+
+    let projCount = 0;
+    for (const agentFile of agentFiles) {
+      const normalized = agentFile.replace(/\\/g, '/');
+      if (normalized.split('/').some(seg => excludeProjects.has(seg.toLowerCase()))) continue;
+
+      const agentName = path.basename(agentFile, '.md');
+      // Derive project name from path (segment after GIT/)
+      const parts     = normalized.split('/');
+      const gitIdx    = parts.indexOf('GIT');
+      const project   = gitIdx !== -1 ? parts[gitIdx + 1] : null;
+      const agentId   = project ? `${project}::${agentName}` : agentName;
+
+      let descText = '';
+      try {
+        const raw   = readFileSync(agentFile, 'utf8');
+        const lines = raw.split('\n');
+        // First non-empty, non-heading, non-frontmatter line
+        let inFm = lines[0] === '---';
+        for (const line of lines) {
+          if (inFm) { if (line === '---' && descText === '') { inFm = false; } continue; }
+          const t = line.trim();
+          if (t && !t.startsWith('#') && !t.startsWith('|') && !t.startsWith('-')) {
+            descText = t.slice(0, 120);
+            break;
+          }
+        }
+      } catch (_) {}
+
+      if (!dryRun) {
+        try {
+          db.upsertVaultAgent(agentId, agentName, project ? `project:${project}` : 'project', descText, null);
+          registered++;
+          projCount++;
+        } catch (err) {
+          process.stderr.write(`[backfill] project agent upsert error '${agentId}': ${err.message}\n`);
+        }
+      } else {
+        registered++;
+        projCount++;
+      }
+    }
+    console.log(`[backfill] Project agents registered: ${projCount}${dryRun ? ' (dry-run)' : ''}`);
   }
 
   console.log(`[backfill] Agents total registered: ${registered}${dryRun ? ' (dry-run)' : ''}`);
@@ -466,7 +569,7 @@ export async function runBackfill(options = {}) {
 
   // ── registry-only modes ───────────────────────────────────────────────
   if (skillsOnly) {
-    agentsResult = backfillAgents(cfg, dryRun);
+    agentsResult = await backfillAgents(cfg, dryRun);
     if (!dryRun) db.close();
     return { total: 0, entries: 0, skipped: 0, agents: agentsResult.registered, tools: 0 };
   }
@@ -478,7 +581,7 @@ export async function runBackfill(options = {}) {
   }
 
   // ── full backfill: memory + registries ────────────────────────────────
-  agentsResult = backfillAgents(cfg, dryRun);
+  agentsResult = await backfillAgents(cfg, dryRun);
   toolsResult  = backfillTools(cfg, dryRun);
 
   // Collect all candidate markdown files
