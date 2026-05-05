@@ -293,6 +293,14 @@ const SCHEMA_SQL = `
     use_count       INTEGER DEFAULT 0,
     last_used       TEXT
   );
+
+  -- Performance indexes — queried on every hook fire
+  CREATE INDEX IF NOT EXISTS idx_edit_events_session   ON edit_events(session_id);
+  CREATE INDEX IF NOT EXISTS idx_edit_events_timestamp ON edit_events(timestamp);
+  CREATE INDEX IF NOT EXISTS idx_tool_calls_session    ON tool_calls(session_id);
+  CREATE INDEX IF NOT EXISTS idx_prompts_session       ON prompts(session_id);
+  CREATE INDEX IF NOT EXISTS idx_memory_source         ON memory_entries(source);
+  CREATE INDEX IF NOT EXISTS idx_patterns_fire         ON patterns(fire_count);
 `;
 
 // ── internal helpers ──────────────────────────────────────────────────────
@@ -399,15 +407,39 @@ function initialize(metricsRoot, dbFile) {
   // WAL mode for concurrent readers + write performance
   _db.exec('PRAGMA journal_mode = WAL');
   _db.exec('PRAGMA busy_timeout = 5000');
+  _db.exec('PRAGMA cache_size = -8000');     // 8 MB page cache
+  _db.exec('PRAGMA temp_store = MEMORY');   // temp tables in RAM
 
   // Apply schema (idempotent)
   _db.exec(SCHEMA_SQL);
 
-  // Additive migrations — safe to run every time; fail silently if column exists
+  // Additive migrations — safe to run every time; fail silently if already applied
+
+  // v1: add promoted column to vault_tools
   try { _db.exec('ALTER TABLE vault_tools ADD COLUMN promoted INTEGER DEFAULT 0'); } catch (err) {
     if (!err.message.includes('duplicate column')) {
       process.stderr.write(`[db] migration warning: ${err.message}\n`);
     }
+  }
+
+  // v2: unique index on memory_entries(source, title) to prevent duplicate accumulation.
+  // Deduplicate existing rows first (keep the MIN(id) per source+title pair) so the
+  // index creation doesn't fail on pre-existing duplicates.
+  try {
+    const hasMigration = _db.prepare(
+      "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_memory_uniq'"
+    ).get();
+    if (!hasMigration) {
+      _db.exec(`
+        DELETE FROM memory_entries
+        WHERE id NOT IN (
+          SELECT MIN(id) FROM memory_entries GROUP BY source, title
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_memory_uniq ON memory_entries(source, title);
+      `);
+    }
+  } catch (err) {
+    process.stderr.write(`[db] memory_entries dedup migration warning: ${err.message}\n`);
   }
 }
 
@@ -506,10 +538,13 @@ function upsertMemoryEntry(source, title, body, tags) {
 
   // The FTS sync triggers fire automatically on INSERT and UPDATE,
   // so no manual FTS manipulation is needed here.
+  // ON CONFLICT on (source, title): update body+tags so stale content doesn't linger.
   _db.prepare(`
     INSERT INTO memory_entries (source, title, body, tags)
     VALUES (@source, @title, @body, @tags)
-    ON CONFLICT DO NOTHING
+    ON CONFLICT(source, title) DO UPDATE SET
+      body = excluded.body,
+      tags = excluded.tags
   `).run({ source, title, body: body || '', tags: tags || '' });
 }
 

@@ -36,9 +36,14 @@ function loadConfig() {
 function getSessionsDir() {
   if (_sessionsDir) return _sessionsDir;
 
-  const cfg = loadConfig();
-  _sessionsDir = (cfg && cfg.paths && cfg.paths.sessions_dir)
-    || path.join(os.homedir(), 'vault', 'methodology', '.metrics', 'sessions');
+  const cfg         = loadConfig();
+  // sessions_dir is under storage (relative to metrics_root), not under paths
+  const metricsRoot = (cfg && cfg.paths   && cfg.paths.metrics_root)      || '';
+  const subDir      = (cfg && cfg.storage && cfg.storage.sessions_dir)    || 'sessions';
+
+  _sessionsDir = metricsRoot
+    ? path.join(metricsRoot, subDir)
+    : path.join(os.homedir(), 'vault', 'methodology', '.metrics', 'sessions');
 
   if (!fs.existsSync(_sessionsDir)) {
     fs.mkdirSync(_sessionsDir, { recursive: true });
@@ -200,8 +205,9 @@ function end() {
  */
 function metric(name) {
   if (!_session) {
-    _session = readCurrentJson();
-    if (!_session) return;
+    const loaded = readCurrentJson();
+    if (!loaded) return;
+    _session = loaded;  // restore to in-memory so subsequent calls don't re-read disk
   }
 
   if (name in _session.metrics) {

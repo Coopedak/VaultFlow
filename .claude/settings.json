@@ -40,14 +40,6 @@
             "command": "node C:\\GIT\\vaultflow\\.claude\\helpers\\hook-handler.cjs session-start"
           }
         ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node C:\\GIT\\vaultflow\\.claude\\helpers\\hook-handler.cjs session-restore"
-          }
-        ]
       }
     ],
     "SessionEnd": [
@@ -76,14 +68,6 @@
           {
             "type": "command",
             "command": "node C:\\GIT\\vaultflow\\.claude\\helpers\\hook-handler.cjs compact-manual"
-          }
-        ]
-      },
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node C:\\GIT\\vaultflow\\.claude\\helpers\\hook-handler.cjs compact-auto"
           }
         ]
       }

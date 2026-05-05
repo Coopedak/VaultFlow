@@ -113,8 +113,8 @@ function consolidate() {
       db.upsertPattern(key, 'auto');
     }
 
-    // Clear the file after successful processing
-    fs.writeFileSync(insightsPath, '', 'utf8');
+    // Clear AFTER successful DB writes so a crash mid-process doesn't lose the file
+    try { fs.writeFileSync(insightsPath, '', 'utf8'); } catch (_) {}
 
     const edges = Object.keys(counts).length;
     return { entries, edges, newEntries: edges };

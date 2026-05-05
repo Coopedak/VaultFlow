@@ -92,16 +92,16 @@ async function dispatch(event) {
       } catch (_) {}
 
       // ── skill auto-injection ────────────────────────────────────────────
-      // Modifies prompt content if confidence meets threshold and the same
-      // skill hasn't been injected recently in this session.
-      let injectionContent = null;
+      // Injects skill instructions into the system context via additionalContext.
+      // Only fires if confidence >= threshold and the skill wasn't recently injected.
+      let additionalContext = null;
       try {
         const { buildInjection } = await import('./skill-loader.mjs');
         const session            = require('./session.cjs');
         const { skill, at }      = session.getInjectedSkill();
         const inj = buildInjection(routing.skill, routing.confidence, skill, at);
         if (inj) {
-          injectionContent = prompt + inj.text;
+          additionalContext = inj.text;  // just the skill content, NOT the full prompt
           session.setInjectedSkill(routing.skill);
           process.stderr.write(
             `[vaultflow] route: injecting ${routing.skill} (${inj.tier}, confidence ${routing.confidence})\n`
@@ -111,23 +111,15 @@ async function dispatch(event) {
         process.stderr.write(`[vaultflow] route: skill-loader error — ${err.message}\n`);
       }
 
-      // Only decision + optional content are valid UserPromptSubmit output fields.
-      // routing/context/tool_summary are internal — log to stderr for diagnostics.
       process.stderr.write(
         `[vaultflow] route: skill=${routing.skill} conf=${routing.confidence} ` +
         `entries=${entries.length} tools=${toolSummary.length}\n`
       );
 
-      const response = {};
-      if (injectionContent) {
-        response.hookSpecificOutput = {
-          hookEventName: 'UserPromptSubmit',
-          additionalContext: injectionContent,
-        };
-      }
-
-      if (Object.keys(response).length > 0) {
-        process.stdout.write(JSON.stringify(response));
+      // UserPromptSubmit hook output: {"additionalContext": "..."} at top level.
+      // The hookSpecificOutput wrapper is NOT the correct format for this hook.
+      if (additionalContext) {
+        process.stdout.write(JSON.stringify({ additionalContext }));
       }
       break;
     }
@@ -332,34 +324,32 @@ async function dispatch(event) {
       // session ID, and top memory context so they can use FTS5 search
       // and record their own tool calls without needing hook injection.
       try {
-        const fs      = require('fs');
-        const path    = require('path');
-        const yaml    = require('js-yaml');
-        const db      = require('./db.cjs');
-        const session = require('./session.cjs');
-        const cfgPath = require('../../config/resolve.cjs');
-        const cfg     = fs.existsSync(cfgPath) ? yaml.load(fs.readFileSync(cfgPath, 'utf8')) : {};
-        const metricsRoot = (cfg.paths && cfg.paths.metrics_root) || '';
-        const dbFile      = (cfg.storage && cfg.storage.db_file) || 'vaultflow.db';
+        const _fs      = require('fs');
+        const _path    = require('path');
+        const _yaml    = require('js-yaml');
+        const _db      = require('./db.cjs');
+        const _session = require('./session.cjs');
+        const _cfgPath = require('../../config/resolve.cjs');
+        const _cfg     = _fs.existsSync(_cfgPath) ? _yaml.load(_fs.readFileSync(_cfgPath, 'utf8')) : {};
+        const _metrics = (_cfg.paths && _cfg.paths.metrics_root) || '';
+        const _dbFile  = (_cfg.storage && _cfg.storage.db_file) || 'vaultflow.db';
 
-        db.initialize(null, null);
-        const sess = session.get();
+        _db.initialize(null, null);
+        const _sess = _session.get();
 
-        // Top 5 memory entries for generic "agent" context
         let topMemory = [];
-        try { topMemory = db.searchMemory('agent task context project', 5); } catch (_) {}
+        try { topMemory = _db.searchMemory('agent task context project', 5); } catch (_) {}
 
         const agentCtx = {
-          db_path:    path.join(metricsRoot, dbFile),
-          session_id: sess ? sess.id : null,
-          project:    sess ? sess.project : null,
+          db_path:     _path.join(_metrics, _dbFile),
+          session_id:  _sess ? _sess.id      : null,
+          project:     _sess ? _sess.project : null,
           helpers_dir: __dirname,
-          top_memory: topMemory.map(m => ({ title: m.title, source: m.source })),
-          updated_at: new Date().toISOString(),
+          top_memory:  topMemory.map(m => ({ title: m.title, source: m.source })),
+          updated_at:  new Date().toISOString(),
         };
 
-        const ctxPath = path.join(metricsRoot, 'agent-context.json');
-        fs.writeFileSync(ctxPath, JSON.stringify(agentCtx, null, 2), 'utf8');
+        _fs.writeFileSync(_path.join(_metrics, 'agent-context.json'), JSON.stringify(agentCtx, null, 2), 'utf8');
         process.stderr.write(`[vaultflow] post-subagent: agent-context.json updated\n`);
       } catch (err) {
         process.stderr.write(`[vaultflow] post-subagent: agent-context error — ${err.message}\n`);
