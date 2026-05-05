@@ -513,6 +513,70 @@ async function dispatch(event) {
       } catch (err) {
         process.stderr.write(`[vaultflow] post-subagent: agent-context error — ${err.message}\n`);
       }
+
+      // ── model routing — record verdict and check for demotion ─────────────
+      try {
+        const router  = require('./model-router.cjs');
+        const _yaml2  = require('js-yaml');
+        const _cfgP2  = require('../../config/resolve.cjs');
+        const _cfg2   = _fs.existsSync(_cfgP2) ? _yaml2.load(_fs.readFileSync(_cfgP2, 'utf8')) : {};
+        const _metrics2 = (_cfg2.paths && _cfg2.paths.metrics_root) || '';
+
+        // subagent_type is the reliable agent identifier (e.g. "reviewer-code",
+        // "developer-fullstack"). It lives at tool_input.subagent_type in the
+        // Claude Code SubagentStop payload.
+        const agentType = sanitizeString(
+          (subagentPayload.tool_input && subagentPayload.tool_input.subagent_type) ||
+          subagentPayload.subagent_type || '', 100);
+        const agent = agentType || sanitizeString(agentDesc || 'unknown', 100);
+
+        // model is not in the hook payload when the Agent tool is called without
+        // an explicit model override. Resolve it from devteam-config agent_models.
+        const TIER_MAP = {
+          'opus': 'claude-opus-4-7',   'Top': 'claude-opus-4-7',
+          'sonnet': 'claude-sonnet-4-6', 'Mid': 'claude-sonnet-4-6',
+          'haiku': 'claude-haiku-4-5-20251001', 'Low': 'claude-haiku-4-5-20251001',
+        };
+        let model = sanitizeString(
+          (subagentPayload.tool_input && subagentPayload.tool_input.model) ||
+          subagentPayload.model || '', 100);
+        if (!model && agentType) {
+          try {
+            const _os      = require('os');
+            const _dtPath  = _path.join(_os.homedir(), '.claude', 'devteam-config.json');
+            const _dtCfg   = _fs.existsSync(_dtPath) ? JSON.parse(_fs.readFileSync(_dtPath, 'utf8')) : {};
+            const _tier    = (_dtCfg.agent_models && _dtCfg.agent_models[agentType]) || 'sonnet';
+            model = TIER_MAP[_tier] || _tier;
+          } catch (_) { model = 'claude-sonnet-4-6'; }
+        }
+        if (!model) model = 'unknown';
+
+        const type    = sanitizeString(
+          (subagentPayload.tool_input && subagentPayload.tool_input.task_type) ||
+          subagentPayload.task_type || 'general', 100);
+        const approved = true; // SubagentStop fires on completion — treat as success
+
+        router.recordVerdict(agent, model, type, approved);
+
+        const demotion = router.checkAndDemote(agent, type);
+        if (demotion && _metrics2) {
+          const recPath = _path.join(_metrics2, 'model-recommendations.json');
+          let recs = {};
+          try { recs = JSON.parse(_fs.readFileSync(recPath, 'utf8')); } catch (_) {}
+          recs[agent] = {
+            model:        demotion.to,
+            demoted_from: demotion.from,
+            updated_at:   new Date().toISOString(),
+          };
+          _fs.writeFileSync(recPath, JSON.stringify(recs, null, 2), 'utf8');
+          process.stderr.write(
+            `[vaultflow] post-subagent: model-router wrote recommendation for "${agent}": ${demotion.from} → ${demotion.to}\n`
+          );
+        }
+      } catch (err) {
+        process.stderr.write(`[vaultflow] post-subagent: model-router error — ${err.message}\n`);
+      }
+
       break;
     }
 

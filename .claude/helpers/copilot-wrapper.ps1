@@ -73,6 +73,15 @@ if ($promptText -and $Subcommand -in @('suggest', 'explain')) {
     $null = $payload | node $HNDLR copilot-prompt 2>&1
 }
 
+# ── resume context block ─────────────────────────────────────────────────────
+# Print a brief session-resume summary for the current project before launching.
+
+$RESUME = Join-Path $PSScriptRoot 'copilot-resume.cjs'
+if (Test-Path $RESUME) {
+    $projectName = Split-Path (Get-Location) -Leaf
+    node $RESUME $projectName
+}
+
 # ── run gh copilot (fully interactive) ───────────────────────────────────────
 
 if ($Subcommand) {

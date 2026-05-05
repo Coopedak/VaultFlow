@@ -23,6 +23,10 @@ function loadConfig() {
 
 // ── helpers ───────────────────────────────────────────────────────────────
 
+function estimateTokens(text) {
+  return Math.ceil((text || '').length / 4);
+}
+
 function metricsRoot() {
   const cfg = loadConfig();
   return (cfg.paths && cfg.paths.metrics_root) || '';
@@ -191,13 +195,42 @@ function getContext(prompt) {
     ensureDbOpen();
     const session  = require('./session.cjs');
     const fs       = require('fs');
+
+    // ── last-session summary prepend ──────────────────────────────────────
+    // Collected outside the token-budget loop and prepended unconditionally.
+    const prependItems = [];
+    try {
+      const sessionObj = session.get() || {};
+      const project    = sessionObj.project || path.basename(process.cwd());
+      const lastSummary = getDb().getLatestSessionSummary(project);
+      const ONE_DAY_MS  = 24 * 60 * 60 * 1000;
+      if (lastSummary && (Date.now() - new Date(lastSummary.summary_at).getTime()) < ONE_DAY_MS) {
+        const h      = Math.round((Date.now() - new Date(lastSummary.summary_at).getTime()) / 3600000);
+        const files  = (lastSummary.top_files  || []).slice(0, 3).join(', ') || 'none';
+        const pats   = (lastSummary.patterns   || []).slice(0, 2).join(', ') || 'none';
+        const durMin = Math.round((lastSummary.duration_ms || 0) / 60000);
+        prependItems.push({
+          title:  'Last Session',
+          body:   `Last session (${h}h ago): edited [${files}], patterns: [${pats}], duration ${durMin}m`,
+          source: 'session_summaries',
+          rank:   0,
+        });
+      }
+    } catch (_) {}
+
     const RANK_FLOOR  = -0.3;  // BM25 is negative; closer to 0 = worse match
     const STALE_MS    = 90 * 24 * 60 * 60 * 1000;
     const cutoff      = Date.now() - STALE_MS;
     const recentSrcs  = new Set(session.getInjectedSources());
 
+    const cfg                  = loadConfig();
+    const intel                = (cfg && cfg.intelligence) || {};
+    const TOKEN_BUDGET         = intel.context_token_budget      || 400;
+    const ENTRY_MAX_TOKENS     = intel.context_entry_max_tokens  || 120;
+
     const results = getDb().searchMemory(prompt, 10); // fetch more, then filter down to 5
     const filtered = [];
+    let tokensSoFar = 0;
 
     for (const r of results) {
       // Relevance floor — skip poor BM25 matches
@@ -215,7 +248,18 @@ function getContext(prompt) {
       // Session dedup — skip source injected recently this session
       if (r.source && recentSrcs.has(r.source)) continue;
 
-      filtered.push(r);
+      // Per-entry body truncation (non-mutating)
+      const maxChars     = ENTRY_MAX_TOKENS * 4;
+      const truncatedBody = (r.body && r.body.length > maxChars)
+        ? r.body.slice(0, maxChars)
+        : r.body;
+
+      // Session token budget — stop if adding this entry would exceed the budget
+      const entryTokens = estimateTokens(truncatedBody);
+      if (tokensSoFar + entryTokens > TOKEN_BUDGET) break;
+      tokensSoFar += entryTokens;
+
+      filtered.push({ ...r, _truncatedBody: truncatedBody });
       if (filtered.length >= 5) break;
     }
 
@@ -224,12 +268,15 @@ function getContext(prompt) {
       if (r.source) session.addInjectedSource(r.source);
     }
 
-    return filtered.map((r) => ({
-      title:  r.title,
-      body:   r.body,
-      source: r.source,
-      rank:   r.rank,
-    }));
+    return [
+      ...prependItems,
+      ...filtered.map((r) => ({
+        title:  r.title,
+        body:   r._truncatedBody !== undefined ? r._truncatedBody : r.body,
+        source: r.source,
+        rank:   r.rank,
+      })),
+    ];
   } catch {
     return [];
   }

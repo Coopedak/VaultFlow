@@ -195,6 +195,39 @@ function end() {
   // Overwrite current.json with the closed state so subsequent reads know it ended
   writeCurrentJson(_session);
 
+  // Write session compaction summary — crash-safe so hook path never throws.
+  try {
+    const db  = require('./db.cjs');
+    const raw = db.raw();
+    // Top 5 files by edit count for this session
+    const topFiles = raw.prepare(`
+      SELECT file_path, COUNT(*) as cnt
+      FROM edit_events
+      WHERE session_id = ?
+      GROUP BY file_path
+      ORDER BY cnt DESC
+      LIMIT 5
+    `).all(_session.id).map(r => path.basename(r.file_path));
+
+    // Patterns fired this session (from patterns table, recent)
+    const patterns = raw.prepare(`
+      SELECT pattern_key FROM patterns
+      WHERE last_fired > ?
+      ORDER BY fire_count DESC
+      LIMIT 3
+    `).all(new Date(Date.now() - (_session.durationMs || 0) - 60000).toISOString())
+      .map(r => r.pattern_key);
+
+    db.writeSessionSummary({
+      session_id:  _session.id,
+      project:     _session.project || path.basename(_session.cwd || ''),
+      duration_ms: _session.durationMs || 0,
+      top_files:   topFiles,
+      patterns:    patterns,
+      summary_at:  new Date().toISOString(),
+    });
+  } catch (_) {}
+
   _session = null;
 }
 
@@ -258,7 +291,7 @@ function getInjectedSkill() {
 
 function getInjectedSources() {
   const s = _session || readCurrentJson();
-  return (s && Array.isArray(s.injectedSources)) ? s.injectedSources.slice(-3) : [];
+  return (s && Array.isArray(s.injectedSources)) ? s.injectedSources : [];
 }
 
 function addInjectedSource(sourcePath) {

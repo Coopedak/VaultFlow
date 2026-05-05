@@ -73,12 +73,21 @@ intelligence:
   dictionary_auto_populate: true
   tool_auto_promote_calls: 5
   tool_auto_promote_sessions: 3
+  context_token_budget: 400        # max tokens injected per getContext() call
+  context_entry_max_tokens: 120    # max tokens per individual memory entry body
 
 memory:
   context_injection_limit: 5
   max_import_file_size_mb: 10
   short_term_days: 1
   long_term_days: 30
+
+model_routing:
+  pinned_agents:
+    - project-manager      # always top tier — orchestration errors are catastrophic
+    - security-reviewer    # always top tier — missed vulnerabilities are catastrophic
+  demotion_threshold: 0.95     # approval rate required before demotion eligible
+  demotion_min_sessions: 10    # minimum verdicts before demotion considered
 
 dashboard:
   port: 7700

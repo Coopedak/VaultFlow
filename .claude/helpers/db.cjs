@@ -317,6 +317,31 @@ const SCHEMA_SQL = `
   CREATE INDEX IF NOT EXISTS idx_verdicts_agent ON agent_verdicts(agent_type);
   CREATE INDEX IF NOT EXISTS idx_verdicts_ts    ON agent_verdicts(timestamp);
 
+  -- Session compaction summaries — written by session.end(), read by intelligence.getContext().
+  CREATE TABLE IF NOT EXISTS session_summaries (
+    session_id   TEXT PRIMARY KEY,
+    project      TEXT,
+    duration_ms  INTEGER,
+    top_files    TEXT,
+    patterns     TEXT,
+    summary_at   TEXT
+  );
+
+  -- Model performance tracking for automatic tier demotion.
+  -- One row per (agent, model, task_type) triple; current=1 marks the active model.
+  CREATE TABLE IF NOT EXISTS model_performance (
+    agent             TEXT NOT NULL,
+    model             TEXT NOT NULL,
+    task_type         TEXT NOT NULL DEFAULT 'general',
+    verdicts_total    INTEGER NOT NULL DEFAULT 0,
+    verdicts_approved INTEGER NOT NULL DEFAULT 0,
+    sessions_on_model INTEGER NOT NULL DEFAULT 0,
+    promoted_at       TEXT,
+    demoted_at        TEXT,
+    current           INTEGER NOT NULL DEFAULT 1,
+    PRIMARY KEY (agent, model, task_type)
+  );
+
   -- Performance indexes — queried on every hook fire
   CREATE INDEX IF NOT EXISTS idx_edit_events_session   ON edit_events(session_id);
   CREATE INDEX IF NOT EXISTS idx_edit_events_timestamp ON edit_events(timestamp);
@@ -324,6 +349,7 @@ const SCHEMA_SQL = `
   CREATE INDEX IF NOT EXISTS idx_prompts_session       ON prompts(session_id);
   CREATE INDEX IF NOT EXISTS idx_memory_source         ON memory_entries(source);
   CREATE INDEX IF NOT EXISTS idx_patterns_fire         ON patterns(fire_count);
+  CREATE INDEX IF NOT EXISTS idx_model_perf_agent      ON model_performance(agent);
 `;
 
 // ── internal helpers ──────────────────────────────────────────────────────
@@ -1410,6 +1436,146 @@ async function flushTelemetryToParquet(metricsRoot, parquetDir) {
   return result;
 }
 
+// ── model performance + routing ──────────────────────────────────────────
+
+/**
+ * Record a model verdict (approved or rejected) for an agent/model/taskType triple.
+ *
+ * Uses INSERT OR IGNORE + UPDATE so the row is always present before incrementing.
+ *
+ * @param {string} agent
+ * @param {string} model
+ * @param {string} taskType
+ * @param {boolean} approved
+ */
+function recordModelVerdict(agent, model, taskType, approved) {
+  if (!_db) throw new Error('db.recordModelVerdict: call initialize() first');
+
+  const type = taskType || 'general';
+
+  _db.prepare(`
+    INSERT OR IGNORE INTO model_performance (agent, model, task_type, verdicts_total, verdicts_approved, current)
+    VALUES (?, ?, ?, 0, 0, 1)
+  `).run(agent, model, type);
+
+  _db.prepare(`
+    UPDATE model_performance
+    SET verdicts_total    = verdicts_total + 1,
+        verdicts_approved = verdicts_approved + ?
+    WHERE agent = ? AND model = ? AND task_type = ?
+  `).run(approved ? 1 : 0, agent, model, type);
+}
+
+/**
+ * Return all performance rows for an agent, ordered by current DESC then sessions DESC.
+ *
+ * @param {string} agent
+ * @returns {Array<{agent, model, task_type, verdicts_total, verdicts_approved, sessions_on_model, promoted_at, demoted_at, current}>}
+ */
+function getModelPerformance(agent) {
+  if (!_db) throw new Error('db.getModelPerformance: call initialize() first');
+
+  return _db.prepare(`
+    SELECT agent, model, task_type, verdicts_total, verdicts_approved,
+           sessions_on_model, promoted_at, demoted_at, current
+    FROM   model_performance
+    WHERE  agent = ?
+    ORDER  BY current DESC, sessions_on_model DESC
+  `).all(agent);
+}
+
+/**
+ * Insert or replace a model_performance row, merging provided fields with defaults.
+ *
+ * @param {string} agent
+ * @param {string} model
+ * @param {object} fields  Optional: sessions_on_model, promoted_at, demoted_at, current
+ */
+function upsertModelPerformance(agent, model, fields) {
+  if (!_db) throw new Error('db.upsertModelPerformance: call initialize() first');
+
+  const f        = fields || {};
+  const taskType = f.task_type || 'general';
+
+  // Read existing row to preserve verdict counts on a replace
+  const existing = _db.prepare(`
+    SELECT * FROM model_performance WHERE agent = ? AND model = ? AND task_type = ?
+  `).get(agent, model, taskType);
+
+  _db.prepare(`
+    INSERT OR REPLACE INTO model_performance
+      (agent, model, task_type, verdicts_total, verdicts_approved,
+       sessions_on_model, promoted_at, demoted_at, current)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    agent,
+    model,
+    taskType,
+    f.verdicts_total    != null ? f.verdicts_total    : (existing ? existing.verdicts_total    : 0),
+    f.verdicts_approved != null ? f.verdicts_approved : (existing ? existing.verdicts_approved : 0),
+    f.sessions_on_model != null ? f.sessions_on_model : (existing ? existing.sessions_on_model : 0),
+    f.promoted_at       != null ? f.promoted_at       : (existing ? existing.promoted_at       : null),
+    f.demoted_at        != null ? f.demoted_at        : (existing ? existing.demoted_at        : null),
+    f.current           != null ? f.current           : (existing ? existing.current           : 1)
+  );
+}
+
+// ── session compaction ────────────────────────────────────────────────────
+
+/**
+ * Write (or replace) a session summary row.
+ *
+ * @param {object} obj
+ * @param {string}   obj.session_id
+ * @param {string}   obj.project
+ * @param {number}   obj.duration_ms
+ * @param {string[]} obj.top_files    Serialized to JSON before storing.
+ * @param {string[]} obj.patterns     Serialized to JSON before storing.
+ * @param {string}   obj.summary_at   ISO timestamp.
+ */
+function writeSessionSummary(obj) {
+  if (!_db) throw new Error('db.writeSessionSummary: call initialize() first');
+
+  _db.prepare(`
+    INSERT OR REPLACE INTO session_summaries
+      (session_id, project, duration_ms, top_files, patterns, summary_at)
+    VALUES
+      (@session_id, @project, @duration_ms, @top_files, @patterns, @summary_at)
+  `).run({
+    session_id:  obj.session_id,
+    project:     obj.project     || null,
+    duration_ms: obj.duration_ms || 0,
+    top_files:   JSON.stringify(Array.isArray(obj.top_files) ? obj.top_files : []),
+    patterns:    JSON.stringify(Array.isArray(obj.patterns)  ? obj.patterns  : []),
+    summary_at:  obj.summary_at  || new Date().toISOString(),
+  });
+}
+
+/**
+ * Return the most recent session summary for the given project, or null if none.
+ * Arrays (top_files, patterns) are parsed from JSON before returning.
+ *
+ * @param {string} project
+ * @returns {object|null}
+ */
+function getLatestSessionSummary(project) {
+  if (!_db) throw new Error('db.getLatestSessionSummary: call initialize() first');
+
+  const row = _db.prepare(`
+    SELECT *
+    FROM   session_summaries
+    WHERE  project = ?
+    ORDER  BY summary_at DESC
+    LIMIT  1
+  `).get(project);
+
+  if (!row) return null;
+
+  try { row.top_files = JSON.parse(row.top_files); } catch (_) { row.top_files = []; }
+  try { row.patterns  = JSON.parse(row.patterns);  } catch (_) { row.patterns  = []; }
+  return row;
+}
+
 /**
  * Close the SQLite connection.
  * Safe to call even if initialize() was never called.
@@ -1466,11 +1632,18 @@ module.exports = {
   // agent verdicts
   recordVerdict,
   getVerdictSummary,
+  // model routing
+  recordModelVerdict,
+  getModelPerformance,
+  upsertModelPerformance,
   // session-end helpers
   getUnpromotedVaultTools,
   promoteVaultTool,
   getLastSessionPrompts,
   getDictionaryTermSet,
+  // session compaction
+  writeSessionSummary,
+  getLatestSessionSummary,
   // Parquet archival
   flushToParquet,
   flushTelemetryToParquet,

@@ -24,7 +24,8 @@
     "dict": "node .claude/helpers/dict.mjs",
     "dict:import": "node .claude/helpers/dict.mjs --import",
     "gen-context": "node .claude/helpers/gen-context.mjs",
-    "install-hooks": "node .claude/helpers/install-git-hooks.mjs"
+    "install-hooks": "node .claude/helpers/install-git-hooks.mjs",
+    "model-status": "node .claude/helpers/model-router.cjs --status"
   },
   "dependencies": {
     "@duckdb/node-api": "^1.5.2-r.1",

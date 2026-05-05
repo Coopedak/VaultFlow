@@ -46,12 +46,16 @@ const STACK_RULES = [
   // .NET UI
   { key: 'wpf',          glob:  '**/*.xaml'       },
   { key: 'blazor',       glob:  '**/*.razor'      },
+  // backend / server
+  { key: 'express',      pkgDeps: ['express'] },
+  { key: 'fastify',      pkgDeps: ['fastify'] },
+  { key: 'nestjs',       pkgDeps: ['@nestjs/core'] },
   // infra / ops
   { key: 'docker',       files: ['docker-compose.yml', 'docker-compose.yaml', 'Dockerfile'] },
   { key: 'github-actions', glob: '.github/workflows/*.yml' },
   // data
-  { key: 'sqlite',       pkgDeps: ['better-sqlite3', 'sqlite3', 'sql.js'] },
-  { key: 'duckdb',       pkgDeps: ['duckdb'] },
+  { key: 'sqlite',       pkgDeps: ['better-sqlite3', 'sqlite3', 'sql.js'], glob: '*.db' },
+  { key: 'duckdb',       pkgDeps: ['duckdb', '@duckdb/node-api'] },
 ];
 
 // ── helpers ───────────────────────────────────────────────────────────────
@@ -152,15 +156,16 @@ export async function detectAndStore(projectRoot, projectName) {
 
 // ── CLI ───────────────────────────────────────────────────────────────────
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const target = process.argv[2] || process.cwd();
+  const target = path.resolve(process.argv[2] || process.cwd());
   const name   = path.basename(target);
   console.log(`Detecting stacks in: ${target}`);
 
-  detectStacks(target).then(stacks => {
-    if (stacks.length === 0) {
+  detectAndStore(path.resolve(target), name).then(keys => {
+    if (keys.length === 0) {
       console.log('No stacks detected.');
     } else {
-      stacks.forEach(s => console.log(`  ${s.key.padEnd(20)} confidence: ${s.confidence}`));
+      keys.forEach(k => console.log(`  ${k}`));
+      console.log(`Stored ${keys.length} stack(s) for project: ${name}`);
     }
   }).catch(err => {
     console.error('Error:', err.message);
