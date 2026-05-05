@@ -281,6 +281,35 @@ async function dispatch(event) {
       break;
     }
 
+    case 'copilot-prompt': {
+      const raw  = await readStdin();
+      let payload = {};
+      try { payload = JSON.parse(raw); } catch (_) {}
+
+      const promptText = payload.prompt || '';
+      const subcommand = payload.subcommand || '';
+      if (!promptText) break;
+
+      const db      = require('./db.cjs');
+      const session = require('./session.cjs');
+      const router  = require('./router.cjs');
+
+      db.initialize(null, null);
+      const sess = session.restore();
+      if (!sess || !sess.id) break;
+
+      const routing  = router.routeTask(promptText);
+      const skillTag = routing.skill ? `[copilot:${routing.skill}]` : '[copilot]';
+      db.recordPrompt(sess.id, promptText, skillTag);
+
+      if (routing.skill) {
+        process.stderr.write(`[vaultflow] copilot-prompt: routed to ${routing.skill} (${(routing.confidence || 0).toFixed(2)})\n`);
+      } else {
+        process.stderr.write(`[vaultflow] copilot-prompt: logged "${subcommand}" prompt (${promptText.length} chars)\n`);
+      }
+      break;
+    }
+
     default:
       process.stderr.write(`[vaultflow] Unknown event: ${event}\n`);
       break;
