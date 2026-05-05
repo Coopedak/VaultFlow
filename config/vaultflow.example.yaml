@@ -65,7 +65,7 @@ intelligence:
   confidence_decay_rate: 0.005
   access_boost_amount: 0.03
   consolidation_threshold: 10
-  pattern_fire_threshold: 3
+  pattern_fire_threshold: 10
   skill_inject_high_threshold: 0.6
   skill_inject_low_threshold: 0.3
   prompt_similarity_threshold: 0.4
