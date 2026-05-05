@@ -11,11 +11,11 @@ paths:
   # Claude Code project memory files
   projects_memory: "C:/Users/YOU/.claude/projects"
 
-  # ai-optimization skill index (for router)
-  skills_index: "C:/GIT/ai-optimization/skills/index.md"
+  # Claude Code skill index (for router)
+  skills_index: "C:/Users/YOU/.claude/skills/index.md"
 
-  # ai-optimization workflow (for model tier routing)
-  ai_workflow: "C:/GIT/ai-optimization/methodology/ai-workflow.md"
+  # Vault workflow (for model tier routing)
+  ai_workflow: "C:/Users/YOU/vault/methodology/ai-workflow.md"
 
   # Glob pattern for all project wikis
   wiki_glob: "C:/GIT/*/wiki/**/*.md"

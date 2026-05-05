@@ -56,7 +56,7 @@ function getSkillsIndexPath() {
 /**
  * Parse a markdown skills index into [{name, desc}].
  *
- * Handles three formats found in the vault/ai-optimization indices:
+ * Handles three formats found in the skills index:
  *   1. Table row: | [skill-name](path) | ... | description |
  *   2. List + dash desc: - [skill-name](path) — description
  *   3. Inline list: - **skill-name** — description

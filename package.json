@@ -1,7 +1,7 @@
 {
   "name": "vaultflow",
   "version": "1.0.0",
-  "description": "Claude Code intelligence layer — merges ruflo hooks with ai-optimization vault architecture",
+  "description": "Claude Code intelligence layer — session tracking, FTS5 memory, skill routing, DISCOVERY pipeline",
   "type": "module",
   "bin": {
     "vaultflow": "./scripts/backfill.mjs"
