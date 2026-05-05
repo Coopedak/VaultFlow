@@ -135,7 +135,8 @@ export async function detectStacks(projectRoot) {
  * @returns {Promise<string[]>}  Array of detected stack keys.
  */
 export async function detectAndStore(projectRoot, projectName) {
-  const db     = require('./db.cjs');
+  const db = require('./db.cjs');
+  db.initialize(null, null);
   const stacks = await detectStacks(projectRoot);
 
   for (const { key, confidence } of stacks) {

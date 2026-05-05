@@ -138,7 +138,10 @@ function start() {
   if (_session) return _session;
 
   const existing = readCurrentJson();
-  if (existing && existing.startedAt && isRecent(existing.startedAt)) {
+  // Use restoredAt (last activity) when available so long sessions (> 10 min)
+  // don't create orphan sessions on every hook invocation.
+  const checkTime = (existing && (existing.restoredAt || existing.startedAt)) || null;
+  if (existing && checkTime && isRecent(checkTime)) {
     existing.restoredAt = new Date().toISOString();
     _session = existing;
     writeCurrentJson(_session);
