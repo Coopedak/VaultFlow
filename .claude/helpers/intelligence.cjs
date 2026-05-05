@@ -165,7 +165,7 @@ function feedback(success) {
         `\n` +
         `## Pattern Promoted\n` +
         `This pattern fired ${p.fire_count} times and was promoted automatically.\n` +
-        `Review and convert to a skill: C:\\Users\\YOU\\vault\\skills\\index.md\n`;
+        `Review and convert to a skill in your vault/skills/ or .claude/skills/ directory.\n`;
 
       fs.writeFileSync(filePath, content, 'utf8');
       promoted.push(p.pattern_key);

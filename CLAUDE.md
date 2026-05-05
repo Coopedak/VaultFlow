@@ -101,5 +101,5 @@ config/
 
 Before answering domain questions or implementing anything, check in this order:
 1. This file (CLAUDE.md) — project-specific rules
-2. `C:\Users\YOU\vault\index.md` — cross-project patterns, tools, methodology
+2. `config/vaultflow.local.yaml → paths.vault_root` + `/index.md` — cross-project patterns, tools, methodology
 3. Source code — actual implementation

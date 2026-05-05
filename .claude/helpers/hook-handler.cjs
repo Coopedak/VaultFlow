@@ -262,7 +262,7 @@ async function dispatch(event) {
         '[vaultflow] Pre-compact checkpoint\n' +
         'Review what\'s in context before compacting:\n' +
         '  • Run /session-reviewer to capture learnings first\n' +
-        '  • Check C:\\Users\\YOU\\vault\\methodology\\.metrics\\discoveries\\ for pending promotions\n' +
+        '  • Check metrics_root/discoveries/ for pending promotions\n' +
         '  • Use /compact only after session-reviewer completes\n'
       );
       // Flush telemetry so tool_calls + prompts are in Parquet before context clears
