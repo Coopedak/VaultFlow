@@ -25,19 +25,11 @@ const yaml    = require('js-yaml');
 
 // ── config ────────────────────────────────────────────────────────────────
 
-/**
- * Load vaultflow.yaml once and return the parsed object.
- * The config file sits two levels above this helper:
- *   .claude/helpers/auto-memory-hook.mjs  →  ../../config/vaultflow.yaml
- */
 function loadConfig() {
-  const configUrl  = new URL('../../config/vaultflow.yaml', import.meta.url);
-  const configPath = fileURLToPath(configUrl);
-
+  const configPath = require('../../config/resolve.cjs');
   if (!existsSync(configPath)) {
     throw new Error(`vaultflow config not found: ${configPath}`);
   }
-
   return yaml.load(readFileSync(configPath, 'utf8')) || {};
 }
 

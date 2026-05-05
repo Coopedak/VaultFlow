@@ -15,7 +15,7 @@ function getDb() {
 function loadConfig() {
   if (_config) return _config;
   const yaml       = require('js-yaml');
-  const configPath = path.resolve(__dirname, '../../config/vaultflow.yaml');
+  const configPath = require('../../config/resolve.cjs');
   if (!fs.existsSync(configPath)) return {};
   _config = yaml.load(fs.readFileSync(configPath, 'utf8')) || {};
   return _config;

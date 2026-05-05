@@ -149,7 +149,7 @@ async function dispatch(event) {
       try {
         const yaml       = require('js-yaml');
         const fs         = require('fs');
-        const cfgPath    = require('path').resolve(__dirname, '../../config/vaultflow.yaml');
+        const cfgPath    = require('../../config/resolve.cjs');
         const cfg        = fs.existsSync(cfgPath) ? yaml.load(fs.readFileSync(cfgPath, 'utf8')) : {};
         const doDetect   = cfg.intelligence && cfg.intelligence.stack_detect_on_session_start !== false;
 
@@ -187,7 +187,7 @@ async function dispatch(event) {
         const yaml = require('js-yaml');
         db.initialize(null, null);
 
-        const cfgPath     = path.resolve(__dirname, '../../config/vaultflow.yaml');
+        const cfgPath     = require('../../config/resolve.cjs');
         const cfg         = fs.existsSync(cfgPath) ? yaml.load(fs.readFileSync(cfgPath, 'utf8')) : {};
         const metricsRoot = cfg.paths && cfg.paths.metrics_root || '';
         const discDir     = path.join(metricsRoot, cfg.storage && cfg.storage.discoveries_dir || 'discoveries');

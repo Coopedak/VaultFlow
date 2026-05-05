@@ -22,6 +22,9 @@ Thumbs.db
 .idea/
 .vscode/
 
+# user config (real paths — never commit)
+config/vaultflow.local.yaml
+
 # env / secrets
 .env
 .env.*

@@ -26,7 +26,7 @@ const yaml = require('js-yaml');
 
 // ── config ────────────────────────────────────────────────────────────────
 
-const CONFIG_PATH = path.resolve(__dirname, '../../../config/vaultflow.yaml');
+const CONFIG_PATH = require('../../../config/resolve.cjs');
 
 function loadConfig() {
   if (!fs.existsSync(CONFIG_PATH)) return {};

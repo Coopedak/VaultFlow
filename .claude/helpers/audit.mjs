@@ -27,7 +27,7 @@ const yaml   = require('js-yaml');
 
 // ── config ─────────────────────────────────────────────────────────────────
 
-const CONFIG_PATH = path.resolve(__dirname, '../../config/vaultflow.yaml');
+const CONFIG_PATH = require('../../config/resolve.cjs');
 
 function loadConfig() {
   if (!fs.existsSync(CONFIG_PATH)) return null;
@@ -81,12 +81,12 @@ function checkConfig() {
   console.log('\n[1] Configuration');
 
   if (!fs.existsSync(CONFIG_PATH)) {
-    check('config/vaultflow.yaml exists', 'fail',
+    check('vaultflow config exists', 'fail',
       `Not found at ${CONFIG_PATH}`,
-      `Create config/vaultflow.yaml — copy config/vaultflow.example.yaml and set paths.metrics_root`);
+      `Copy config/vaultflow.yaml to config/vaultflow.local.yaml and fill in your paths`);
     return false;
   }
-  check('config/vaultflow.yaml exists', 'pass');
+  check('vaultflow config exists', 'pass');
 
   if (!cfg) {
     check('Config parses as valid YAML', 'fail', 'YAML parse error');
@@ -96,8 +96,8 @@ function checkConfig() {
 
   if (!cfg?.paths?.metrics_root) {
     check('paths.metrics_root is set', 'fail',
-      'metrics_root is missing or empty in vaultflow.yaml',
-      'Set paths.metrics_root to the directory where vaultflow should store its DB and Parquet files');
+      'metrics_root is missing or empty in the active config',
+      'Set paths.metrics_root in config/vaultflow.local.yaml');
     return false;
   }
   check('paths.metrics_root is set', 'pass', `→ ${METRICS}`);

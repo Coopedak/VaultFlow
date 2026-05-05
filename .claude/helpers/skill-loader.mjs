@@ -31,7 +31,7 @@ function loadConfig() {
   if (_config) return _config;
   try {
     const yaml       = require('js-yaml');
-    const configPath = path.resolve(__dirname, '../../config/vaultflow.yaml');
+    const configPath = require('../../config/resolve.cjs');
     if (fs.existsSync(configPath)) {
       _config = yaml.load(fs.readFileSync(configPath, 'utf8'));
     }

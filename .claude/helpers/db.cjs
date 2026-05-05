@@ -59,7 +59,7 @@ let _config      = null;
 function loadConfig() {
   if (_config) return _config;
 
-  const configPath = path.resolve(__dirname, '../../config/vaultflow.yaml');
+  const configPath = require('../../config/resolve.cjs');
   if (!fs.existsSync(configPath)) {
     // Graceful degradation — callers must pass paths explicitly if config absent
     return null;

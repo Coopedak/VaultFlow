@@ -30,7 +30,7 @@ const db      = require('./db.cjs');
 
 // ── config ────────────────────────────────────────────────────────────────
 
-const CONFIG_PATH = path.resolve(__dirname, '../../config/vaultflow.yaml');
+const CONFIG_PATH = require('../../config/resolve.cjs');
 
 /**
  * Load vaultflow.yaml. Returns a plain object. Requires js-yaml (already a

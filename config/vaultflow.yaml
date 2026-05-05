@@ -1,5 +1,6 @@
 # vaultflow configuration
-# All paths configurable — defaults assume YOU's machine layout
+# Copy this file to config/vaultflow.local.yaml and fill in your paths.
+# vaultflow.local.yaml is gitignored — your real paths never leave your machine.
 
 paths:
   # Where your vault lives
@@ -24,9 +25,7 @@ paths:
   claude_glob: "C:/GIT/*/CLAUDE.md"
 
   # Projects to exclude from wiki/CLAUDE.md backfill (folder name matching)
-  exclude_projects:
-    - "PSI.All"
-    - "PSI-Wiki-Site"
+  exclude_projects: []
 
   # Vault tool registry
   vault_tools_index: "C:/Users/YOU/vault/tools/index.md"
@@ -40,72 +39,40 @@ paths:
   # ruflo .agents/ directory (Codex CLI skills)
   agents_dir: "C:/GIT/vaultflow/.agents"
 
-  # User-level Claude Code skills (C:\Users\YOU\.claude\skills\)
+  # User-level Claude Code skills
   user_skills_dir: "C:/Users/YOU/.claude/skills"
 
   # Glob for project-level .claude/agents/ markdown files
   project_agents_glob: "C:/GIT/*/.claude/agents/*.md"
 
 storage:
-  # SQLite write buffer
   db_file: "vaultflow.db"          # relative to metrics_root
-
-  # Parquet archive directory
   parquet_dir: "parquet"           # relative to metrics_root
-
-  # Vector store (semantic memory)
-  memory_store: "memory-store.json"  # relative to metrics_root
-
-  # Session archives
-  sessions_dir: "sessions"         # relative to metrics_root
-
-  # DISCOVERY stubs (written by intelligence.cjs, consumed by Ralph Loop 5)
-  discoveries_dir: "discoveries"   # relative to metrics_root
-
-  # Parquet filenames for tool call and prompt telemetry
+  memory_store: "memory-store.json"
+  sessions_dir: "sessions"
+  discoveries_dir: "discoveries"
   tool_calls_parquet: "tool_calls.parquet"
   prompts_parquet: "prompts.parquet"
 
 intelligence:
-  # PageRank settings
   page_rank_damping: 0.85
   max_graph_nodes: 5000
   similarity_threshold: 0.8
-
-  # Learning settings
   confidence_decay_rate: 0.005
   access_boost_amount: 0.03
   consolidation_threshold: 10
-
-  # DISCOVERY promotion
-  pattern_fire_threshold: 3        # fires before flagging for Ralph Loop 5
-
-  # Skill auto-injection thresholds (UserPromptSubmit hook)
-  # >= high_threshold: inject full skill instructions
-  # >= low_threshold:  inject skill description only
-  # <  low_threshold:  silent (no injection)
+  pattern_fire_threshold: 3
   skill_inject_high_threshold: 0.6
   skill_inject_low_threshold: 0.3
-
-  # Prompt similarity — surface past prompts above this BM25 confidence
   prompt_similarity_threshold: 0.4
-
-  # Detect tech stack on session start
   stack_detect_on_session_start: true
-
-  # Auto-populate dictionary from vault/domain/ on session start
   dictionary_auto_populate: true
-
-  # Auto-promote vault_tools after this many calls across this many sessions
   tool_auto_promote_calls: 5
   tool_auto_promote_sessions: 3
 
 memory:
-  # How many top entries to inject into context per prompt
   context_injection_limit: 5
   max_import_file_size_mb: 10
-
-  # Retention
   short_term_days: 1
   long_term_days: 30
 
