@@ -59,6 +59,74 @@ function buildPatternKey(filePath) {
   return `${ext}::${parent}`;
 }
 
+// ── memory re-index helpers ───────────────────────────────────────────────
+
+/**
+ * Returns true if the file is a wiki or vault markdown file that should be
+ * kept live in memory_entries. Covers:
+ *   - C:/GIT/<project>/wiki/**\/*.md
+ *   - C:/Users/.../vault/**\/*.md  (but not .metrics/)
+ */
+function isMemoryFile(filePath) {
+  if (!filePath || !filePath.endsWith('.md')) return false;
+  const norm = filePath.replace(/\\/g, '/');
+  if (norm.includes('/wiki/') && norm.includes('/GIT/')) return true;
+  if (norm.includes('/vault/') && !norm.includes('/.metrics/')) return true;
+  return false;
+}
+
+/**
+ * Parse a markdown file into memory entries (same logic as backfill.mjs).
+ * Each ## heading becomes an entry; preamble uses the filename as title.
+ */
+function parseMemoryFile(filePath, content) {
+  const entries  = [];
+  const basename = path.basename(filePath, '.md');
+  const sections = content.split(/^(?=## )/m);
+
+  for (const section of sections) {
+    const trimmed = section.trim();
+    if (!trimmed) continue;
+    let title, body;
+    if (trimmed.startsWith('## ')) {
+      const nl = trimmed.indexOf('\n');
+      if (nl === -1) { title = trimmed.slice(3).trim(); body = ''; }
+      else           { title = trimmed.slice(3, nl).trim(); body = trimmed.slice(nl + 1).trim(); }
+    } else {
+      title = basename;
+      body  = trimmed;
+    }
+    if (!title) continue;
+    // Simple tag extraction: hashtags and [[wikilinks]]
+    const raw   = `${title} ${body}`;
+    const tags  = [
+      ...(raw.match(/#([a-z][a-z0-9_-]*)/gi) || []),
+      ...(raw.match(/\[\[([^\]|]+)/g) || []).map(t => t.slice(2)),
+    ].map(t => t.replace(/^#/, '').toLowerCase()).slice(0, 20).join(' ');
+    entries.push({ title, body, tags });
+  }
+  return entries;
+}
+
+/**
+ * Re-index a wiki or vault file into memory_entries so FTS5 stays current.
+ */
+function reindexMemoryFile(db, filePath) {
+  const fs = require('fs');
+  let content;
+  try { content = fs.readFileSync(filePath, 'utf8'); } catch (_) { return; }
+
+  const entries = parseMemoryFile(filePath, content);
+  if (entries.length === 0) return;
+
+  try {
+    db.replaceMemorySource(filePath, entries);
+    process.stderr.write(`post-edit: re-indexed "${path.basename(filePath)}" — ${entries.length} entries\n`);
+  } catch (err) {
+    process.stderr.write(`post-edit: re-index error: ${err.message}\n`);
+  }
+}
+
 // ── live registry update helpers ─────────────────────────────────────────
 
 /**
@@ -209,6 +277,13 @@ function run(input) {
       upsertAgentFromFile(db, filePath, regKind);
     } else if (regKind === 'tool-index') {
       refreshToolIndex(db, filePath);
+    }
+
+    // ── live memory re-index ────────────────────────────────────────────
+    // When a wiki or vault .md file is edited, update its memory_entries
+    // immediately so FTS5 search reflects the latest content.
+    if (isMemoryFile(filePath)) {
+      reindexMemoryFile(db, filePath);
     }
 
   } catch (err) {
