@@ -59,6 +59,114 @@ function buildPatternKey(filePath) {
   return `${ext}::${parent}`;
 }
 
+// ── live registry update helpers ─────────────────────────────────────────
+
+/**
+ * Classify an edited file path to determine if it affects the agent or
+ * tool registry. Returns 'agent', 'user-skill', 'tool-index', or null.
+ */
+function classifyRegistryFile(filePath) {
+  if (!filePath) return null;
+  const norm = filePath.replace(/\\/g, '/');
+  // Project agent: C:/GIT/<project>/.claude/agents/<name>.md
+  if (norm.includes('/.claude/agents/') && norm.endsWith('.md')) return 'agent';
+  // User skill: C:/Users/.../.claude/skills/...
+  if (norm.includes('/.claude/skills/') && norm.endsWith('.md')) return 'user-skill';
+  // Vault tools index
+  if (norm.endsWith('/vault/tools/index.md')) return 'tool-index';
+  return null;
+}
+
+/**
+ * Re-register a single agent file in vault_agents.
+ * Source is derived from the project folder name.
+ */
+function upsertAgentFromFile(db, filePath, kind) {
+  const fs   = require('fs');
+  const path = require('path');
+  const norm = filePath.replace(/\\/g, '/');
+  const name = path.basename(filePath, '.md');
+
+  let source = kind === 'user-skill' ? 'user-skill' : null;
+  if (!source) {
+    const parts  = norm.split('/');
+    const gitIdx = parts.indexOf('GIT');
+    source = gitIdx !== -1 ? `project:${parts[gitIdx + 1]}` : 'project';
+  }
+
+  let desc = '';
+  try {
+    const lines = fs.readFileSync(filePath, 'utf8').split('\n');
+    let inFm = lines[0] === '---';
+    for (const line of lines) {
+      if (inFm) { if (line === '---' && desc === '') inFm = false; continue; }
+      const t = line.trim();
+      if (t && !t.startsWith('#') && !t.startsWith('|') && !t.startsWith('-')) {
+        desc = t.slice(0, 120);
+        break;
+      }
+    }
+  } catch (_) {}
+
+  const agentId = source.startsWith('project:')
+    ? `${source.slice(8)}::${name}`
+    : name;
+
+  try {
+    db.upsertVaultAgent(agentId, name, source, desc, null);
+    process.stderr.write(`post-edit: registered agent "${agentId}" (${source})\n`);
+  } catch (err) {
+    process.stderr.write(`post-edit: agent upsert error: ${err.message}\n`);
+  }
+}
+
+/**
+ * Re-parse vault/tools/index.md and upsert all tools found.
+ * Uses the same H3-section + table/list parser as backfill.mjs.
+ */
+function refreshToolIndex(db, filePath) {
+  const fs = require('fs');
+  let content;
+  try { content = fs.readFileSync(filePath, 'utf8'); } catch (_) { return; }
+
+  const entries = [];
+  const seen    = new Set();
+
+  // Line-by-line formats (table / list)
+  for (const raw of content.split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    let name = null, desc = '';
+    const tm = line.match(/^\|\s*\[([^\]]+)\]\([^)]*\)\s*\|(.+)\|$/);
+    if (tm) { name = tm[1].trim(); const cells = tm[2].split('|').map(c => c.trim()).filter(Boolean); desc = cells[cells.length-1]||''; }
+    if (!name) { const m = line.match(/^[-*]\s+\[([^\]]+)\]\([^)]*\)\s*[—–-]\s*(.+)$/); if (m) { name=m[1].trim(); desc=m[2].trim(); } }
+    if (!name) { const m = line.match(/^[-*]\s+\*\*([^*]+)\*\*\s*[—–-]\s*(.+)$/);       if (m) { name=m[1].trim(); desc=m[2].trim(); } }
+    if (!name) { const m = line.match(/^[-*]\s+\[([^\]]+)\]\([^)]*\)\s*$/);               if (m) { name=m[1].trim(); } }
+    if (name && !seen.has(name)) { seen.add(name); entries.push({ name, desc }); }
+  }
+
+  // H3 sections (vault tools format: ### tool-name)
+  for (const section of content.split(/^(?=### )/m)) {
+    const first = section.split('\n')[0];
+    if (!first.startsWith('### ')) continue;
+    const name = first.slice(4).trim();
+    if (!name || seen.has(name)) continue;
+    const bodyLines = section.split('\n').slice(1)
+      .map(l => l.trim())
+      .filter(l => l && !l.startsWith('-') && !l.startsWith('*') && !l.startsWith('`') && !l.startsWith('#') && l !== '---');
+    const desc = bodyLines[bodyLines.length - 1] || '';
+    seen.add(name);
+    entries.push({ name, desc });
+  }
+
+  let count = 0;
+  for (const { name, desc } of entries) {
+    const toolId = name.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+    try { db.upsertVaultTool(toolId, name, desc, null, ''); count++; } catch (_) {}
+  }
+  process.stderr.write(`post-edit: refreshed tool index — ${count} tools upserted\n`);
+}
+
 // ── main hook handler ─────────────────────────────────────────────────────
 function run(input) {
   try {
@@ -73,11 +181,8 @@ function run(input) {
     const db      = require('./db.cjs');
     const session = require('./session.cjs');
 
-    // Initialize DB via config (db.initialize reads config internally when
-    // metricsRoot is null)
     db.initialize(null, null);
 
-    // Restore or start session (idempotent)
     const sess = session.start();
     if (!sess || !sess.id) {
       process.stderr.write('post-edit: no active session — skipping DB recording\n');
@@ -91,17 +196,22 @@ function run(input) {
 
     session.metric('edits');
 
-    // Agent field is intentionally null here — post-edit fires outside any
-    // named agent context; the pattern_key alone carries the signal.
     db.upsertPattern(patternKey, null);
 
-    // Record as a tool call for deduplication telemetry. Serialise only the
-    // file_path so the hash is stable across calls to the same file.
     const toolCallInput = JSON.stringify({ file_path: filePath, tool: toolName });
     db.recordToolCall(sessionId, toolName, toolCallInput);
 
+    // ── live registry updates ───────────────────────────────────────────
+    // When a registry-relevant file is edited, re-register it immediately
+    // so vault_agents / vault_tools stay current without a manual backfill.
+    const regKind = classifyRegistryFile(filePath);
+    if (regKind === 'agent' || regKind === 'user-skill') {
+      upsertAgentFromFile(db, filePath, regKind);
+    } else if (regKind === 'tool-index') {
+      refreshToolIndex(db, filePath);
+    }
+
   } catch (err) {
-    // Hooks must always exit 0 — only write to stderr
     process.stderr.write(`post-edit: error: ${err.message}\n`);
   }
 
