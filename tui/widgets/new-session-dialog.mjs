@@ -22,7 +22,6 @@ const TOOLS = [
 export function createNewSessionDialog(screen, { onLaunch } = {}) {
   let visible = false;
   let toolIdx = 0;
-  let projectDir = '';
   let initialPrompt = '';
   let fieldFocus = 'tool';  // 'tool' | 'dir' | 'prompt'
 
@@ -223,7 +222,7 @@ export function createNewSessionDialog(screen, { onLaunch } = {}) {
 
   function launch() {
     const tool = TOOLS[toolIdx].id;
-    const rawCwd = (dirInput.getValue() || projectDir || '').trim();
+    const rawCwd = (dirInput.getValue() || '').trim();
 
     // Resolve to absolute path and validate it exists
     let cwd;

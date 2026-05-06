@@ -3,10 +3,14 @@
  *
  * Layout:
  *   [2-row session header]
- *   [scrollable PTY output — blessed log box]
+ *   [1-row horizontal separator]
+ *   [scrollable PTY output log]
  *
  * When focused: keystrokes pass through to the active PTY process.
- * When live tail (scrollPos === -1): auto-scrolls to bottom on new output.
+ * When live tail (liveTail === true): auto-scrolls to bottom on new output.
+ *
+ * Output events are debounced to 16ms to prevent re-rendering every PTY line
+ * from a fast-outputting CLI (e.g. ng build, cargo build).
  */
 
 import blessed            from 'blessed';
@@ -16,9 +20,8 @@ import { ansiToBlessed }  from '../ansi.mjs';
 
 const LEFT_WIDTH = 37;  // left panel (36) + divider (1)
 
-// Tool color tags
 const TOOL_COLORS = {
-  'claude':     '{#ff8800-fg}',
+  'claude':     '{yellow-fg}',
   'gh-copilot': '{magenta-fg}',
   'codex':      '{cyan-fg}',
 };
@@ -40,7 +43,7 @@ function buildHeaderContent(session) {
 
   const color   = TOOL_COLORS[session.tool] || '{white-fg}';
   const project = session.project;
-  const tool    = session.tool === 'claude' ? 'claude' :
+  const tool    = session.tool === 'claude'     ? 'claude' :
                   session.tool === 'gh-copilot' ? 'gh copilot' : 'codex';
   const dur     = elapsed(session.startedAt);
   const tokens  = session.tokens.toLocaleString();
@@ -73,7 +76,17 @@ export function createRightPanel(screen) {
   const left   = LEFT_WIDTH;
   const width  = `100%-${left}`;
 
-  // Session header box (2 rows)
+  // Vertical divider between left and right panels
+  const divider = blessed.box({
+    top:    1,
+    left:   LEFT_WIDTH - 1,
+    width:  1,
+    height: '100%-2',
+    content: '',
+    style:  { fg: 'grey', bg: 'grey' },
+  });
+
+  // Session header box (2 rows, no border — separator drawn separately)
   const headerBox = blessed.box({
     top:    1,
     left,
@@ -83,17 +96,26 @@ export function createRightPanel(screen) {
     style: {
       fg: 'white',
       bg: 'black',
-      border: { fg: 'grey' },
     },
-    border: { type: 'line', bottom: true },
+  });
+
+  // Horizontal separator below header
+  const headerSep = blessed.box({
+    top:     3,
+    left,
+    width,
+    height:  1,
+    tags:    false,
+    content: '',
+    style:   { fg: 'grey', bg: 'black' },
   });
 
   // Output log box (scrollable)
   const logBox = blessed.box({
-    top:          3,   // below header row + border
+    top:          4,   // below header(2) + header-row-1 + separator(1)
     left,
     width,
-    height:       '100%-4',  // minus header(2) + border(1) + footer(1)
+    height:       '100%-5',  // minus header(2) + top-row(1) + separator(1) + footer(1)
     tags:         true,
     scrollable:   true,
     alwaysScroll: true,
@@ -107,16 +129,20 @@ export function createRightPanel(screen) {
     },
   });
 
-  // Divider between left and right panels
-  const divider = blessed.line({
-    top:         1,
-    left:        LEFT_WIDTH - 1,
-    orientation: 'vertical',
-    height:      '100%-2',
-    style:       { fg: 'grey', bg: 'black' },
-  });
+  let liveTail = true;
 
-  let liveTail = true;  // track whether we're auto-scrolling
+  // ── separator fill ────────────────────────────────────────────────────────
+
+  function updateSepContent() {
+    try {
+      const w = screen.width - LEFT_WIDTH;
+      headerSep.setContent('─'.repeat(Math.max(0, w)));
+    } catch {}
+  }
+
+  screen.on('resize', updateSepContent);
+  // Initial fill after first render
+  setTimeout(updateSepContent, 0);
 
   // ── content management ────────────────────────────────────────────────────
 
@@ -167,26 +193,29 @@ export function createRightPanel(screen) {
     }
   });
 
-  // High-frequency output event — append efficiently
-  sessionManager.on('output', (session, _line) => {
+  // Debounced output handler — at most one re-render per 16ms animation frame.
+  // Without this, a fast-outputting CLI causes hundreds of setContent() calls/sec.
+  let _outputTimer = null;
+
+  sessionManager.on('output', (session) => {
     const selected = sessionManager.getSelected();
     if (selected?.id !== session.id) return;
 
-    try {
-      // Re-render the full content (blessed doesn't support append-only well)
-      // For large buffers, render just the last 200 lines to keep it fast
-      const lines = session.lines.slice(-200).map(l => {
-        try { return ansiToBlessed(l); }
-        catch { return l; }
-      });
-      logBox.setContent(lines.join('\n'));
-      if (liveTail) {
-        logBox.setScrollPerc(100);
-      }
-      screen.render();
-    } catch {
-      // never crash
-    }
+    if (_outputTimer) return;  // render already scheduled
+    _outputTimer = setTimeout(() => {
+      _outputTimer = null;
+      const sel = sessionManager.getSelected();
+      if (!sel) return;
+      try {
+        const lines = sel.lines.slice(-200).map(l => {
+          try { return ansiToBlessed(l); }
+          catch { return l; }
+        });
+        logBox.setContent(lines.join('\n'));
+        if (liveTail) logBox.setScrollPerc(100);
+        screen.render();
+      } catch {}
+    }, 16);
   });
 
   // ── scroll controls ───────────────────────────────────────────────────────
@@ -224,10 +253,6 @@ export function createRightPanel(screen) {
 
   // ── PTY passthrough ───────────────────────────────────────────────────────
 
-  /**
-   * Called by app.mjs when right panel has focus and a key is pressed.
-   * Forwards keystrokes to the active PTY.
-   */
   function forwardKey(key) {
     const session = sessionManager.getSelected();
     if (!session) return;
@@ -240,6 +265,7 @@ export function createRightPanel(screen) {
 
   return {
     headerBox,
+    headerSep,
     logBox,
     divider,
     scrollDown,

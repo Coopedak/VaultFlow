@@ -4,15 +4,16 @@
  * WHY: PTY output arrives with raw ANSI codes. Blessed renders its own
  * tag markup like {green-fg}. This module bridges the two formats so
  * PTY output can be displayed in a blessed box with correct colors.
+ *
+ * Brace escaping: literal { and } in PTY output are replaced with
+ * {open} and {close} (blessed's documented escape sequences) so that
+ * they render as actual braces rather than being parsed as tag syntax.
  */
 
-// Map ANSI color codes to blessed tags.
-// Only foreground colors are mapped; background and 256-color are stripped.
 const COLOR_MAP = {
   '0':  '{/}',
   '1':  '{bold}',
   '2':  '{grey-fg}',
-  '3':  '{italic}',          // blessed may not support — ignored gracefully
   '22': '{/bold}',
   '30': '{black-fg}',
   '31': '{red-fg}',
@@ -22,7 +23,7 @@ const COLOR_MAP = {
   '35': '{magenta-fg}',
   '36': '{cyan-fg}',
   '37': '{white-fg}',
-  '39': '{/fg}',
+  '39': '{/}',
   '90': '{grey-fg}',
   '91': '{red-fg}',
   '92': '{green-fg}',
@@ -33,6 +34,10 @@ const COLOR_MAP = {
   '97': '{white-fg}',
 };
 
+// Unique placeholder strings that will not appear in normal PTY output
+const OPEN  = '\x00BOPEN\x00';
+const CLOSE = '\x00BCLOSE\x00';
+
 /**
  * Convert a raw ANSI string to a blessed-tagged string.
  *
@@ -42,18 +47,12 @@ const COLOR_MAP = {
 export function ansiToBlessed(raw) {
   if (!raw || typeof raw !== 'string') return '';
 
-  // First, escape any literal { and } that aren't part of blessed tags.
-  // We'll do this before inserting tags, then unescape our own tags.
-  // Strategy: replace all { and } with placeholders, insert tags, restore.
-  const OPEN  = '\x00OPEN\x00';
-  const CLOSE = '\x00CLOSE\x00';
-
+  // Step 1: protect literal braces before we insert blessed tags
   let out = raw
     .replace(/\{/g, OPEN)
     .replace(/\}/g, CLOSE);
 
-  // Replace known ANSI sequences with blessed tags.
-  // \x1b[ ... m — SGR (Select Graphic Rendition)
+  // Step 2: convert ANSI SGR sequences → blessed color tags
   out = out.replace(/\x1b\[([0-9;]*)m/g, (_match, codes) => {
     if (!codes) return '{/}';
     const parts = codes.split(';');
@@ -61,23 +60,22 @@ export function ansiToBlessed(raw) {
     for (const code of parts) {
       const tag = COLOR_MAP[code];
       if (tag) tags.push(tag);
-      // 256-color sequences (38;5;N or 48;5;N) — skip, will be stripped below
     }
     return tags.join('') || '';
   });
 
-  // Strip all remaining unrecognized escape sequences (cursor moves, etc.)
-  out = out.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');
+  // Step 3: strip all remaining unrecognized escape sequences
+  out = out.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');          // CSI sequences
   out = out.replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)/g, ''); // OSC sequences
-  out = out.replace(/\x1b[^[\]]/g, ''); // other ESC sequences
-  out = out.replace(/\x1b/g, '');       // any leftover bare ESC
+  out = out.replace(/\x1b[^[\]]/g, '');                       // other ESC
+  out = out.replace(/\x1b/g, '');                             // leftover bare ESC
 
-  // Strip \r (carriage return) — leave \n intact
+  // Step 4: strip \r — leave \n intact for line splitting upstream
   out = out.replace(/\r/g, '');
 
-  // Restore escaped braces (not part of any tag we inserted)
-  out = out.replace(new RegExp(OPEN, 'g'), '{\\{');
-  out = out.replace(new RegExp(CLOSE, 'g'), '\\}');
+  // Step 5: restore protected braces using blessed's documented escape tags
+  out = out.replace(new RegExp(OPEN,  'g'), '{open}');
+  out = out.replace(new RegExp(CLOSE, 'g'), '{close}');
 
   return out;
 }

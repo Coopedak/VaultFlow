@@ -1,14 +1,14 @@
 /**
  * widgets/left-panel.mjs — sessions list + reviews + model routing + tools
  *
- * Layout (36 cols fixed):
+ * Layout (36 cols fixed, including 1-char border on each side = 34 content):
  *   SESSIONS (collapsible groups per tool)
  *   REVIEWS
  *   MODEL ROUTING
  *   TOOLS
  *
- * The panel is a blessed list-like widget with custom content rendering.
- * Navigation is handled by app.mjs via focusLeft / cursor management here.
+ * Navigation is handled by app.mjs via cursorUp/cursorDown/openCurrent.
+ * Mouse clicks are handled internally via box.on('click').
  */
 
 import blessed            from 'blessed';
@@ -17,9 +17,8 @@ import { getModelRouting, getTopTools } from '../db-reader.mjs';
 
 const PANEL_WIDTH = 36;
 
-// Tool display metadata
 const TOOL_META = {
-  'claude':     { label: 'Claude Code', badge: 'CC', color: '{#ff8800-fg}' },
+  'claude':     { label: 'Claude Code', badge: 'CC', color: '{yellow-fg}' },
   'gh-copilot': { label: 'Copilot',     badge: 'CP', color: '{magenta-fg}' },
   'codex':      { label: 'Codex',       badge: 'CX', color: '{cyan-fg}' },
 };
@@ -45,28 +44,29 @@ function formatTokens(n) {
 }
 
 export function createLeftPanel(screen, { onSessionSelect } = {}) {
-  // Collapsed state per tool group
   const collapsed = { 'claude': false, 'gh-copilot': false, 'codex': false };
 
-  // Cursor position — index into the flat list of rendered "slots"
-  let cursor = 0;
+  let cursor = 0;        // index into rendered slots
+  let _cursorInit = false; // true once cursor has been placed on a session
 
-  // The rendered slots: each slot is { type, session?, tool? }
+  // Rendered slots: { type, session?, tool?, label? }
   let slots = [];
 
   const box = blessed.box({
-    top:     1,          // below header
-    left:    0,
-    width:   PANEL_WIDTH,
-    height:  '100%-2',   // minus header + footer
-    tags:    true,
-    scrollable: true,
+    top:          1,
+    left:         0,
+    width:        PANEL_WIDTH,
+    height:       '100%-2',
+    tags:         true,
+    scrollable:   true,
     alwaysScroll: true,
-    mouse:   true,
-    keys:    false,       // we handle keys in app.mjs
+    mouse:        true,
+    keys:         false,
+    border:       { type: 'line' },
     style: {
-      fg:       'white',
-      bg:       'black',
+      fg:        'white',
+      bg:        'black',
+      border:    { fg: 'grey' },
       scrollbar: { bg: 'grey' },
     },
   });
@@ -109,9 +109,8 @@ export function createLeftPanel(screen, { onSessionSelect } = {}) {
           const tok        = formatTokens(s.tokens);
           const editsStr   = `${s.edits} edit${s.edits !== 1 ? 's' : ''}`;
           const sId        = s.sessionId ? `s#${s.sessionId}` : '';
-          const warn        = s.status === 'notification' ? ' ⚠' : '';
+          const warn       = s.status === 'notification' ? ' ⚠' : '';
 
-          // Pad to panel width (account for tag overhead)
           const namePart = s.project.slice(0, 14).padEnd(14);
           const durPart  = dur.padStart(4);
 
@@ -125,7 +124,7 @@ export function createLeftPanel(screen, { onSessionSelect } = {}) {
 
           lines.push(line1);
           lines.push(line2);
-          slots.push({ type: 'session', session: s });
+          slots.push({ type: 'session',       session: s });
           slots.push({ type: 'session-line2', session: s });
         }
       }
@@ -185,6 +184,18 @@ export function createLeftPanel(screen, { onSessionSelect } = {}) {
       });
     }
 
+    // On first build that has sessions, place cursor on the first session slot
+    if (!_cursorInit) {
+      const firstSession = slots.findIndex(s => s.type === 'session');
+      if (firstSession >= 0) {
+        cursor = firstSession;
+        _cursorInit = true;
+      }
+    }
+
+    // Clamp cursor to valid slot range
+    if (cursor >= slots.length) cursor = Math.max(0, slots.length - 1);
+
     return lines.join('\n');
   }
 
@@ -199,7 +210,6 @@ export function createLeftPanel(screen, { onSessionSelect } = {}) {
 
   // ── cursor navigation ─────────────────────────────────────────────────────
 
-  /** Move cursor up, skipping non-session slots. */
   function cursorUp() {
     for (let i = cursor - 1; i >= 0; i--) {
       if (slots[i]?.type === 'session') {
@@ -210,7 +220,6 @@ export function createLeftPanel(screen, { onSessionSelect } = {}) {
     }
   }
 
-  /** Move cursor down, skipping non-session slots. */
   function cursorDown() {
     for (let i = cursor + 1; i < slots.length; i++) {
       if (slots[i]?.type === 'session') {
@@ -221,7 +230,6 @@ export function createLeftPanel(screen, { onSessionSelect } = {}) {
     }
   }
 
-  /** Open the session currently under the cursor. */
   function openCurrent() {
     const slot = slots[cursor];
     if (slot?.type === 'session' && slot.session) {
@@ -230,19 +238,16 @@ export function createLeftPanel(screen, { onSessionSelect } = {}) {
     }
   }
 
-  /** Get session under cursor (may be null). */
   function getCursorSession() {
     const slot = slots[cursor];
     if (slot?.type === 'session') return slot.session;
     return null;
   }
 
-  /** Jump to session by 1-based position in flat list. */
   function jumpTo(n) {
-    const flat = sessionManager.getFlat();
+    const flat   = sessionManager.getFlat();
     const target = flat[n - 1];
     if (!target) return;
-    // Find its slot
     const idx = slots.findIndex(s => s.type === 'session' && s.session?.id === target.id);
     if (idx >= 0) {
       cursor = idx;
@@ -251,19 +256,75 @@ export function createLeftPanel(screen, { onSessionSelect } = {}) {
     }
   }
 
-  /** Toggle collapse for a tool group. */
   function toggleGroup(tool) {
     collapsed[tool] = !collapsed[tool];
     render();
   }
 
-  // Wire events
+  // ── section scroll ────────────────────────────────────────────────────────
+
+  /**
+   * Scroll the panel so that the given section header is at the top.
+   * Uses the rendered line content to find the section.
+   */
+  function scrollToSection(name) {
+    try {
+      const content = buildContent();
+      const lines   = content.split('\n');
+      const idx     = lines.findIndex(l => l.includes(name));
+      if (idx >= 0) {
+        box.scrollTo(idx);
+        screen.render();
+      }
+    } catch {}
+  }
+
+  // ── mouse click ───────────────────────────────────────────────────────────
+
+  box.on('click', (data) => {
+    try {
+      // data.y is absolute screen position. atop is the box's absolute top.
+      // Border takes 1 row. childBase is the scroll offset.
+      const borderOffset = box.border ? 1 : 0;
+      const lineIdx = data.y - (box.atop || 0) - borderOffset + (box.childBase || 0);
+      if (lineIdx < 0 || lineIdx >= slots.length) return;
+
+      const slot = slots[lineIdx];
+      if (!slot?.session) return;
+
+      const session = slot.session;
+      const sIdx = slots.findIndex(
+        s => s.type === 'session' && s.session?.id === session.id
+      );
+      if (sIdx < 0) return;
+
+      cursor = sIdx;
+      sessionManager.select(session.id);
+      if (onSessionSelect) onSessionSelect(session);
+      render();
+    } catch {}
+  });
+
+  // ── group header click (toggle collapse) ─────────────────────────────────
+
+  box.on('click', (data) => {
+    try {
+      const borderOffset = box.border ? 1 : 0;
+      const lineIdx = data.y - (box.atop || 0) - borderOffset + (box.childBase || 0);
+      if (lineIdx < 0 || lineIdx >= slots.length) return;
+      const slot = slots[lineIdx];
+      if (slot?.type === 'group-header' && slot.tool) {
+        toggleGroup(slot.tool);
+      }
+    } catch {}
+  });
+
+  // ── event wiring ──────────────────────────────────────────────────────────
+
   sessionManager.on('added',    render);
   sessionManager.on('removed',  render);
   sessionManager.on('updated',  render);
   sessionManager.on('selected', render);
-  // Output events are high-frequency — only re-render on token/edit changes
-  // (that's handled via 'updated' which fires from pty output parsing)
 
   render();
 
@@ -276,5 +337,6 @@ export function createLeftPanel(screen, { onSessionSelect } = {}) {
     getCursorSession,
     jumpTo,
     toggleGroup,
+    scrollToSection,
   };
 }
