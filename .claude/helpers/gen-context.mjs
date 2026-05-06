@@ -390,7 +390,10 @@ if (process.argv[1] === thisPath) {
         const result = await generateForProject(absTarget);
         result.generated.forEach(f => console.log(`  wrote: ${f}`));
       } else if (target === '--all') {
-        const searchRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
+        const cfg2       = loadConfig();
+        const searchRoot = (cfg2.paths && cfg2.paths.watcher_watch_dir)
+          ? cfg2.paths.watcher_watch_dir.replace(/\//g, path.sep)
+          : path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
         let dirs = [];
         try {
           dirs = fs.readdirSync(searchRoot, { withFileTypes: true })
