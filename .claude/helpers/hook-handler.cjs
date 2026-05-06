@@ -260,6 +260,22 @@ async function dispatch(event) {
           }
         }
 
+        // ── gen-context auto-refresh ──────────────────────────────────────
+        // Regenerate copilot-instructions.md, AGENTS.md, and .cursor/rules/wiki.mdc
+        // for the current project on every session start so context files are
+        // always current without manual intervention.
+        if (sess && sess.cwd && fs.existsSync(sess.cwd)) {
+          try {
+            const { generateForProject } = await import('./gen-context.mjs');
+            const gcResult = await generateForProject(sess.cwd);
+            if (gcResult.generated.length > 0) {
+              process.stderr.write(`[vaultflow] session-start: gen-context refreshed ${gcResult.generated.length} file(s)\n`);
+            }
+          } catch (gcErr) {
+            process.stderr.write(`[vaultflow] session-start: gen-context error — ${gcErr.message}\n`);
+          }
+        }
+
         // ── watcher daemon auto-start ─────────────────────────────────────
         // Start the file-system watcher daemon if not already running.
         // This captures edits from background agents, Copilot, Cursor, and
