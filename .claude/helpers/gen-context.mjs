@@ -5,6 +5,10 @@
  * by reading from the vaultflow DB (stacks, memory, dictionary, recent patterns)
  * and writing thin, always-fresh pointer files.
  *
+ * Every generated file includes a Shared Infrastructure section so all AI tools
+ * (Claude Code, Copilot, Cursor, Codex) see the same vault tools, skills, and
+ * vaultflow capabilities — not just project-specific context.
+ *
  * Run after any significant session to keep AI context files current.
  *
  * Usage:
@@ -15,6 +19,7 @@
 import { createRequire } from 'node:module';
 import path              from 'node:path';
 import fs                from 'node:fs';
+import os                from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
@@ -26,7 +31,7 @@ function loadConfig() {
     const yaml       = require('js-yaml');
     const configPath = require('../../config/resolve.cjs');
     if (fs.existsSync(configPath)) {
-      return yaml.load(fs.readFileSync(configPath, 'utf8'));
+      return yaml.load(fs.readFileSync(configPath, 'utf8')) || {};
     }
   } catch (_) {}
   return {};
@@ -42,6 +47,102 @@ function getDb() {
   return db;
 }
 
+// ── shared infrastructure loader ──────────────────────────────────────────
+
+/**
+ * Read the shared vault tools, skills, and vaultflow paths from config.
+ * Returns everything needed to populate the Shared Infrastructure section.
+ */
+function loadSharedInfrastructure(cfg) {
+  const paths = cfg.paths || {};
+
+  // Skills: scan user_skills_dir for subdirectory names
+  const skillsDir  = paths.user_skills_dir
+    ? paths.user_skills_dir.replace(/\//g, path.sep)
+    : path.join(os.homedir(), '.claude', 'skills');
+  let skills = [];
+  try {
+    skills = fs.readdirSync(skillsDir, { withFileTypes: true })
+      .filter(d => d.isDirectory())
+      .map(d => d.name)
+      .sort();
+  } catch (_) {}
+
+  // Vault tools index path
+  const vaultToolsIndex = paths.vault_tools_index
+    ? paths.vault_tools_index.replace(/\//g, path.sep)
+    : path.join(os.homedir(), 'vault', 'tools', 'index.md');
+
+  // Vault root
+  const vaultRoot = paths.vault_root
+    ? paths.vault_root.replace(/\//g, path.sep)
+    : path.join(os.homedir(), 'vault');
+
+  // Skills index (for Claude Code /skill-name invocation guide)
+  const skillsIndex = paths.skills_index
+    ? paths.skills_index.replace(/\//g, path.sep)
+    : path.join(skillsDir, 'index.md');
+
+  // vaultflow helpers dir (for DB search CLI)
+  const helpersDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
+  const vaultflowDir = path.resolve(helpersDir, '..', '..');
+
+  return {
+    skillsDir,
+    skillsIndex,
+    skills,
+    vaultToolsIndex,
+    vaultRoot,
+    helpersDir,
+    vaultflowDir,
+    hasVaultTools: fs.existsSync(vaultToolsIndex),
+    hasSkillsDir:  skills.length > 0,
+  };
+}
+
+/**
+ * Build the Shared Infrastructure markdown section.
+ * Included in every generated file so all AI tools see the same shared resources.
+ */
+function buildSharedSection(infra) {
+  const lines = ['## Shared Infrastructure'];
+  lines.push('');
+  lines.push('> These resources are cross-project. Check them before building anything new.');
+  lines.push('');
+
+  // Vault tools
+  if (infra.hasVaultTools) {
+    lines.push(`**Vault tools:** \`${infra.vaultToolsIndex}\``);
+    lines.push('  30+ reusable scripts and utilities — check before implementing. Rule: exact match → use it; similar → adapt it; nothing close → build new and register.');
+    lines.push('');
+  }
+
+  // Skills
+  if (infra.hasSkillsDir) {
+    const skillList = infra.skills.join(' · ');
+    lines.push(`**Skills** (Claude Code: \`/skill-name\`, Codex: \`.agents/skills/\`):`);
+    lines.push(`  ${skillList}`);
+    if (fs.existsSync(infra.skillsIndex)) {
+      lines.push(`  Full index: \`${infra.skillsIndex}\``);
+    }
+    lines.push('');
+  }
+
+  // vaultflow
+  lines.push(`**vaultflow** (hook system + shared DB):`);
+  lines.push(`  DB search:  \`node ${path.join(infra.helpersDir, 'db.cjs')} --search "query"\``);
+  lines.push(`  Gen context: \`node ${path.join(infra.helpersDir, 'gen-context.mjs')}\``);
+  lines.push(`  Model status: \`node ${path.join(infra.helpersDir, 'model-router.cjs')} --status\``);
+  lines.push('');
+
+  // Vault knowledge base
+  lines.push(`**Vault:** \`${infra.vaultRoot}\``);
+  lines.push(`  \`vault/tools/\` — reusable tools  |  \`vault/methodology/\` — engineering patterns`);
+  lines.push(`  \`vault/domain/\` — domain knowledge  |  \`vault/agents/\` — agent registry`);
+
+  return lines.join('\n');
+}
+
 // ── context builders ──────────────────────────────────────────────────────
 
 /**
@@ -55,7 +156,7 @@ function formatStacks(stacks) {
  * Generate .github/copilot-instructions.md for a project.
  * Copilot reads this file automatically as project context.
  */
-function genCopilotInstructions(projectPath, projectName, stacks, memoryEntries) {
+function genCopilotInstructions(projectPath, projectName, stacks, memoryEntries, infra) {
   const stackLine = formatStacks(stacks);
   const wikiPath  = path.join(projectPath, 'wiki', 'index.md');
   const hasWiki   = fs.existsSync(wikiPath);
@@ -66,27 +167,37 @@ function genCopilotInstructions(projectPath, projectName, stacks, memoryEntries)
     ? memoryEntries.slice(0, 5).map(e => `- **${e.title}**: ${e.body.slice(0, 120)}`).join('\n')
     : '- No recent memory entries.';
 
-  const content = [
+  const sharedSection = buildSharedSection(infra);
+
+  const parts = [
     `# ${projectName} — Copilot Instructions`,
     '',
     `**Tech stack:** ${stackLine}`,
     '',
-    hasLlms  ? `**Start here:** [\`wiki/llms.txt\`](wiki/llms.txt) — universal AI entry point` : '',
-    hasWiki  ? `**Wiki:** [\`wiki/index.md\`](wiki/index.md) — project knowledge base` : '',
-    '',
+  ];
+
+  if (hasLlms)  parts.push(`**Start here:** [\`wiki/llms.txt\`](wiki/llms.txt) — universal AI entry point`);
+  if (hasWiki)  parts.push(`**Wiki:** [\`wiki/index.md\`](wiki/index.md) — project knowledge base`);
+  if (hasLlms || hasWiki) parts.push('');
+
+  parts.push(
     '## Recent Context (from vaultflow)',
     '',
     memSection,
     '',
+    sharedSection,
+    '',
     '## Rules',
     '- Read wiki/llms.txt before answering domain questions.',
+    '- Check vault tools index before building any utility or script.',
     '- Match existing code patterns — do not introduce new conventions.',
     '- Never commit secrets, connection strings, or .env files.',
     '',
     `*Generated by vaultflow gen-context — ${new Date().toISOString()}*`,
-  ].filter(l => l !== undefined).join('\n');
+  );
 
-  const outDir = path.join(projectPath, '.github');
+  const content = parts.join('\n');
+  const outDir  = path.join(projectPath, '.github');
   fs.mkdirSync(outDir, { recursive: true });
   const outPath = path.join(outDir, 'copilot-instructions.md');
   fs.writeFileSync(outPath, content, 'utf8');
@@ -96,7 +207,7 @@ function genCopilotInstructions(projectPath, projectName, stacks, memoryEntries)
 /**
  * Generate AGENTS.md for a project (Codex CLI entry point).
  */
-function genAgentsMd(projectPath, projectName, stacks, agents) {
+function genAgentsMd(projectPath, projectName, stacks, agents, infra) {
   const stackLine = formatStacks(stacks);
   const wikiPath  = path.join(projectPath, 'wiki', 'llms.txt');
   const hasLlms   = fs.existsSync(wikiPath);
@@ -106,6 +217,13 @@ function genAgentsMd(projectPath, projectName, stacks, agents) {
         `| ${a.name} | ${a.source} | ${(a.description || '').slice(0, 80)} |`
       ).join('\n')
     : '| (no agents registered) | | |';
+
+  const sharedSection = buildSharedSection(infra);
+
+  // Skills table for Codex — path is user_skills_dir relative
+  const skillRows = infra.skills.length > 0
+    ? infra.skills.map(s => `| ${s} | \`${path.join(infra.skillsDir, s)}\` | \`/${s}\` in Claude Code |`).join('\n')
+    : '| (no skills found) | | |';
 
   const content = [
     `# ${projectName} — Agent Roster`,
@@ -119,15 +237,24 @@ function genAgentsMd(projectPath, projectName, stacks, agents) {
     '|-------|--------|-------------|',
     agentSection,
     '',
+    '## Skills (invoke with /skill-name in Claude Code)',
+    '',
+    '| Skill | Path | Invocation |',
+    '|-------|------|------------|',
+    skillRows,
+    '',
+    sharedSection,
+    '',
     '## Entry Points',
     hasLlms
       ? '1. Read `wiki/llms.txt` first — universal AI entry point'
       : '1. Read `CLAUDE.md` for project context',
     '2. Check `wiki/index.md` for domain knowledge',
     '3. Check `wiki/log.md` for recent session history',
+    `4. Check \`${infra.vaultToolsIndex}\` before building any utility`,
     '',
     `*Generated by vaultflow gen-context — ${new Date().toISOString()}*`,
-  ].filter(l => l !== undefined).join('\n');
+  ].join('\n');
 
   const outPath = path.join(projectPath, 'AGENTS.md');
   fs.writeFileSync(outPath, content, 'utf8');
@@ -137,11 +264,13 @@ function genAgentsMd(projectPath, projectName, stacks, agents) {
 /**
  * Generate .cursor/rules/wiki.mdc for a project (Cursor MDC rule).
  */
-function genCursorRule(projectPath, projectName) {
+function genCursorRule(projectPath, projectName, infra) {
   const wikiPath = path.join(projectPath, 'wiki', 'llms.txt');
   const hasLlms  = fs.existsSync(wikiPath);
   const idxPath  = path.join(projectPath, 'wiki', 'index.md');
   const hasIdx   = fs.existsSync(idxPath);
+
+  const skillList = infra.skills.slice(0, 10).join(', ');
 
   const content = [
     '---',
@@ -152,13 +281,20 @@ function genCursorRule(projectPath, projectName) {
     '',
     `# ${projectName} — Context`,
     '',
-    hasLlms ? 'Always read `wiki/llms.txt` before answering questions about this project.' : '',
-    hasIdx  ? 'Project knowledge is in `wiki/index.md`.' : '',
+    ...(hasLlms ? ['Always read `wiki/llms.txt` before answering questions about this project.'] : []),
+    ...(hasIdx  ? ['Project knowledge is in `wiki/index.md`.'] : []),
     '',
     'Match existing code patterns. Never introduce new conventions without reading the wiki first.',
     '',
+    '## Shared Resources',
+    '',
+    ...(infra.hasVaultTools ? [`- **Vault tools:** \`${infra.vaultToolsIndex}\` — check before building any utility`] : []),
+    ...(infra.hasSkillsDir  ? [`- **Skills:** ${skillList}`] : []),
+    `- **vaultflow DB search:** \`node ${path.join(infra.helpersDir, 'db.cjs')} --search "query"\``,
+    `- **Vault:** \`${infra.vaultRoot}\` — tools, methodology, domain knowledge`,
+    '',
     `*Generated by vaultflow gen-context — ${new Date().toISOString()}*`,
-  ].filter(l => l !== undefined).join('\n');
+  ].join('\n');
 
   const outDir = path.join(projectPath, '.cursor', 'rules');
   fs.mkdirSync(outDir, { recursive: true });
@@ -177,7 +313,9 @@ function genCursorRule(projectPath, projectName) {
  */
 export async function generateForProject(projectPath) {
   const projectName = path.basename(projectPath);
+  const cfg         = loadConfig();
   const db          = getDb();
+  const infra       = loadSharedInfrastructure(cfg);
   const generated   = [];
 
   let stacks        = [];
@@ -193,16 +331,19 @@ export async function generateForProject(projectPath) {
 
   // Get registered agents (Claude + Codex, sorted by use_count)
   try {
-    agents = db.raw().prepare(
-      'SELECT name, source, description FROM vault_agents ORDER BY use_count DESC LIMIT 15'
-    ).all();
+    const rawDb = db.raw();
+    if (rawDb) {
+      agents = rawDb.prepare(
+        'SELECT name, source, description FROM vault_agents ORDER BY use_count DESC LIMIT 15'
+      ).all();
+    }
   } catch (err) {
     process.stderr.write(`[gen-context] agent registry unavailable: ${err.message}\n`);
   }
 
   // Copilot instructions
   try {
-    const p = genCopilotInstructions(projectPath, projectName, stacks, memoryEntries);
+    const p = genCopilotInstructions(projectPath, projectName, stacks, memoryEntries, infra);
     generated.push(p);
   } catch (err) {
     process.stderr.write(`[gen-context] copilot error: ${err.message}\n`);
@@ -210,7 +351,7 @@ export async function generateForProject(projectPath) {
 
   // AGENTS.md
   try {
-    const p = genAgentsMd(projectPath, projectName, stacks, agents);
+    const p = genAgentsMd(projectPath, projectName, stacks, agents, infra);
     generated.push(p);
   } catch (err) {
     process.stderr.write(`[gen-context] agents.md error: ${err.message}\n`);
@@ -218,7 +359,7 @@ export async function generateForProject(projectPath) {
 
   // Cursor rule
   try {
-    const p = genCursorRule(projectPath, projectName);
+    const p = genCursorRule(projectPath, projectName, infra);
     generated.push(p);
   } catch (err) {
     process.stderr.write(`[gen-context] cursor error: ${err.message}\n`);
@@ -249,10 +390,7 @@ if (process.argv[1] === thisPath) {
         const result = await generateForProject(absTarget);
         result.generated.forEach(f => console.log(`  wrote: ${f}`));
       } else if (target === '--all') {
-        const cfg     = loadConfig();
-        const gitRoot = (cfg.paths && cfg.paths.vault_root) ? null : null;
-        // Walk C:\GIT for directories with a CLAUDE.md or package.json
-        const searchRoot = path.resolve(__dirname, '..', '..', '..', '..');
+        const searchRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..');
         let dirs = [];
         try {
           dirs = fs.readdirSync(searchRoot, { withFileTypes: true })
