@@ -304,8 +304,8 @@ function genCursorRule(projectPath, projectName, infra) {
 }
 
 /**
- * Generate .vscode/mcp.json for a project (VS Code / GitHub Copilot MCP registration).
- * Points every project's VS Code workspace at the global vaultflow MCP server.
+ * Generate .vscode/mcp.json for a project (VS Code MCP registration — still used by VS Code itself).
+ * Copilot CLI no longer reads .vscode/mcp.json; use .mcp.json at project root for that.
  */
 function genVscodeMcp(projectPath, infra) {
   const mcpServerPath = path.join(infra.helpersDir, 'mcp-server.cjs').replace(/\\/g, '/');
@@ -322,6 +322,26 @@ function genVscodeMcp(projectPath, infra) {
   const outDir = path.join(projectPath, '.vscode');
   fs.mkdirSync(outDir, { recursive: true });
   const outPath = path.join(outDir, 'mcp.json');
+  fs.writeFileSync(outPath, content, 'utf8');
+  return outPath;
+}
+
+/**
+ * Generate .mcp.json at project root (Copilot CLI + Claude Code project-level MCP registration).
+ * Copilot CLI migrated away from .vscode/mcp.json to this format.
+ */
+function genRootMcp(projectPath, infra) {
+  const mcpServerPath = path.join(infra.helpersDir, 'mcp-server.cjs').replace(/\\/g, '/');
+  const content = JSON.stringify({
+    mcpServers: {
+      vaultflow: {
+        command: 'node',
+        args: [mcpServerPath],
+      },
+    },
+  }, null, 2) + '\n';
+
+  const outPath = path.join(projectPath, '.mcp.json');
   fs.writeFileSync(outPath, content, 'utf8');
   return outPath;
 }
@@ -388,12 +408,20 @@ export async function generateForProject(projectPath) {
     process.stderr.write(`[gen-context] cursor error: ${err.message}\n`);
   }
 
-  // VS Code MCP registration
+  // VS Code MCP registration (.vscode/mcp.json)
   try {
     const p = genVscodeMcp(projectPath, infra);
     generated.push(p);
   } catch (err) {
     process.stderr.write(`[gen-context] vscode mcp error: ${err.message}\n`);
+  }
+
+  // Project-root MCP registration (.mcp.json — Copilot CLI + Claude Code)
+  try {
+    const p = genRootMcp(projectPath, infra);
+    generated.push(p);
+  } catch (err) {
+    process.stderr.write(`[gen-context] root mcp error: ${err.message}\n`);
   }
 
   return { generated };
