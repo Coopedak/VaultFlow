@@ -10,6 +10,7 @@
  */
 
 import pty            from 'node-pty';
+import fs             from 'node:fs';
 import { sessionManager } from './session-manager.mjs';
 
 // Tool → command mapping
@@ -34,6 +35,14 @@ class PtyManager {
   spawn(session, { cols = 130, rows = 40, initialPrompt = '' } = {}) {
     const toolDef = TOOL_COMMANDS[session.tool] || TOOL_COMMANDS['claude'];
 
+    // Validate cwd — node-pty throws error 267 on Windows if cwd is invalid
+    let cwd = session.cwd || process.cwd();
+    try {
+      if (!fs.statSync(cwd).isDirectory()) cwd = process.cwd();
+    } catch {
+      cwd = process.cwd();
+    }
+
     let ptyProc;
     try {
       // On Windows, node-pty works best spawning the shell directly.
@@ -46,7 +55,7 @@ class PtyManager {
           name: 'xterm-256color',
           cols,
           rows,
-          cwd: session.cwd,
+          cwd,
           env: { ...process.env, TERM: 'xterm-256color' },
           useConpty: true,
         });
@@ -55,7 +64,7 @@ class PtyManager {
           name: 'xterm-256color',
           cols,
           rows,
-          cwd: session.cwd,
+          cwd,
           env: { ...process.env, TERM: 'xterm-256color' },
         });
       }

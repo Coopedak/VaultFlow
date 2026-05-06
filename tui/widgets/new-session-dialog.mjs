@@ -8,6 +8,7 @@
 
 import blessed            from 'blessed';
 import path               from 'node:path';
+import fs                 from 'node:fs';
 import { sessionManager } from '../session-manager.mjs';
 import { ptyManager }     from '../pty-manager.mjs';
 import { getRecentProjects } from '../db-reader.mjs';
@@ -222,9 +223,28 @@ export function createNewSessionDialog(screen, { onLaunch } = {}) {
 
   function launch() {
     const tool = TOOLS[toolIdx].id;
-    const cwd  = (dirInput.getValue() || projectDir || process.cwd()).trim();
-    const prompt = (promptInput.getValue() || '').trim();
+    const rawCwd = (dirInput.getValue() || projectDir || '').trim();
 
+    // Resolve to absolute path and validate it exists
+    let cwd;
+    if (!rawCwd) {
+      cwd = process.cwd();
+    } else {
+      try {
+        cwd = path.resolve(rawCwd);
+      } catch {
+        cwd = process.cwd();
+      }
+    }
+
+    // Verify directory exists — node-pty throws error 267 on invalid cwd
+    try {
+      if (!fs.statSync(cwd).isDirectory()) cwd = process.cwd();
+    } catch {
+      cwd = process.cwd();
+    }
+
+    const prompt = (promptInput.getValue() || '').trim();
     const project = path.basename(cwd) || 'unknown';
 
     const session = sessionManager.create({ tool, project, cwd });
