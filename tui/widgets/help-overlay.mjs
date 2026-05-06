@@ -13,20 +13,21 @@ const HELP_TEXT = `
 
 {bold}Navigation{/}
   {cyan-fg}Tab{/}          Switch focus: left panel ↔ right panel
-  {cyan-fg}↑ / ↓{/}        Navigate sessions (left) or scroll output (right)
-  {cyan-fg}Enter{/}        Open session in right panel
+  {cyan-fg}↑ / ↓{/}        Navigate sessions (left) or scroll preview (right)
+  {cyan-fg}Enter{/}        Select session for right-panel overview
   {cyan-fg}1–9{/}          Jump to session by position
   {cyan-fg}/{/}            Search sessions (filter left panel)
 
 {bold}Session Actions{/}
   {cyan-fg}N{/}            New session dialog
+  {cyan-fg}P{/}            Pop out selected session in a real terminal
   {cyan-fg}K{/}            Kill session (prompts for confirmation)
-  {cyan-fg}D{/}            Detach session (background, remove from list)
-  {cyan-fg}Q{/}  {cyan-fg}C-c{/}       Quit TUI (sessions keep running)
+  {cyan-fg}D{/}            Detach session to a real terminal and remove it from the list
+  {cyan-fg}Q{/}  {cyan-fg}C-c{/}       Quit TUI
 
 {bold}Right Panel{/}
   {cyan-fg}Space{/}        Scroll down one page
-  {cyan-fg}G{/}            Jump to bottom (live tail)
+  {cyan-fg}G{/}            Jump to bottom of preview
   {cyan-fg}g g{/}          Jump to top
 
 {bold}Reviews{/}
@@ -37,7 +38,7 @@ const HELP_TEXT = `
 
 {bold}Other{/}
   {cyan-fg}M{/}            Jump to MODEL ROUTING section
-  {cyan-fg}Esc{/}          Close dialog / cancel
+  {cyan-fg}Esc{/}          Return focus to left pane / cancel dialog
   {cyan-fg}?{/}            Toggle this help
 
 {grey-fg}─────────────────────────────────────────────────────────────────────{/}

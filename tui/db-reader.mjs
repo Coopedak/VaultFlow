@@ -55,6 +55,7 @@ function getDbPath() {
 // ── DB connection (lazy, read-only) ───────────────────────────────────────────
 
 let _db = null;
+let _fallbackModelRoutingCache = null;
 
 function getDb() {
   if (_db) return _db;
@@ -117,6 +118,7 @@ export function getModelRouting() {
 
 function _fallbackModelRouting(db) {
   try {
+    if (_fallbackModelRoutingCache) return _fallbackModelRoutingCache;
     // Build mock routing from patterns table agent names
     const rows = db.prepare(`
       SELECT DISTINCT agent FROM patterns
@@ -126,12 +128,13 @@ function _fallbackModelRouting(db) {
     `).all();
 
     const PINNED = ['project-manager', 'security-reviewer'];
-    return rows.map(r => ({
+    _fallbackModelRoutingCache = rows.map(r => ({
       agent:        r.agent,
       model:        PINNED.includes(r.agent) ? 'opus' : 'sonnet',
-      approvalRate: 95 + Math.floor(Math.random() * 5),
+      approvalRate: null,
       pinned:       PINNED.includes(r.agent),
     }));
+    return _fallbackModelRoutingCache;
   } catch {
     return [];
   }
@@ -172,10 +175,10 @@ export function getRecentProjects() {
 }
 
 /**
- * Get top N files by edit count for a given session (or all sessions).
+ * Get top N tool calls for a given session (or all sessions).
  * @param {string|null} sessionId — null = aggregate all
  * @param {number} limit
- * @returns {Array<{ file: string, count: number }>}
+ * @returns {Array<{ tool: string, count: number }>}
  */
 export function getTopTools(sessionId = null, limit = 3) {
   try {
@@ -185,25 +188,25 @@ export function getTopTools(sessionId = null, limit = 3) {
     let rows;
     if (sessionId) {
       rows = db.prepare(`
-        SELECT file_path, COUNT(*) as cnt
-        FROM edit_events
+        SELECT tool_name, COUNT(*) as cnt
+        FROM tool_calls
         WHERE session_id = ?
-        GROUP BY file_path
+        GROUP BY tool_name
         ORDER BY cnt DESC
         LIMIT ?
       `).all(sessionId, limit);
     } else {
       rows = db.prepare(`
-        SELECT file_path, COUNT(*) as cnt
-        FROM edit_events
-        GROUP BY file_path
+        SELECT tool_name, COUNT(*) as cnt
+        FROM tool_calls
+        GROUP BY tool_name
         ORDER BY cnt DESC
         LIMIT ?
       `).all(limit);
     }
 
     return rows.map(r => ({
-      file:  path.basename(r.file_path || 'unknown'),
+      tool:  r.tool_name || 'unknown',
       count: r.cnt,
     }));
   } catch {
@@ -242,4 +245,5 @@ export function closeDb() {
   } catch {
     // ignore
   }
+  _fallbackModelRoutingCache = null;
 }

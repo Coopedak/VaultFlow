@@ -4,7 +4,8 @@
   "description": "Claude Code intelligence layer — session tracking, FTS5 memory, skill routing, DISCOVERY pipeline",
   "type": "module",
   "bin": {
-    "vaultflow": "./scripts/backfill.mjs"
+    "vault": "./scripts/cli.mjs",
+    "vaultflow": "./scripts/cli.mjs"
   },
   "scripts": {
     "audit": "node .claude/helpers/audit.mjs",
@@ -14,11 +15,20 @@
     "plan": "node .claude/helpers/plan-init.mjs",
     "plan:dir": "node .claude/helpers/plan-init.mjs --list",
     "backfill": "node .claude/helpers/backfill.mjs",
+    "backfill:cli-telemetry": "node .claude/helpers/cli-telemetry-backfill.mjs",
+    "project-audit": "node .claude/helpers/project-audit.mjs",
     "flush": "node .claude/helpers/flush-parquet.mjs",
-    "status": "node .claude/helpers/hook-handler.cjs status",
+    "status": "node .claude/helpers/watcher.mjs --status",
     "dashboard": "node .claude/helpers/dashboard/gen.mjs",
     "dashboard:open": "node .claude/helpers/dashboard/gen.mjs --open",
     "dashboard:serve": "node .claude/helpers/dashboard/server.mjs",
+    "dashboard:desktop:build": "dotnet build desktop/VaultFlow.DashboardLauncher/VaultFlow.DashboardLauncher.csproj",
+    "dashboard:desktop:publish": "dotnet publish desktop/VaultFlow.DashboardLauncher/VaultFlow.DashboardLauncher.csproj -c Release",
+    "dashboard:desktop:shortcut": "powershell -ExecutionPolicy Bypass -File scripts/create-dashboard-shortcut.ps1",
+    "claude:tracked": "node scripts/tracked-cli.mjs claude",
+    "copilot:tracked": "node scripts/tracked-cli.mjs copilot",
+    "codex:tracked": "node scripts/tracked-cli.mjs codex",
+    "copilot:tracked:shortcut": "powershell -ExecutionPolicy Bypass -File scripts/create-tracked-copilot-shortcut.ps1",
     "watcher": "node .claude/helpers/watcher.mjs",
     "watcher:stop": "node .claude/helpers/watcher.mjs --stop",
     "dict": "node .claude/helpers/dict.mjs",

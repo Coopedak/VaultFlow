@@ -12,18 +12,34 @@ import fs                 from 'node:fs';
 import { sessionManager } from '../session-manager.mjs';
 import { ptyManager }     from '../pty-manager.mjs';
 import { getRecentProjects } from '../db-reader.mjs';
+import { recordSessionStart } from '../telemetry.mjs';
 
 const TOOLS = [
   { id: 'claude',     label: 'claude',     desc: 'Claude Code (claude CLI)',              color: '{#ff8800-fg}' },
-  { id: 'gh-copilot', label: 'gh copilot', desc: 'GitHub Copilot CLI (gh copilot chat)',  color: '{magenta-fg}' },
+  { id: 'copilot',    label: 'copilot',    desc: 'GitHub Copilot CLI (copilot)',          color: '{magenta-fg}' },
   { id: 'codex',      label: 'codex',      desc: 'OpenAI Codex CLI (codex)',              color: '{cyan-fg}' },
 ];
+
+function getDefaultProjectDir() {
+  if (process.platform === 'win32') {
+    const gitRoot = 'C:\\GIT';
+    try {
+      if (fs.statSync(gitRoot).isDirectory()) {
+        return gitRoot;
+      }
+    } catch {}
+  }
+
+  return process.cwd();
+}
 
 export function createNewSessionDialog(screen, { onLaunch } = {}) {
   let visible = false;
   let toolIdx = 0;
-  let initialPrompt = '';
-  let fieldFocus = 'tool';  // 'tool' | 'dir' | 'prompt'
+  let fieldFocus = 'tool';  // 'tool' | 'projects' | 'dir' | 'prompt'
+  let projectDirs = [];
+  let projectIdx = 0;
+  let projectRoot = getDefaultProjectDir();
 
   // ── container ──────────────────────────────────────────────────────────────
 
@@ -31,7 +47,7 @@ export function createNewSessionDialog(screen, { onLaunch } = {}) {
     top:    'center',
     left:   'center',
     width:  87,
-    height: 24,
+    height: 31,
     hidden: true,
     tags:   true,
     border: { type: 'line' },
@@ -112,7 +128,7 @@ export function createNewSessionDialog(screen, { onLaunch } = {}) {
 
   // Recent projects
   const recentBox = blessed.box({
-    top:    12,
+    top:    21,
     left:   2,
     width:  '100%-4',
     height: 1,
@@ -120,9 +136,39 @@ export function createNewSessionDialog(screen, { onLaunch } = {}) {
     style:  { fg: 'grey', bg: 'black' },
   });
 
+  const projectLabel = blessed.box({
+    top:    12,
+    left:   2,
+    width:  '100%-4',
+    height: 1,
+    tags:   true,
+    content: 'Projects in C:\\GIT',
+    style:  { fg: 'grey', bg: 'black' },
+  });
+
+  const projectList = blessed.list({
+    top:     13,
+    left:    2,
+    width:   '100%-4',
+    height:  8,
+    tags:    true,
+    border:  { type: 'line' },
+    keys:    false,
+    mouse:   true,
+    scrollable: true,
+    alwaysScroll: true,
+    style: {
+      fg:       'white',
+      bg:       'black',
+      border:   { fg: 'grey' },
+      selected: { fg: 'white', bg: '#333333' },
+      scrollbar: { bg: 'grey' },
+    },
+  });
+
   // Prompt label
   const promptLabel = blessed.box({
-    top:    14,
+    top:    23,
     left:   2,
     width:  '100%-4',
     height: 1,
@@ -133,7 +179,7 @@ export function createNewSessionDialog(screen, { onLaunch } = {}) {
 
   // Prompt input
   const promptInput = blessed.textbox({
-    top:      15,
+    top:      24,
     left:     2,
     width:    '100%-4',
     height:   3,
@@ -150,12 +196,12 @@ export function createNewSessionDialog(screen, { onLaunch } = {}) {
 
   // Footer hint
   const hintBox = blessed.box({
-    top:    19,
+    top:    28,
     left:   2,
     width:  '100%-4',
     height: 1,
     tags:   true,
-    content: '{green-fg}Enter:launch{/}    {grey-fg}Tab:next field{/}    {grey-fg}Esc:cancel{/}',
+    content: '{green-fg}Enter:launch{/}    {grey-fg}Tab:next field{/}    {grey-fg}↑↓:choose project{/}    {grey-fg}Esc:cancel{/}',
     style:  { fg: 'white', bg: 'black' },
   });
 
@@ -165,6 +211,8 @@ export function createNewSessionDialog(screen, { onLaunch } = {}) {
   container.append(toolList);
   container.append(dirLabel);
   container.append(dirInput);
+  container.append(projectLabel);
+  container.append(projectList);
   container.append(recentBox);
   container.append(promptLabel);
   container.append(promptInput);
@@ -191,20 +239,67 @@ export function createNewSessionDialog(screen, { onLaunch } = {}) {
     }
   }
 
+  function renderProjectLabel() {
+    projectLabel.setContent(`Projects in ${projectRoot}`);
+  }
+
+  function loadProjects() {
+    projectRoot = getDefaultProjectDir();
+    try {
+      projectDirs = fs.readdirSync(projectRoot, { withFileTypes: true })
+        .filter(entry => entry.isDirectory() && !entry.name.startsWith('.'))
+        .map(entry => entry.name)
+        .sort((a, b) => a.localeCompare(b));
+    } catch {
+      projectDirs = [];
+    }
+    projectIdx = 0;
+    renderProjectLabel();
+  }
+
+  function syncDirToProject() {
+    const name = projectDirs[projectIdx];
+    if (!name) {
+      dirInput.setValue(projectRoot);
+      return;
+    }
+    dirInput.setValue(path.join(projectRoot, name));
+  }
+
+  function renderProjectList() {
+    const items = projectDirs.length === 0
+      ? [`{grey-fg}(no projects found under ${projectRoot}){/}`]
+      : projectDirs.map((name, i) => {
+          const dot = i === projectIdx ? '●' : '○';
+          return `{cyan-fg}${dot}{/} ${name}`;
+        });
+    projectList.setItems(items);
+    if (projectDirs.length > 0) {
+      projectList.select(projectIdx);
+      syncDirToProject();
+    } else {
+      dirInput.setValue(getDefaultProjectDir());
+    }
+  }
+
   // ── focus management ────────────────────────────────────────────────────────
 
   function setFieldFocus(field) {
     fieldFocus = field;
     // Update border colors to show active field
+    projectList.style.border.fg = field === 'projects' ? '#ff8800' : 'grey';
     dirInput.style.border.fg    = field === 'dir'    ? '#ff8800' : 'grey';
     promptInput.style.border.fg = field === 'prompt' ? '#ff8800' : 'grey';
 
-    if (field === 'dir') {
+    if (field === 'projects') {
+      projectList.focus();
+    } else if (field === 'dir') {
       dirInput.focus();
     } else if (field === 'prompt') {
       promptInput.focus();
     } else {
       // tool — blur inputs
+      try { projectList.cancel(); } catch {}
       try { dirInput.cancel(); }    catch {}
       try { promptInput.cancel(); } catch {}
       toolList.focus();
@@ -213,7 +308,8 @@ export function createNewSessionDialog(screen, { onLaunch } = {}) {
   }
 
   function tabNext() {
-    if (fieldFocus === 'tool')   setFieldFocus('dir');
+    if (fieldFocus === 'tool')        setFieldFocus('projects');
+    else if (fieldFocus === 'projects') setFieldFocus('dir');
     else if (fieldFocus === 'dir')    setFieldFocus('prompt');
     else                              setFieldFocus('tool');
   }
@@ -227,26 +323,28 @@ export function createNewSessionDialog(screen, { onLaunch } = {}) {
     // Resolve to absolute path and validate it exists
     let cwd;
     if (!rawCwd) {
-      cwd = process.cwd();
+      cwd = getDefaultProjectDir();
     } else {
       try {
         cwd = path.resolve(rawCwd);
       } catch {
-        cwd = process.cwd();
+        cwd = getDefaultProjectDir();
       }
     }
 
     // Verify directory exists — node-pty throws error 267 on invalid cwd
     try {
-      if (!fs.statSync(cwd).isDirectory()) cwd = process.cwd();
+      if (!fs.statSync(cwd).isDirectory()) cwd = getDefaultProjectDir();
     } catch {
-      cwd = process.cwd();
+      cwd = getDefaultProjectDir();
     }
 
     const prompt = (promptInput.getValue() || '').trim();
     const project = path.basename(cwd) || 'unknown';
 
     const session = sessionManager.create({ tool, project, cwd });
+    session.commands = prompt ? 1 : 0;
+    recordSessionStart(session, { initialPrompt: prompt });
     hide();
 
     // Get right panel dimensions for PTY sizing
@@ -285,7 +383,26 @@ export function createNewSessionDialog(screen, { onLaunch } = {}) {
         return true;
       }
       if (key === 'enter') {
-        setFieldFocus('dir');
+        setFieldFocus('projects');
+        return true;
+      }
+    }
+
+    if (fieldFocus === 'projects') {
+      if (key === 'up' && projectIdx > 0) {
+        projectIdx--;
+        renderProjectList();
+        screen.render();
+        return true;
+      }
+      if (key === 'down' && projectIdx < projectDirs.length - 1) {
+        projectIdx++;
+        renderProjectList();
+        screen.render();
+        return true;
+      }
+      if (key === 'enter') {
+        launch();
         return true;
       }
     }
@@ -309,8 +426,9 @@ export function createNewSessionDialog(screen, { onLaunch } = {}) {
     visible  = true;
     toolIdx  = 0;
     fieldFocus = 'tool';
+    loadProjects();
 
-    dirInput.clearValue();
+    renderProjectList();
     promptInput.clearValue();
 
     renderToolList();

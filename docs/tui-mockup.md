@@ -221,7 +221,7 @@ Left panel session row fills `[YELLOW]` background. Right panel shows notificati
 │         │  Tool                                                                         │                                    │
 │         │  ┌─────────────────────────────────────────────────────────────────────────┐ │                                    │
 │         │  │ [ORANGE] ● claude           Claude Code (claude CLI)                    │ │                                    │
-│         │  │ [PURPLE] ○ gh copilot       GitHub Copilot CLI (gh copilot suggest)     │ │                                    │
+│         │  │ [PURPLE] ○ copilot          GitHub Copilot CLI (copilot)                │ │                                    │
 │         │  │ [CYAN]   ○ codex            OpenAI Codex CLI (codex)                    │ │                                    │
 │         │  └─────────────────────────────────────────────────────────────────────────┘ │                                    │
 │         │                                                                               │                                    │

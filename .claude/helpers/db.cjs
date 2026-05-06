@@ -94,6 +94,10 @@ const SCHEMA_SQL = `
     ended_at    TEXT,
     duration_ms INTEGER,
     platform    TEXT,
+    cli         TEXT,
+    cli_version TEXT,
+    model       TEXT,
+    model_provider TEXT,
     cwd         TEXT,
     edits       INTEGER DEFAULT 0,
     commands    INTEGER DEFAULT 0,
@@ -371,6 +375,23 @@ function duckEsc(p) {
   return String(p).replace(/\\/g, '/').replace(/'/g, "''");
 }
 
+function parquetShardSuffix(date = new Date()) {
+  return date.toISOString().replace(/[-:.]/g, '').replace('T', '-').replace('Z', 'Z');
+}
+
+function parquetShardPath(dir, baseName, stamp) {
+  return path.join(dir, `${baseName}-${stamp}.parquet`);
+}
+
+function parquetGlobPath(dir, baseName) {
+  return path.join(dir, `${baseName}*.parquet`);
+}
+
+function hasParquetArchive(dir, baseName) {
+  if (!fs.existsSync(dir)) return false;
+  return fs.readdirSync(dir).some(name => name.startsWith(baseName) && name.endsWith('.parquet'));
+}
+
 /**
  * Normalize DuckDB row objects: convert BigInt values to Number.
  * @duckdb/node-api returns BigInt for INTEGER columns.
@@ -490,6 +511,19 @@ function initialize(metricsRoot, dbFile) {
   } catch (err) {
     process.stderr.write(`[db] memory_entries dedup migration warning: ${err.message}\n`);
   }
+
+  for (const migration of [
+    'ALTER TABLE sessions ADD COLUMN cli TEXT',
+    'ALTER TABLE sessions ADD COLUMN cli_version TEXT',
+    'ALTER TABLE sessions ADD COLUMN model TEXT',
+    'ALTER TABLE sessions ADD COLUMN model_provider TEXT',
+  ]) {
+    try { _db.exec(migration); } catch (err) {
+      if (!err.message.includes('duplicate column')) {
+        process.stderr.write(`[db] migration warning: ${err.message}\n`);
+      }
+    }
+  }
 }
 
 /**
@@ -527,6 +561,10 @@ function recordEdit(sessionId, filePath, project, changeType) {
  * @param {string} [session.ended_at]
  * @param {number} [session.duration_ms]
  * @param {string} [session.platform]
+ * @param {string} [session.cli]
+ * @param {string} [session.cli_version]
+ * @param {string} [session.model]
+ * @param {string} [session.model_provider]
  * @param {string} [session.cwd]
  * @param {number} [session.edits]
  * @param {number} [session.commands]
@@ -539,35 +577,49 @@ function upsertSession(session) {
 
   const stmt = _db.prepare(`
     INSERT INTO sessions
-      (id, started_at, ended_at, duration_ms, platform, cwd,
+      (id, started_at, ended_at, duration_ms, platform, cli, cli_version, model, model_provider, cwd,
        edits, commands, tasks, errors, project)
     VALUES
-      (@id, @started_at, @ended_at, @duration_ms, @platform, @cwd,
+      (@id, @started_at, @ended_at, @duration_ms, @platform, @cli, @cli_version, @model, @model_provider, @cwd,
        @edits, @commands, @tasks, @errors, @project)
     ON CONFLICT(id) DO UPDATE SET
-      ended_at    = excluded.ended_at,
-      duration_ms = excluded.duration_ms,
-      platform    = excluded.platform,
-      cwd         = excluded.cwd,
-      edits       = excluded.edits,
-      commands    = excluded.commands,
-      tasks       = excluded.tasks,
-      errors      = excluded.errors,
-      project     = excluded.project
+      started_at  = CASE
+                      WHEN excluded.started_at IS NULL THEN sessions.started_at
+                      WHEN sessions.started_at IS NULL THEN excluded.started_at
+                      WHEN excluded.started_at < sessions.started_at THEN excluded.started_at
+                      ELSE sessions.started_at
+                    END,
+      ended_at    = COALESCE(excluded.ended_at, sessions.ended_at),
+      duration_ms = COALESCE(excluded.duration_ms, sessions.duration_ms),
+      platform    = COALESCE(excluded.platform, sessions.platform),
+      cli         = COALESCE(excluded.cli, sessions.cli),
+      cli_version = COALESCE(excluded.cli_version, sessions.cli_version),
+      model       = COALESCE(excluded.model, sessions.model),
+      model_provider = COALESCE(excluded.model_provider, sessions.model_provider),
+      cwd         = COALESCE(excluded.cwd, sessions.cwd),
+      edits       = COALESCE(excluded.edits, sessions.edits),
+      commands    = COALESCE(excluded.commands, sessions.commands),
+      tasks       = COALESCE(excluded.tasks, sessions.tasks),
+      errors      = COALESCE(excluded.errors, sessions.errors),
+      project     = COALESCE(excluded.project, sessions.project)
   `);
 
   stmt.run({
     id:          session.id,
     started_at:  session.started_at,
-    ended_at:    session.ended_at    || null,
-    duration_ms: session.duration_ms || null,
-    platform:    session.platform    || null,
-    cwd:         session.cwd         || null,
-    edits:       session.edits       || 0,
-    commands:    session.commands    || 0,
-    tasks:       session.tasks       || 0,
-    errors:      session.errors      || 0,
-    project:     session.project     || null,
+    ended_at:    session.ended_at    ?? null,
+    duration_ms: session.duration_ms ?? null,
+    platform:    session.platform    ?? null,
+    cli:         session.cli         ?? null,
+    cli_version: session.cli_version ?? null,
+    model:       session.model       ?? null,
+    model_provider: session.model_provider ?? null,
+    cwd:         session.cwd         ?? null,
+    edits:       session.edits       ?? null,
+    commands:    session.commands    ?? null,
+    tasks:       session.tasks       ?? null,
+    errors:      session.errors      ?? null,
+    project:     session.project     ?? null,
   });
 }
 
@@ -741,6 +793,9 @@ async function flushToParquet(metricsRoot, parquetDir) {
   const dbPath        = path.join(root, (cfg && cfg.storage && cfg.storage.db_file) || 'vaultflow.db');
   const editsParquet  = path.join(pDirFull, 'edit_events.parquet');
   const sessParquet   = path.join(pDirFull, 'sessions.parquet');
+  const flushStamp    = parquetShardSuffix();
+  const editsShard    = parquetShardPath(pDirFull, 'edit_events', flushStamp);
+  const sessShard     = parquetShardPath(pDirFull, 'sessions', flushStamp);
 
   ensureDir(pDirFull);
 
@@ -764,21 +819,11 @@ async function flushToParquet(metricsRoot, parquetDir) {
     const editsFlushed = editCountRows[0]?.cnt || 0;
 
     if (editsFlushed > 0) {
-      const ep_ = duckEsc(editsParquet);
-      if (fs.existsSync(editsParquet)) {
-        await duckRun(conn,
-          `COPY (
-             SELECT * FROM read_parquet('${ep_}') WHERE timestamp > '1970-01-01T00:00:00.000Z'
-             UNION ALL
-             SELECT * FROM sqlite_scan('${db_}', 'edit_events') WHERE timestamp > '${lf_}'
-           ) TO '${ep_}' (FORMAT PARQUET)`
-        );
-      } else {
-        await duckRun(conn,
-          `COPY (SELECT * FROM sqlite_scan('${db_}', 'edit_events') WHERE timestamp > '${lf_}')
-           TO '${ep_}' (FORMAT PARQUET)`
-        );
-      }
+      const ep_ = duckEsc(editsShard);
+      await duckRun(conn,
+        `COPY (SELECT * FROM sqlite_scan('${db_}', 'edit_events') WHERE timestamp > '${lf_}')
+         TO '${ep_}' (FORMAT PARQUET)`
+      );
     }
 
     // ── sessions flush ───────────────────────────────────────────────────
@@ -788,21 +833,11 @@ async function flushToParquet(metricsRoot, parquetDir) {
     const sessionsFlushed = sessCountRows[0]?.cnt || 0;
 
     if (sessionsFlushed > 0) {
-      const sp_ = duckEsc(sessParquet);
-      if (fs.existsSync(sessParquet)) {
-        await duckRun(conn,
-          `COPY (
-             SELECT * FROM read_parquet('${sp_}') WHERE started_at > '1970-01-01T00:00:00.000Z'
-             UNION ALL
-             SELECT * FROM sqlite_scan('${db_}', 'sessions') WHERE started_at > '${lf_}'
-           ) TO '${sp_}' (FORMAT PARQUET)`
-        );
-      } else {
-        await duckRun(conn,
-          `COPY (SELECT * FROM sqlite_scan('${db_}', 'sessions') WHERE started_at > '${lf_}')
-           TO '${sp_}' (FORMAT PARQUET)`
-        );
-      }
+      const sp_ = duckEsc(sessShard);
+      await duckRun(conn,
+        `COPY (SELECT * FROM sqlite_scan('${db_}', 'sessions') WHERE started_at > '${lf_}')
+         TO '${sp_}' (FORMAT PARQUET)`
+      );
     }
 
     return { editsFlushed, sessionsFlushed };
@@ -834,6 +869,7 @@ async function queryEditFrequency(metricsRoot, parquetDir, days) {
 
   const pDirFull     = path.join(root, pDir);
   const editsParquet = path.join(pDirFull, 'edit_events.parquet');
+  const editsGlob    = parquetGlobPath(pDirFull, 'edit_events');
   const dbPath       = path.join(root, (cfg && cfg.storage && cfg.storage.db_file) || 'vaultflow.db');
   const lookback     = days || 30;
 
@@ -846,8 +882,8 @@ async function queryEditFrequency(metricsRoot, parquetDir, days) {
     const db_  = duckEsc(dbPath);
     const cut_ = duckEsc(cutoff);
 
-    if (fs.existsSync(editsParquet)) {
-      const ep_ = duckEsc(editsParquet);
+    if (fs.existsSync(editsParquet) || hasParquetArchive(pDirFull, 'edit_events')) {
+      const ep_ = duckEsc(editsGlob);
       return duckQuery(conn, `
         SELECT   file_path,
                  project,
@@ -1367,6 +1403,9 @@ async function flushTelemetryToParquet(metricsRoot, parquetDir) {
   const dbPath          = path.join(root, (cfg && cfg.storage && cfg.storage.db_file) || 'vaultflow.db');
   const toolsParquet    = path.join(pDirFull, (cfg && cfg.storage && cfg.storage.tool_calls_parquet) || 'tool_calls.parquet');
   const promptsParquet  = path.join(pDirFull, (cfg && cfg.storage && cfg.storage.prompts_parquet) || 'prompts.parquet');
+  const flushStamp      = parquetShardSuffix();
+  const toolsShard      = parquetShardPath(pDirFull, 'tool_calls', flushStamp);
+  const promptsShard    = parquetShardPath(pDirFull, 'prompts', flushStamp);
 
   ensureDir(pDirFull);
 
@@ -1388,21 +1427,11 @@ async function flushTelemetryToParquet(metricsRoot, parquetDir) {
     const toolCallsFlushed = tcCount[0]?.cnt || 0;
 
     if (toolCallsFlushed > 0) {
-      const tp_ = duckEsc(toolsParquet);
-      if (fs.existsSync(toolsParquet)) {
-        await duckRun(conn,
-          `COPY (
-             SELECT * FROM read_parquet('${tp_}')
-             UNION ALL
-             SELECT * FROM sqlite_scan('${db_}', 'tool_calls') WHERE timestamp > '${lf_}'
-           ) TO '${tp_}' (FORMAT PARQUET)`
-        );
-      } else {
-        await duckRun(conn,
-          `COPY (SELECT * FROM sqlite_scan('${db_}', 'tool_calls') WHERE timestamp > '${lf_}')
-           TO '${tp_}' (FORMAT PARQUET)`
-        );
-      }
+      const tp_ = duckEsc(toolsShard);
+      await duckRun(conn,
+        `COPY (SELECT * FROM sqlite_scan('${db_}', 'tool_calls') WHERE timestamp > '${lf_}')
+         TO '${tp_}' (FORMAT PARQUET)`
+      );
     }
 
     // ── prompts ──────────────────────────────────────────────────────────
@@ -1412,21 +1441,11 @@ async function flushTelemetryToParquet(metricsRoot, parquetDir) {
     const promptsFlushed = prCount[0]?.cnt || 0;
 
     if (promptsFlushed > 0) {
-      const pp_ = duckEsc(promptsParquet);
-      if (fs.existsSync(promptsParquet)) {
-        await duckRun(conn,
-          `COPY (
-             SELECT * FROM read_parquet('${pp_}')
-             UNION ALL
-             SELECT * FROM sqlite_scan('${db_}', 'prompts') WHERE timestamp > '${lf_}'
-           ) TO '${pp_}' (FORMAT PARQUET)`
-        );
-      } else {
-        await duckRun(conn,
-          `COPY (SELECT * FROM sqlite_scan('${db_}', 'prompts') WHERE timestamp > '${lf_}')
-           TO '${pp_}' (FORMAT PARQUET)`
-        );
-      }
+      const pp_ = duckEsc(promptsShard);
+      await duckRun(conn,
+        `COPY (SELECT * FROM sqlite_scan('${db_}', 'prompts') WHERE timestamp > '${lf_}')
+         TO '${pp_}' (FORMAT PARQUET)`
+      );
     }
 
     return { toolCallsFlushed, promptsFlushed };

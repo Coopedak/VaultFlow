@@ -37,6 +37,9 @@ const COLOR_MAP = {
 // Unique placeholder strings that will not appear in normal PTY output
 const OPEN  = '\x00BOPEN\x00';
 const CLOSE = '\x00BCLOSE\x00';
+const CSI_RE = /\x1b\[[0-?]*[ -/]*[@-~]/g;
+const OSC_RE = /\x1b\][^\x07\x1b]*(\x07|\x1b\\)/g;
+const ESC_RE = /\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\)|[ -/]*[0-~])/g;
 
 /**
  * Convert a raw ANSI string to a blessed-tagged string.
@@ -65,9 +68,9 @@ export function ansiToBlessed(raw) {
   });
 
   // Step 3: strip all remaining unrecognized escape sequences
-  out = out.replace(/\x1b\[[0-9;]*[A-Za-z]/g, '');          // CSI sequences
-  out = out.replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)/g, ''); // OSC sequences
-  out = out.replace(/\x1b[^[\]]/g, '');                       // other ESC
+  out = out.replace(CSI_RE, '');                              // CSI sequences
+  out = out.replace(OSC_RE, '');                              // OSC sequences
+  out = out.replace(ESC_RE, '');                              // other ESC
   out = out.replace(/\x1b/g, '');                             // leftover bare ESC
 
   // Step 4: strip \r — leave \n intact for line splitting upstream
@@ -87,9 +90,9 @@ export function ansiToBlessed(raw) {
 export function stripAnsi(raw) {
   if (!raw || typeof raw !== 'string') return '';
   return raw
-    .replace(/\x1b\[[0-9;]*[A-Za-z]/g, '')
-    .replace(/\x1b\][^\x07\x1b]*(\x07|\x1b\\)/g, '')
-    .replace(/\x1b[^[\]]/g, '')
+    .replace(CSI_RE, '')
+    .replace(OSC_RE, '')
+    .replace(ESC_RE, '')
     .replace(/\x1b/g, '')
     .replace(/\r/g, '');
 }

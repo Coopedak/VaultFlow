@@ -36,16 +36,22 @@ class SessionManager extends EventEmitter {
       sessionId: null,    // set by db-reader when a matching DB row is found
       project,
       cwd,
-      tool,               // 'claude' | 'gh-copilot' | 'codex'
+      tool,               // 'claude' | 'copilot' | 'codex'
       status: 'running',  // 'running' | 'idle' | 'notification' | 'crashed'
       tokens: 0,
       maxTokens: 200000,
       edits: 0,
+      commands: 0,
+      tasks: 0,
+      errors: 0,
       startedAt: new Date(),
       lines: [],          // buffered PTY output lines (plain strings, ANSI intact)
       ptyProc: null,      // node-pty instance (set by pty-manager)
       pendingReview: null,
       scrollPos: -1,      // -1 = live tail; ≥0 = pinned scroll position
+      externalLaunches: 0,
+      lastPoppedOutAt: null,
+      launchName: null,
     };
     this._sessions.set(id, session);
     this.emit('added', session);
@@ -70,7 +76,7 @@ class SessionManager extends EventEmitter {
 
   /** Get sessions grouped by tool type. */
   getGrouped() {
-    const groups = { claude: [], 'gh-copilot': [], codex: [] };
+    const groups = { claude: [], copilot: [], codex: [] };
     for (const s of this._sessions.values()) {
       const key = s.tool in groups ? s.tool : 'claude';
       groups[key].push(s);
@@ -151,11 +157,11 @@ class SessionManager extends EventEmitter {
 
   /**
    * Get a flat list of sessions in display order (for 1–9 shortcuts).
-   * Order: claude sessions, then gh-copilot, then codex.
+   * Order: claude sessions, then copilot, then codex.
    */
   getFlat() {
     const g = this.getGrouped();
-    return [...g.claude, ...g['gh-copilot'], ...g.codex];
+    return [...g.claude, ...g.copilot, ...g.codex];
   }
 }
 

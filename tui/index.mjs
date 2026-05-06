@@ -9,6 +9,9 @@
  */
 
 import { createApp } from './app.mjs';
+import { ptyManager } from './pty-manager.mjs';
+import { sessionManager } from './session-manager.mjs';
+import { recordSessionAction, recordSessionEnd } from './telemetry.mjs';
 
 // Suppress Node 22 experimental warnings that would bleed into the TUI
 const { emitWarning } = process;
@@ -26,6 +29,11 @@ let _screen = null;
 
 process.on('uncaughtException', (err) => {
   try {
+    for (const session of sessionManager.getAll()) {
+      recordSessionAction(session, 'TuiCrash', { source: 'uncaught-exception', message: err.message });
+      recordSessionEnd(session, { status: 'crashed', errors: (session.errors || 0) + 1 });
+    }
+    ptyManager.killAll();
     if (_screen) {
       _screen.destroy();
     }
@@ -39,6 +47,11 @@ process.on('uncaughtException', (err) => {
 
 process.on('unhandledRejection', (reason) => {
   try {
+    for (const session of sessionManager.getAll()) {
+      recordSessionAction(session, 'TuiCrash', { source: 'unhandled-rejection', message: String(reason) });
+      recordSessionEnd(session, { status: 'crashed', errors: (session.errors || 0) + 1 });
+    }
+    ptyManager.killAll();
     if (_screen) {
       _screen.destroy();
     }

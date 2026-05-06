@@ -119,6 +119,7 @@ function dbUpsert(session) {
       ended_at:    session.endedAt,
       duration_ms: session.durationMs,
       platform:    session.platform,
+      cli:         'claude',
       cwd:         session.cwd,
       edits:       session.metrics.edits,
       commands:    session.metrics.commands,

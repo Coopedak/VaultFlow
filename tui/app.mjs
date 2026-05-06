@@ -2,13 +2,9 @@
  * app.mjs — screen setup, layout assembly, global keybindings
  *
  * Focus model:
- *   'left'  — session list navigation (↑↓ = cursor, Enter = open)
- *   'right' — right panel (↑↓ = scroll, keystrokes → PTY)
+ *   'left'  — session list navigation
+ *   'right' — session overview + recent output preview
  *   'dialog' — new-session or help overlay modal (Esc to close)
- *
- * PTY passthrough rule: when focusMode === 'right', ONLY escape/tab/scroll/kill
- * keys are intercepted. Everything else forwards to the active PTY so that
- * q, n, ?, 1-9, etc. reach Claude / Copilot / Codex as intended.
  */
 
 import blessed from 'blessed';
@@ -20,7 +16,9 @@ import { createHelpOverlay }      from './widgets/help-overlay.mjs';
 import { createNewSessionDialog } from './widgets/new-session-dialog.mjs';
 import { sessionManager }         from './session-manager.mjs';
 import { ptyManager }             from './pty-manager.mjs';
+import { launchExternalTerminal } from './terminal-launcher.mjs';
 import { closeDb }                from './db-reader.mjs';
+import { recordSessionAction, recordSessionEnd } from './telemetry.mjs';
 
 export function createApp() {
   // ── screen ────────────────────────────────────────────────────────────────
@@ -48,8 +46,10 @@ export function createApp() {
   const helpOverlay = createHelpOverlay(screen);
   const newSessionDialog = createNewSessionDialog(screen, {
     onLaunch: (session) => {
+      leftPanel.selectSession(session.id);
       sessionManager.select(session.id);
       focusMode = 'right';
+      updateFocusStyle();
     },
   });
 
@@ -63,7 +63,7 @@ export function createApp() {
     tags:    true,
     content:
       '  {grey-fg}Tab:focus  ↑↓:nav  Enter:open  N:new  K:kill  D:detach  ' +
-      'Q:quit  G:tail  Space:pgdn  R:reviews  M:models  ?:help{/}',
+      'P:popout  Q:quit  G:tail  Space:pgdn  R:reviews  M:models  ?:help{/}',
     style: {
       fg: 'grey',
       bg: 'black',
@@ -137,15 +137,15 @@ export function createApp() {
       return;
     }
 
+    if (keyName === 'q') { quit(); return; }
+    if (keyName === '?') { helpOverlay.toggle(); return; }
+    if (keyName === 'n' || keyName === 'N') { newSessionDialog.show(); return; }
+    if (keyName === 'p' || keyName === 'P') { popoutCurrent(); return; }
+    if (keyName === 'd' || keyName === 'D') { detachCurrent(); return; }
+
     // ── left panel keys ─────────────────────────────────────────────────────
-    // Only intercept global shortcuts (q, n, ?, 1-9) when left panel is
-    // focused. When right panel is focused these must reach the PTY.
 
     if (focusMode === 'left') {
-      if (keyName === 'q') { quit(); return; }
-      if (keyName === '?') { helpOverlay.toggle(); return; }
-      if (keyName === 'n' || keyName === 'N') { newSessionDialog.show(); return; }
-
       if (ch >= '1' && ch <= '9') {
         leftPanel.jumpTo(parseInt(ch, 10));
         sessionManager.select(leftPanel.getCursorSession()?.id);
@@ -162,16 +162,13 @@ export function createApp() {
         return;
       }
       if (keyName === 'k' || keyName === 'K') { initiateKill();   return; }
-      if (keyName === 'd' || keyName === 'D') { detachCurrent();  return; }
       if (keyName === 'r' || keyName === 'R') { leftPanel.scrollToSection('REVIEWS');       return; }
       if (keyName === 'm' || keyName === 'M') { leftPanel.scrollToSection('MODEL ROUTING'); return; }
       return;
     }
 
     // ── right panel keys ─────────────────────────────────────────────────────
-    // Minimal interception: only scroll/kill/escape controls.
-    // All other keys (q, n, ?, digits, letters) forward to the PTY so the
-    // user can interact with Claude / Copilot / Codex normally.
+    // Right side is now a smooth overview/preview, not a full PTY passthrough.
 
     if (focusMode === 'right') {
       if (keyName === 'escape') {
@@ -197,12 +194,6 @@ export function createApp() {
       }
 
       if (keyName === 'k' || keyName === 'K') { initiateKill(); return; }
-
-      // All other keystrokes → PTY passthrough
-      const session = sessionManager.getSelected();
-      if (session?.ptyProc) {
-        rightPanel.forwardKey(ch || key?.sequence || keyName);
-      }
       return;
     }
   });
@@ -213,7 +204,9 @@ export function createApp() {
   let _killTarget  = null;
 
   function initiateKill() {
-    const session = leftPanel.getCursorSession() || sessionManager.getSelected();
+    const session = focusMode === 'right'
+      ? sessionManager.getSelected()
+      : leftPanel.getCursorSession() || sessionManager.getSelected();
     if (!session) return;
 
     _killTarget  = session;
@@ -231,6 +224,8 @@ export function createApp() {
 
     if (ch === 'y' || ch === 'Y') {
       if (_killTarget) {
+        recordSessionAction(_killTarget, 'TuiKill', { source: 'kill-confirm' });
+        recordSessionEnd(_killTarget, { status: 'idle', errors: _killTarget.errors || 0 });
         ptyManager.kill(_killTarget.id);
         sessionManager.remove(_killTarget.id);
       }
@@ -244,21 +239,69 @@ export function createApp() {
   function restoreFooter() {
     footer.setContent(
       '  {grey-fg}Tab:focus  ↑↓:nav  Enter:open  N:new  K:kill  D:detach  ' +
-      'Q:quit  G:tail  Space:pgdn  R:reviews  M:models  ?:help{/}'
+      'P:popout  Q:quit  G:tail  Space:pgdn  R:reviews  M:models  ?:help{/}'
     );
   }
 
   // ── detach ────────────────────────────────────────────────────────────────
 
-  function detachCurrent() {
-    const session = leftPanel.getCursorSession() || sessionManager.getSelected();
+  async function detachCurrent() {
+    const session = focusMode === 'right'
+      ? sessionManager.getSelected()
+      : leftPanel.getCursorSession() || sessionManager.getSelected();
     if (!session) return;
-    sessionManager.remove(session.id);
+    const previousStatus = session.status || 'idle';
+    try {
+      await launchExternalTerminal(session);
+      recordSessionAction(session, 'TuiDetach', { mode: 'external-terminal' });
+      recordSessionEnd(session, { status: 'idle', errors: session.errors || 0 });
+      sessionManager.update(session.id, {
+        externalLaunches: (session.externalLaunches || 0) + 1,
+        lastPoppedOutAt: new Date(),
+      });
+      ptyManager.kill(session.id);
+      sessionManager.remove(session.id);
+    } catch (err) {
+      recordSessionAction(session, 'TuiDetachFailed', { message: err.message });
+      sessionManager.appendLine(session.id,
+        `\x1b[31m[vaultflow] Failed to detach session: ${err.message}\x1b[0m`);
+      sessionManager.update(session.id, { status: previousStatus });
+    }
+  }
+
+  async function popoutCurrent() {
+    const session = focusMode === 'right'
+      ? sessionManager.getSelected()
+      : leftPanel.getCursorSession() || sessionManager.getSelected();
+    if (!session) return;
+    const previousStatus = session.status || 'idle';
+    try {
+      const result = await launchExternalTerminal(session);
+      recordSessionAction(session, 'TuiPopout', { resumable: Boolean(result?.resumable) });
+      sessionManager.appendLine(session.id,
+        result.resumable
+          ? '\x1b[90m[vaultflow] Opened a real terminal window for this tool. Use P again to re-open or resume it from the manager.\x1b[0m'
+          : '\x1b[90m[vaultflow] Opened a real terminal window for this tool in the same project directory.\x1b[0m');
+      sessionManager.update(session.id, {
+        externalLaunches: (session.externalLaunches || 0) + 1,
+        lastPoppedOutAt: new Date(),
+      });
+    } catch (err) {
+      recordSessionAction(session, 'TuiPopoutFailed', { message: err.message });
+      sessionManager.appendLine(session.id,
+        `\x1b[31m[vaultflow] Failed to open external terminal: ${err.message}\x1b[0m`);
+      sessionManager.update(session.id, { status: previousStatus });
+    }
   }
 
   // ── quit ─────────────────────────────────────────────────────────────────
 
   function quit() {
+    for (const session of sessionManager.getAll()) {
+      recordSessionAction(session, 'TuiQuit', { source: 'app-quit' });
+      recordSessionEnd(session, { status: session.status || 'idle', errors: session.errors || 0 });
+    }
+    try { ptyManager.killAll(); } catch {}
     try { closeDb(); } catch {}
     screen.destroy();
     process.exit(0);

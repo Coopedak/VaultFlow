@@ -285,7 +285,7 @@ function buildHtml(data) {
   ));
 
   const hotFileRows = d.hotFiles.map(f => row(
-    `<span title="${f.file_path}">${f.file_path.replace(/\\/g, '/').split('/').pop()}</span>`,
+    `<span title="${(f.file_path || '').replace(/"/g, '&quot;').replace(/</g, '&lt;')}">${(f.file_path || '').replace(/\\/g, '/').split('/').pop().replace(/</g, '&lt;')}</span>`,
     f.project || '—',
     f.edit_count,
     fmtDate(f.last_edit)

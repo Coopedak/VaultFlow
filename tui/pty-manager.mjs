@@ -12,13 +12,8 @@
 import pty            from 'node-pty';
 import fs             from 'node:fs';
 import { sessionManager } from './session-manager.mjs';
-
-// Tool → command mapping
-const TOOL_COMMANDS = {
-  'claude':     { cmd: 'claude',               args: [] },
-  'gh-copilot': { cmd: 'gh',                   args: ['copilot', 'chat'] },
-  'codex':      { cmd: 'codex',                args: [] },
-};
+import { buildToolCommand, ensureSessionLaunchMeta } from './tool-commands.mjs';
+import { recordSessionAction, recordSessionEnd } from './telemetry.mjs';
 
 class PtyManager {
   constructor() {
@@ -33,7 +28,8 @@ class PtyManager {
    * @param {{ cols?: number, rows?: number, initialPrompt?: string }} opts
    */
   spawn(session, { cols = 130, rows = 40, initialPrompt = '' } = {}) {
-    const toolDef = TOOL_COMMANDS[session.tool] || TOOL_COMMANDS['claude'];
+    ensureSessionLaunchMeta(session);
+    const toolDef = buildToolCommand(session.tool, session, { mode: 'pty' });
 
     // Validate cwd — node-pty throws error 267 on Windows if cwd is invalid
     let cwd = session.cwd || process.cwd();
@@ -50,8 +46,9 @@ class PtyManager {
       const isWindows = process.platform === 'win32';
 
       if (isWindows) {
-        // Use cmd.exe to invoke the CLI — keeps the PTY open and interactive.
-        ptyProc = pty.spawn('cmd.exe', ['/k', toolDef.cmd, ...toolDef.args], {
+        // Use the npm .cmd shims explicitly so PowerShell-backed CLIs resolve
+        // consistently from the PTY, then let cmd.exe exit when the tool exits.
+        ptyProc = pty.spawn('cmd.exe', ['/d', '/c', toolDef.windowsCmd || toolDef.cmd, ...toolDef.args], {
           name: 'xterm-256color',
           cols,
           rows,
@@ -71,12 +68,16 @@ class PtyManager {
     } catch (err) {
       sessionManager.appendLine(session.id,
         `\x1b[31m[vaultflow] Failed to spawn ${session.tool}: ${err.message}\x1b[0m`);
+      session.errors = (session.errors || 0) + 1;
+      recordSessionAction(session, 'TuiSpawnFailed', { message: err.message });
+      recordSessionEnd(session, { status: 'crashed', errors: session.errors });
       sessionManager.update(session.id, { status: 'crashed' });
       return null;
     }
 
     session.ptyProc = ptyProc;
     this._procs.set(session.id, ptyProc);
+    recordSessionAction(session, 'TuiSpawned', { launchName: session.launchName || null });
     sessionManager.update(session.id, { status: 'running', ptyProc });
 
     // Pipe PTY output → session lines
@@ -121,6 +122,13 @@ class PtyManager {
           status: crashed ? 'crashed' : 'idle',
           ptyProc: null,
         });
+        if (crashed) {
+          session.errors = (session.errors || 0) + 1;
+        }
+        recordSessionEnd(session, {
+          status: crashed ? 'crashed' : 'idle',
+          errors: session.errors || 0,
+        });
         this._procs.delete(session.id);
       } catch {
         // swallow
@@ -146,7 +154,6 @@ class PtyManager {
 
   /**
    * Send input to the active PTY process for a session.
-   * Used when the right panel has focus and keystrokes pass through.
    */
   write(sessionId, data) {
     const proc = this._procs.get(sessionId);

@@ -1,29 +1,26 @@
 /**
- * widgets/right-panel.mjs — session header bar + scrollable PTY output log
+ * widgets/right-panel.mjs — session header bar + hybrid session overview
  *
  * Layout:
  *   [2-row session header]
  *   [1-row horizontal separator]
- *   [scrollable PTY output log]
+ *   [scrollable summary + recent-output preview]
  *
- * When focused: keystrokes pass through to the active PTY process.
- * When live tail (liveTail === true): auto-scrolls to bottom on new output.
- *
- * Output events are debounced to 16ms to prevent re-rendering every PTY line
- * from a fast-outputting CLI (e.g. ng build, cargo build).
+ * The goal is to keep the TUI as a smooth session manager rather than trying
+ * to fully embed another terminal UI inside blessed.
  */
 
 import blessed            from 'blessed';
 import { sessionManager } from '../session-manager.mjs';
-import { ptyManager }     from '../pty-manager.mjs';
 import { ansiToBlessed }  from '../ansi.mjs';
+import { buildDisplayCommand, getToolLabel } from '../tool-commands.mjs';
 
 const LEFT_WIDTH = 37;  // left panel (36) + divider (1)
 
 const TOOL_COLORS = {
-  'claude':     '{yellow-fg}',
-  'gh-copilot': '{magenta-fg}',
-  'codex':      '{cyan-fg}',
+  'claude':  '{yellow-fg}',
+  'copilot': '{magenta-fg}',
+  'codex':   '{cyan-fg}',
 };
 
 function elapsed(startedAt) {
@@ -36,6 +33,12 @@ function elapsed(startedAt) {
   return h > 0 ? `${h}:${mm}:${ss}` : `${String(m).padStart(2, '0')}:${ss}`;
 }
 
+function escapeTags(value) {
+  return String(value || '')
+    .replace(/\{/g, '{open}')
+    .replace(/\}/g, '{close}');
+}
+
 function buildHeaderContent(session) {
   if (!session) {
     return '{grey-fg}  No session open  Press N to launch one{/}';
@@ -43,8 +46,7 @@ function buildHeaderContent(session) {
 
   const color   = TOOL_COLORS[session.tool] || '{white-fg}';
   const project = session.project;
-  const tool    = session.tool === 'claude'     ? 'claude' :
-                  session.tool === 'gh-copilot' ? 'gh copilot' : 'codex';
+  const tool    = session.tool;
   const dur     = elapsed(session.startedAt);
   const tokens  = session.tokens.toLocaleString();
   const edits   = `${session.edits} edit${session.edits !== 1 ? 's' : ''}`;
@@ -164,12 +166,44 @@ export function createRightPanel(screen) {
       return;
     }
 
-    const lines = session.lines.map(l => {
-      try { return ansiToBlessed(l); }
-      catch { return l; }
-    });
+    const status = session.status === 'running'      ? '{green-fg}LIVE{/}' :
+                   session.status === 'idle'         ? '{grey-fg}IDLE{/}' :
+                   session.status === 'notification' ? '{yellow-fg}REVIEW{/}' :
+                                                       '{red-fg}CRASHED{/}';
+    const recentLines = session.lines
+      .slice(-18)
+      .map(line => {
+        try { return ansiToBlessed(line); }
+        catch { return escapeTags(line); }
+      })
+      .filter(line => line && line.trim() !== '');
 
-    logBox.setContent(lines.join('\n'));
+    const parts = [
+      '  {bold}Session overview{/}',
+      `  Tool: ${TOOL_COLORS[session.tool] || '{white-fg}'}${escapeTags(getToolLabel(session.tool))}{/}`,
+      `  Status: ${status}`,
+      `  CWD: {grey-fg}${escapeTags(session.cwd)}{/}`,
+      `  Launch: {grey-fg}${escapeTags(buildDisplayCommand(session.tool, session, { mode: 'pty' }))}{/}`,
+      `  Re-open: {grey-fg}${escapeTags(buildDisplayCommand(session.tool, session, { mode: session.tool === 'codex' ? 'pty' : 'resume' }))}{/}`,
+      `  Session name: {grey-fg}${escapeTags(session.launchName || '(auto)')}{/}`,
+      `  Pop-outs: {grey-fg}${session.externalLaunches}{/}`,
+      '',
+      '  {bold}Quick actions{/}',
+      '  {cyan-fg}P{/} re-open/resume in a real terminal   {cyan-fg}K{/} kill   {cyan-fg}D{/} detach',
+      '  {cyan-fg}N{/} new session   {cyan-fg}Tab{/}/{cyan-fg}Esc{/} switch focus   {cyan-fg}G{/}/{cyan-fg}gg{/} preview tail/top',
+      '',
+      '  {bold}Recent output preview{/}',
+    ];
+
+    if (recentLines.length === 0) {
+      parts.push('  {grey-fg}(no output yet){/}');
+    } else {
+      for (const line of recentLines) {
+        parts.push(`  ${line}`);
+      }
+    }
+
+    logBox.setContent(parts.join('\n'));
 
     if (liveTail) {
       logBox.setScrollPerc(100);
@@ -193,8 +227,6 @@ export function createRightPanel(screen) {
     }
   });
 
-  // Debounced output handler — at most one re-render per 16ms animation frame.
-  // Without this, a fast-outputting CLI causes hundreds of setContent() calls/sec.
   let _outputTimer = null;
 
   sessionManager.on('output', (session) => {
@@ -207,11 +239,7 @@ export function createRightPanel(screen) {
       const sel = sessionManager.getSelected();
       if (!sel) return;
       try {
-        const lines = sel.lines.slice(-200).map(l => {
-          try { return ansiToBlessed(l); }
-          catch { return l; }
-        });
-        logBox.setContent(lines.join('\n'));
+        renderLog(sel);
         if (liveTail) logBox.setScrollPerc(100);
         screen.render();
       } catch {}
@@ -251,14 +279,6 @@ export function createRightPanel(screen) {
     screen.render();
   }
 
-  // ── PTY passthrough ───────────────────────────────────────────────────────
-
-  function forwardKey(key) {
-    const session = sessionManager.getSelected();
-    if (!session) return;
-    ptyManager.write(session.id, key);
-  }
-
   // Initial empty render
   renderHeader(null);
   renderLog(null);
@@ -273,7 +293,6 @@ export function createRightPanel(screen) {
     scrollPageDown,
     scrollToBottom,
     scrollToTop,
-    forwardKey,
     setLiveTail: (val) => { liveTail = val; },
   };
 }

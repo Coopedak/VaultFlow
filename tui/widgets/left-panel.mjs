@@ -18,9 +18,9 @@ import { getModelRouting, getTopTools } from '../db-reader.mjs';
 const PANEL_WIDTH = 36;
 
 const TOOL_META = {
-  'claude':     { label: 'Claude Code', badge: 'CC', color: '{yellow-fg}' },
-  'gh-copilot': { label: 'Copilot',     badge: 'CP', color: '{magenta-fg}' },
-  'codex':      { label: 'Codex',       badge: 'CX', color: '{cyan-fg}' },
+  'claude':  { label: 'Claude Code', badge: 'CC', color: '{yellow-fg}' },
+  'copilot': { label: 'Copilot',     badge: 'CP', color: '{magenta-fg}' },
+  'codex':   { label: 'Codex',       badge: 'CX', color: '{cyan-fg}' },
 };
 
 const STATUS_DOTS = {
@@ -44,7 +44,7 @@ function formatTokens(n) {
 }
 
 export function createLeftPanel(screen, { onSessionSelect } = {}) {
-  const collapsed = { 'claude': false, 'gh-copilot': false, 'codex': false };
+  const collapsed = { 'claude': false, 'copilot': false, 'codex': false };
 
   let cursor = 0;        // index into rendered slots
   let _cursorInit = false; // true once cursor has been placed on a session
@@ -83,7 +83,7 @@ export function createLeftPanel(screen, { onSessionSelect } = {}) {
     lines.push('{bold}SESSIONS{/}');
     slots.push({ type: 'section-header', label: 'SESSIONS' });
 
-    for (const tool of ['claude', 'gh-copilot', 'codex']) {
+    for (const tool of ['claude', 'copilot', 'codex']) {
       const meta     = TOOL_META[tool];
       const sessions = groups[tool];
       const isOpen   = !collapsed[tool];
@@ -158,12 +158,15 @@ export function createLeftPanel(screen, { onSessionSelect } = {}) {
       lines.push(' {grey-fg}(no data){/}');
     } else {
       for (const r of routing.slice(0, 5)) {
-        const pctColor = r.approvalRate >= 95 ? '{green-fg}' :
+        const pctColor = r.approvalRate == null ? '{grey-fg}' :
+                         r.approvalRate >= 95 ? '{green-fg}' :
                          r.approvalRate >= 80 ? '{yellow-fg}' : '{red-fg}';
         const lock     = r.pinned ? '🔒 ' : '';
         const name     = r.agent.slice(0, 13).padEnd(13);
         const model    = r.model.slice(0, 6).padEnd(6);
-        const pctStr   = `${pctColor}${r.approvalRate}%{/}`;
+        const pctStr   = r.approvalRate == null
+          ? `${pctColor}--{/}`
+          : `${pctColor}${r.approvalRate}%{/}`;
         lines.push(` ${lock}${name} ${model} ${pctStr}`);
       }
     }
@@ -179,7 +182,7 @@ export function createLeftPanel(screen, { onSessionSelect } = {}) {
       lines.push(' {grey-fg}(no data){/}');
     } else {
       tools.forEach((t, i) => {
-        const name = t.file.slice(0, 16).padEnd(16);
+        const name = t.tool.slice(0, 16).padEnd(16);
         lines.push(` ${i + 1}. ${name} ×${t.count}`);
       });
     }
@@ -248,10 +251,14 @@ export function createLeftPanel(screen, { onSessionSelect } = {}) {
     const flat   = sessionManager.getFlat();
     const target = flat[n - 1];
     if (!target) return;
-    const idx = slots.findIndex(s => s.type === 'session' && s.session?.id === target.id);
+    selectSession(target.id);
+  }
+
+  function selectSession(id) {
+    const idx = slots.findIndex(s => s.type === 'session' && s.session?.id === id);
     if (idx >= 0) {
       cursor = idx;
-      sessionManager.select(target.id);
+      sessionManager.select(id);
       render();
     }
   }
@@ -336,6 +343,7 @@ export function createLeftPanel(screen, { onSessionSelect } = {}) {
     openCurrent,
     getCursorSession,
     jumpTo,
+    selectSession,
     toggleGroup,
     scrollToSection,
   };

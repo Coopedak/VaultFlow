@@ -98,6 +98,12 @@ node .claude/helpers/backfill.mjs
 npm run backfill
 ```
 
+To backfill historical local CLI session metadata from Copilot and Codex into SQLite:
+
+```bash
+npm run backfill:cli-telemetry
+```
+
 ### 5. Verify
 
 ```bash
@@ -156,7 +162,7 @@ SQLite (hot write, synchronous)
 
 | Table | What's stored |
 |-------|-------------|
-| `sessions` | Session start/end, duration, edits, commands, tasks, errors, project, platform |
+| `sessions` | Session start/end, duration, edits, commands, tasks, errors, project, platform, cli, cli_version, model, model_provider |
 | `edit_events` | Timestamp, file path, project, change type (create/edit/delete), session |
 | `patterns` | File-type patterns (e.g. `ts::src`), fire count, agent, confidence, promoted flag |
 | `memory_entries` | FTS5-indexed vault + wiki content — title, body, source path |
@@ -190,7 +196,90 @@ SQLite (hot write, synchronous)
 
 All commands run from the vaultflow root.
 
+### Global launcher
+
+If you want a project-named command in any terminal, link the repo once:
+
+```bash
+cd C:\GIT\vaultflow
+npm link
+```
+
+Then you can launch the TUI from anywhere with:
+
+```bash
+vault
+```
+
+`vaultflow` works too. With no arguments, both commands open the TUI.
+
+### TUI workflow
+
+The TUI now uses a **hybrid session manager** model:
+
+- **left pane** = all Claude Code, Copilot, and Codex sessions in one place
+- **right pane** = selected session overview plus recent-output preview
+- **pop out** = open the selected tool in a real terminal tab when you want full direct interaction
+
+Core controls:
+
+```text
+N  new session
+P  pop out or re-open the selected session in a real terminal
+K  kill selected session
+D  detach the selected session to a real terminal and remove it from the manager
+Tab / Esc  switch focus between panes
+```
+
+This keeps session management centralized without forcing three full-screen terminal apps to fully live inside another terminal UI.
+
+### Project audit
+
+Audit all projects under `C:\GIT` using git metadata plus vaultflow's tracked sessions, edits, and tool calls:
+
+```bash
+npm run project-audit
+vault project-audit
+vault project-audit --json
+```
+
+This is designed to help identify:
+- active projects with real tracked history
+- projects with little or no tracked activity
+- **dead-project candidates** for manual review
+
+It does **not** delete anything.
+
 ### Dashboard
+
+#### Windows desktop launcher
+
+The dashboard can now be launched through a small **.NET Windows executable** that starts the Node dashboard server and opens the dashboard in your browser.
+
+```bash
+npm run dashboard:desktop:publish
+npm run dashboard:desktop:shortcut
+```
+
+That creates a desktop shortcut named **VaultFlow Dashboard** pointing at the published launcher.
+
+### Tracked CLI launchers
+
+If you want VaultFlow to write a SQLite session row when you open a CLI directly, launch the tool through the tracked wrapper:
+
+```bash
+npm run copilot:tracked
+npm run claude:tracked
+npm run codex:tracked
+```
+
+For Copilot on Windows you can also create a desktop shortcut:
+
+```bash
+npm run copilot:tracked:shortcut
+```
+
+That shortcut opens the real Copilot CLI through `scripts\tracked-cli.mjs`, which records a VaultFlow session start/end plus launch metadata in SQLite.
 
 Generate a self-contained HTML analytics dashboard. Opens in any browser — no server required.
 
