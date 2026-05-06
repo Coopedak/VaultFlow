@@ -1,0 +1,372 @@
+'use strict';
+/**
+ * mcp-server.cjs — vaultflow MCP (Model Context Protocol) server
+ *
+ * Exposes vaultflow's memory, context, skills, model routing, and vault tools
+ * as callable MCP tools. Any MCP-capable AI sees these tools automatically:
+ *   - Claude Code (via mcpServers in ~/.claude/settings.json)
+ *   - GitHub Copilot in VS Code (via .vscode/mcp.json)
+ *   - Cursor, Windsurf, etc.
+ *
+ * As the vaultflow DB grows (more memory, patterns, sessions), tool responses
+ * get richer with zero maintenance.
+ *
+ * Transport: stdio — line-delimited JSON-RPC 2.0
+ */
+
+const readline = require('readline');
+const path     = require('path');
+const fs       = require('fs');
+const os       = require('os');
+
+// ── config + DB (lazy, initialized once) ─────────────────────────────────
+
+let _cfg = null;
+let _db  = null;
+
+function getCfg() {
+  if (_cfg) return _cfg;
+  try {
+    const yaml       = require('js-yaml');
+    const configPath = require('../../config/resolve.cjs');
+    if (fs.existsSync(configPath)) {
+      _cfg = yaml.load(fs.readFileSync(configPath, 'utf8')) || {};
+    }
+  } catch (_) {}
+  _cfg = _cfg || {};
+  return _cfg;
+}
+
+function getDb() {
+  if (_db) return _db;
+  _db = require('./db.cjs');
+  const cfg = getCfg();
+  _db.initialize(
+    (cfg.paths   && cfg.paths.metrics_root) || null,
+    (cfg.storage && cfg.storage.db_file)    || null
+  );
+  return _db;
+}
+
+// ── tool definitions ──────────────────────────────────────────────────────
+
+const TOOLS = [
+  {
+    name: 'search_memory',
+    description:
+      'Search vaultflow memory using BM25 full-text search across vault notes, ' +
+      'project wikis, CLAUDE.md files, and session learnings. Returns the most ' +
+      'relevant entries. Use this to find prior decisions, patterns, and domain knowledge.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Search query' },
+        limit: { type: 'number',  description: 'Max results (1–20, default 5)' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'get_context',
+    description:
+      'Get ranked context entries for a prompt. Applies token budgeting and ' +
+      'returns the most relevant memory entries for the current or named project. ' +
+      'Use before starting work on a task to load relevant background.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        prompt:  { type: 'string', description: 'The task or question to get context for' },
+        project: { type: 'string', description: 'Project name override (default: cwd basename)' },
+        limit:   { type: 'number', description: 'Max entries (default 5)' },
+      },
+      required: ['prompt'],
+    },
+  },
+  {
+    name: 'list_skills',
+    description:
+      'List all available Claude Code skills with names and descriptions. ' +
+      'Skills are invoked with /skill-name in Claude Code. Returns the full ' +
+      'list so you know what pipelines and agents are available.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'model_status',
+    description:
+      'Get current model routing status — which AI model each agent runs on, ' +
+      'approval rates, demotion eligibility, and which agents are pinned to top tier. ' +
+      'Use this to understand the current capability/cost trade-off per agent.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'get_session_summary',
+    description:
+      'Get the most recent session summary for a project — files edited, ' +
+      'patterns fired, and session duration. Use to resume context from the last session.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project: { type: 'string', description: 'Project name (default: cwd basename)' },
+      },
+    },
+  },
+  {
+    name: 'search_vault_tools',
+    description:
+      'Search the vault tools index for reusable utilities and scripts. ' +
+      'ALWAYS call this before implementing any new utility, script, or helper. ' +
+      '30+ tools registered: logging, DB connectors, retry patterns, parsers, ' +
+      'ML pipelines, API wrappers, and more.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Tool name, category, or description fragment' },
+      },
+      required: ['query'],
+    },
+  },
+];
+
+// ── tool handlers ─────────────────────────────────────────────────────────
+
+async function callTool(name, args) {
+  const db  = getDb();
+  const cfg = getCfg();
+
+  switch (name) {
+
+    case 'search_memory': {
+      const limit   = Math.min(Math.max(1, Math.floor(args.limit || 5)), 20);
+      const results = db.searchMemory(String(args.query || ''), limit);
+      if (!results || results.length === 0) {
+        return { content: [{ type: 'text', text: 'No memory entries found.' }] };
+      }
+      const text = results
+        .map(r => `### ${r.title}\n*Source: ${r.source}*\n\n${r.body}`)
+        .join('\n\n---\n\n');
+      return { content: [{ type: 'text', text }] };
+    }
+
+    case 'get_context': {
+      const project = String(args.project || path.basename(process.cwd()));
+      const limit   = Math.min(Math.max(1, Math.floor(args.limit || 5)), 10);
+      const prompt  = String(args.prompt || '');
+
+      // Last-session summary prepend
+      const parts = [];
+      try {
+        const summary = db.getLatestSessionSummary(project);
+        const ONE_DAY = 24 * 60 * 60 * 1000;
+        if (summary && (Date.now() - new Date(summary.summary_at).getTime()) < ONE_DAY) {
+          const h      = Math.round((Date.now() - new Date(summary.summary_at).getTime()) / 3600000);
+          const files  = (summary.top_files || []).slice(0, 3).join(', ') || 'none';
+          const pats   = (summary.patterns  || []).slice(0, 2).join(', ') || 'none';
+          const durMin = Math.round((summary.duration_ms || 0) / 60000);
+          parts.push(`**Last session** (${h}h ago, ${durMin}m): edited [${files}], patterns: [${pats}]`);
+        }
+      } catch (_) {}
+
+      // BM25 search
+      const results = db.searchMemory(prompt, limit);
+      for (const r of results) {
+        parts.push(`### ${r.title}\n${(r.body || '').slice(0, 480)}`);
+      }
+
+      return {
+        content: [{
+          type: 'text',
+          text: parts.length > 0 ? parts.join('\n\n---\n\n') : 'No context found.',
+        }],
+      };
+    }
+
+    case 'list_skills': {
+      const skillsDir = (cfg.paths && cfg.paths.user_skills_dir)
+        ? cfg.paths.user_skills_dir.replace(/\//g, path.sep)
+        : path.join(os.homedir(), '.claude', 'skills');
+
+      let dirs = [];
+      try {
+        dirs = fs.readdirSync(skillsDir, { withFileTypes: true })
+          .filter(d => d.isDirectory())
+          .map(d => d.name)
+          .sort();
+      } catch (err) {
+        return { content: [{ type: 'text', text: `Skills dir unavailable: ${err.message}` }] };
+      }
+
+      const skills = dirs.map(sName => {
+        let desc = '';
+        for (const fname of ['SKILL.md', 'skill.md', 'README.md']) {
+          const fpath = path.join(skillsDir, sName, fname);
+          if (!fs.existsSync(fpath)) continue;
+          try {
+            const content = fs.readFileSync(fpath, 'utf8').slice(0, 1000);
+            const m = content.match(/^description:\s*(.+)$/m);
+            if (m) { desc = m[1].trim(); break; }
+            const lines = content.split('\n')
+              .filter(l => l.trim() && !l.startsWith('---') && !l.startsWith('#'));
+            if (lines.length) { desc = lines[0].slice(0, 120); break; }
+          } catch (_) {}
+        }
+        return `**/${sName}**${desc ? ` — ${desc}` : ''}`;
+      });
+
+      return { content: [{ type: 'text', text: skills.join('\n') || 'No skills found.' }] };
+    }
+
+    case 'model_status': {
+      const router = require('./model-router.cjs');
+      const rows   = router.getStatusTable();
+      if (!rows || rows.length === 0) {
+        return { content: [{ type: 'text', text: 'No model performance data yet.' }] };
+      }
+      const lines = rows.map(r => {
+        const pin     = r.pinned  ? ' 🔒' : '';
+        const cur     = r.current ? ' ◀ active' : '';
+        const rate    = r.verdicts_total > 0
+          ? ` | ${r.approval_rate}% approval over ${r.verdicts_total} verdicts`
+          : '';
+        return `**${r.agent}${pin}** — ${r.model}${cur}${rate}`;
+      });
+      return { content: [{ type: 'text', text: lines.join('\n') }] };
+    }
+
+    case 'get_session_summary': {
+      const project = String(args.project || path.basename(process.cwd()));
+      const summary = db.getLatestSessionSummary(project);
+      if (!summary) {
+        return { content: [{ type: 'text', text: `No session summary for "${project}".` }] };
+      }
+      const h      = Math.round((Date.now() - new Date(summary.summary_at).getTime()) / 3600000);
+      const files  = (summary.top_files || []).join(', ') || 'none';
+      const pats   = (summary.patterns  || []).join(', ') || 'none';
+      const dur    = Math.round((summary.duration_ms || 0) / 60000);
+      const text   = [
+        `**Project:** ${project}`,
+        `**Last session:** ${h}h ago (${dur}m)`,
+        `**Top files:** ${files}`,
+        `**Patterns fired:** ${pats}`,
+      ].join('\n');
+      return { content: [{ type: 'text', text }] };
+    }
+
+    case 'search_vault_tools': {
+      const toolsIndex = (cfg.paths && cfg.paths.vault_tools_index)
+        ? cfg.paths.vault_tools_index.replace(/\//g, path.sep)
+        : path.join(os.homedir(), 'vault', 'tools', 'index.md');
+
+      if (!fs.existsSync(toolsIndex)) {
+        return { content: [{ type: 'text', text: `Vault tools index not found: ${toolsIndex}` }] };
+      }
+
+      const content = fs.readFileSync(toolsIndex, 'utf8');
+      const query   = String(args.query || '').toLowerCase();
+      const terms   = query.split(/\s+/).filter(Boolean);
+
+      const matches = content.split('\n').filter(line => {
+        const lower = line.toLowerCase();
+        return terms.length > 0 && terms.every(t => lower.includes(t));
+      });
+
+      return {
+        content: [{
+          type: 'text',
+          text: matches.length > 0
+            ? matches.slice(0, 25).join('\n')
+            : `No tools matching "${args.query}".\nFull index: ${toolsIndex}`,
+        }],
+      };
+    }
+
+    default:
+      throw { code: -32601, message: `Unknown tool: ${name}` };
+  }
+}
+
+// ── JSON-RPC 2.0 handler ──────────────────────────────────────────────────
+
+async function handleMessage(msg) {
+  const { jsonrpc, id, method, params } = msg;
+
+  if (jsonrpc !== '2.0') {
+    return { jsonrpc: '2.0', id: id ?? null,
+      error: { code: -32600, message: 'Invalid Request' } };
+  }
+
+  try {
+    switch (method) {
+
+      case 'initialize':
+        return {
+          jsonrpc: '2.0', id,
+          result: {
+            protocolVersion: '2024-11-05',
+            capabilities: { tools: {} },
+            serverInfo: { name: 'vaultflow', version: '1.3.0' },
+          },
+        };
+
+      case 'initialized':
+        return undefined; // notification — no response
+
+      case 'tools/list':
+        return { jsonrpc: '2.0', id, result: { tools: TOOLS } };
+
+      case 'tools/call': {
+        const toolName = (params && params.name)      || '';
+        const toolArgs = (params && params.arguments) || {};
+        const result   = await callTool(toolName, toolArgs);
+        return { jsonrpc: '2.0', id, result };
+      }
+
+      case 'ping':
+        return { jsonrpc: '2.0', id, result: {} };
+
+      default:
+        if (id !== undefined && id !== null) {
+          return { jsonrpc: '2.0', id,
+            error: { code: -32601, message: `Method not found: ${method}` } };
+        }
+        return undefined; // unknown notification — no response
+    }
+  } catch (err) {
+    return {
+      jsonrpc: '2.0',
+      id: id ?? null,
+      error: { code: err.code || -32603, message: err.message || 'Internal error' },
+    };
+  }
+}
+
+// ── stdio transport ───────────────────────────────────────────────────────
+
+function send(obj) {
+  process.stdout.write(JSON.stringify(obj) + '\n');
+}
+
+const rl = readline.createInterface({ input: process.stdin, terminal: false });
+
+rl.on('line', async (line) => {
+  const trimmed = line.trim();
+  if (!trimmed) return;
+  let msg;
+  try {
+    msg = JSON.parse(trimmed);
+  } catch {
+    send({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } });
+    return;
+  }
+  const response = await handleMessage(msg);
+  if (response !== undefined) send(response);
+});
+
+rl.on('close', () => process.exit(0));
+
+process.stderr.write('[vaultflow-mcp] server started\n');

@@ -303,6 +303,29 @@ function genCursorRule(projectPath, projectName, infra) {
   return outPath;
 }
 
+/**
+ * Generate .vscode/mcp.json for a project (VS Code / GitHub Copilot MCP registration).
+ * Points every project's VS Code workspace at the global vaultflow MCP server.
+ */
+function genVscodeMcp(projectPath, infra) {
+  const mcpServerPath = path.join(infra.helpersDir, 'mcp-server.cjs').replace(/\\/g, '/');
+  const content = JSON.stringify({
+    servers: {
+      vaultflow: {
+        type: 'stdio',
+        command: 'node',
+        args: [mcpServerPath],
+      },
+    },
+  }, null, 2) + '\n';
+
+  const outDir = path.join(projectPath, '.vscode');
+  fs.mkdirSync(outDir, { recursive: true });
+  const outPath = path.join(outDir, 'mcp.json');
+  fs.writeFileSync(outPath, content, 'utf8');
+  return outPath;
+}
+
 // ── public API ────────────────────────────────────────────────────────────
 
 /**
@@ -363,6 +386,14 @@ export async function generateForProject(projectPath) {
     generated.push(p);
   } catch (err) {
     process.stderr.write(`[gen-context] cursor error: ${err.message}\n`);
+  }
+
+  // VS Code MCP registration
+  try {
+    const p = genVscodeMcp(projectPath, infra);
+    generated.push(p);
+  } catch (err) {
+    process.stderr.write(`[gen-context] vscode mcp error: ${err.message}\n`);
   }
 
   return { generated };
