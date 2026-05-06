@@ -26,14 +26,18 @@
     "gen-context": "node .claude/helpers/gen-context.mjs",
     "install-hooks": "node .claude/helpers/install-git-hooks.mjs",
     "model-status": "node .claude/helpers/model-router.cjs --status",
-    "mcp-server": "node .claude/helpers/mcp-server.cjs"
+    "mcp-server": "node .claude/helpers/mcp-server.cjs",
+    "tui": "node tui/index.mjs",
+    "tui:dev": "node --enable-source-maps tui/index.mjs"
   },
   "dependencies": {
     "@duckdb/node-api": "^1.5.2-r.1",
+    "blessed": "^0.1.81",
     "chokidar": "^3.6.0",
     "express": "^4.18.2",
     "glob": "^10.3.10",
-    "js-yaml": "^4.1.0"
+    "js-yaml": "^4.1.0",
+    "node-pty": "^1.1.0"
   },
   "engines": {
     "node": ">=22.0.0"
