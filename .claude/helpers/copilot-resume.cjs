@@ -17,65 +17,92 @@ const fs   = require('node:fs');
 
 function loadConfig() {
   try {
-    const yaml       = require('js-yaml');
     const configPath = require('../../config/resolve.cjs');
-    if (fs.existsSync(configPath)) return require('js-yaml').load(fs.readFileSync(configPath, 'utf8'));
+    if (fs.existsSync(configPath)) {
+      return require('js-yaml').load(fs.readFileSync(configPath, 'utf8')) || {};
+    }
   } catch (_) {}
   return {};
 }
 
-const cfg = loadConfig();
-const db  = require('./db.cjs');
-db.initialize(
-  (cfg.paths   && cfg.paths.metrics_root)  || null,
-  (cfg.storage && cfg.storage.db_file)     || null
-);
-const raw = db.raw();
+// ── init (crash-safe) ─────────────────────────────────────────────────────
+
+let raw;
+try {
+  const cfg = loadConfig();
+  const db  = require('./db.cjs');
+  db.initialize(
+    (cfg.paths   && cfg.paths.metrics_root)  || null,
+    (cfg.storage && cfg.storage.db_file)     || null
+  );
+  raw = db.raw();
+} catch (err) {
+  process.stderr.write(`[copilot-resume] DB unavailable — ${err.message}\n`);
+  process.exit(0);
+}
+
+if (!raw) {
+  process.stderr.write('[copilot-resume] DB not initialized — skipping resume\n');
+  process.exit(0);
+}
 
 // ── args ──────────────────────────────────────────────────────────────────
 
 const project = process.argv[2] || path.basename(process.cwd());
 
-// ── queries ───────────────────────────────────────────────────────────────
+// ── queries (each individually crash-safe) ────────────────────────────────
 
 // Recent files edited (last 72h), excluding build artifacts and generated context files
 const cutoff = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString();
-const recentFiles = raw.prepare(`
-  SELECT file_path, MAX(timestamp) as last_edit, COUNT(*) as edits
-  FROM   edit_events
-  WHERE  (project = ? OR file_path LIKE ?)
-    AND  timestamp > ?
-    AND  file_path NOT LIKE '%.tsbuildinfo'
-    AND  file_path NOT LIKE '%node_modules%'
-    AND  file_path NOT LIKE '%.map'
-    AND  file_path NOT LIKE '%\\dist\\%'
-    AND  file_path NOT LIKE '%/dist/%'
-    AND  file_path NOT LIKE '%AGENTS.md'
-    AND  file_path NOT LIKE '%copilot-instructions.md'
-    AND  file_path NOT LIKE '%wiki.mdc'
-    AND  file_path NOT LIKE '%llms.txt'
-  GROUP  BY file_path
-  ORDER  BY last_edit DESC
-  LIMIT  7
-`).all(project, `%${project}%`, cutoff);
+let recentFiles = [];
+try {
+  recentFiles = raw.prepare(`
+    SELECT file_path, MAX(timestamp) as last_edit, COUNT(*) as edits
+    FROM   edit_events
+    WHERE  (project = ? OR file_path LIKE ?)
+      AND  timestamp > ?
+      AND  file_path NOT LIKE '%.tsbuildinfo'
+      AND  file_path NOT LIKE '%node_modules%'
+      AND  file_path NOT LIKE '%.map'
+      AND  file_path NOT LIKE '%\\dist\\%'
+      AND  file_path NOT LIKE '%/dist/%'
+      AND  file_path NOT LIKE '%AGENTS.md'
+      AND  file_path NOT LIKE '%copilot-instructions.md'
+      AND  file_path NOT LIKE '%wiki.mdc'
+      AND  file_path NOT LIKE '%llms.txt'
+    GROUP  BY file_path
+    ORDER  BY last_edit DESC
+    LIMIT  7
+  `).all(project, `%${project}%`, cutoff);
+} catch (_) {}
 
 // Last session for this project
-const lastSession = raw.prepare(`
-  SELECT started_at, ended_at, duration_ms
-  FROM   sessions
-  WHERE  project = ?
-  ORDER  BY started_at DESC
-  LIMIT  1
-`).get(project);
+let lastSession = null;
+try {
+  lastSession = raw.prepare(`
+    SELECT started_at, ended_at, duration_ms
+    FROM   sessions
+    WHERE  project = ?
+    ORDER  BY started_at DESC
+    LIMIT  1
+  `).get(project);
+} catch (_) {}
 
 // Edit count total for project
-const editCount = raw.prepare(`
-  SELECT COUNT(*) as cnt FROM edit_events
-  WHERE project = ? OR file_path LIKE ?
-`).get(project, `%${project}%`);
+let editCount = { cnt: 0 };
+try {
+  editCount = raw.prepare(`
+    SELECT COUNT(*) as cnt FROM edit_events
+    WHERE project = ? OR file_path LIKE ?
+  `).get(project, `%${project}%`) || { cnt: 0 };
+} catch (_) {}
 
 // Top memory entries for this project
-const memory = db.searchMemory(project, 3);
+let memory = [];
+try {
+  const db = require('./db.cjs');
+  memory = db.searchMemory(project, 3);
+} catch (_) {}
 
 // ── format ────────────────────────────────────────────────────────────────
 
@@ -94,7 +121,8 @@ const lines = [
 ];
 
 if (lastSession) {
-  lines.push(`  Last session : ${relTime(lastSession.started_at)}  (${Math.round((lastSession.duration_ms||0)/60000)}m)`);
+  const durMin = Math.round((lastSession.duration_ms || 0) / 60000);
+  lines.push(`  Last session : ${relTime(lastSession.started_at)}  (${durMin}m)`);
 }
 lines.push(`  Total edits  : ${editCount.cnt}`);
 

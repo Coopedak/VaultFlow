@@ -200,7 +200,7 @@ function getContext(prompt) {
     // Collected outside the token-budget loop and prepended unconditionally.
     const prependItems = [];
     try {
-      const sessionObj = session.get() || {};
+      const sessionObj = session.get() || session.restore() || {};
       const project    = sessionObj.project || path.basename(process.cwd());
       const lastSummary = getDb().getLatestSessionSummary(project);
       const ONE_DAY_MS  = 24 * 60 * 60 * 1000;
@@ -254,9 +254,10 @@ function getContext(prompt) {
         ? r.body.slice(0, maxChars)
         : r.body;
 
-      // Session token budget — stop if adding this entry would exceed the budget
+      // Session token budget — stop if adding this entry would exceed the budget.
+      // TOKEN_BUDGET=0 means unlimited (disabled).
       const entryTokens = estimateTokens(truncatedBody);
-      if (tokensSoFar + entryTokens > TOKEN_BUDGET) break;
+      if (TOKEN_BUDGET > 0 && tokensSoFar + entryTokens > TOKEN_BUDGET) break;
       tokensSoFar += entryTokens;
 
       filtered.push({ ...r, _truncatedBody: truncatedBody });

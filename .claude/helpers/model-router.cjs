@@ -132,7 +132,6 @@ function demotionEligible(agent, model, taskType) {
     const threshold   = getDemotionThreshold();
 
     if (row.verdicts_total < minSessions) return false;
-    if (row.verdicts_total === 0) return false;
 
     const rate = row.verdicts_approved / row.verdicts_total;
     return rate >= threshold;
@@ -191,14 +190,22 @@ function getRecommendedModel(agent, taskType) {
  */
 function checkAndDemote(agent, taskType) {
   try {
-    const newModel = getRecommendedModel(agent, taskType || 'general');
-    if (!newModel) return null;
+    if (getPinnedAgents().includes(agent)) return null;
 
     const db   = getDb();
     db.initialize(null, null);
     const rows = db.getModelPerformance(agent);
+    if (!rows || rows.length === 0) return null;
+
     const currentRow = rows.find(r => r.current === 1);
     if (!currentRow) return null;
+
+    // Check demotion eligibility using the already-fetched rows (avoids TOCTOU re-read)
+    if (!demotionEligible(agent, currentRow.model, taskType || 'general')) return null;
+
+    const idx = MODEL_LADDER.indexOf(currentRow.model);
+    if (idx === -1 || idx === MODEL_LADDER.length - 1) return null;
+    const newModel = MODEL_LADDER[idx + 1];
 
     const oldModel = currentRow.model;
     const now      = new Date().toISOString();
@@ -249,7 +256,9 @@ function getStatusTable() {
     const db = getDb();
     db.initialize(null, null);
 
-    const rows = db.raw().prepare(`
+    const rawDb = db.raw();
+    if (!rawDb) return [];
+    const rows = rawDb.prepare(`
       SELECT agent, model, task_type, verdicts_total, verdicts_approved,
              sessions_on_model, current
       FROM   model_performance

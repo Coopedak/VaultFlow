@@ -198,7 +198,10 @@ function end() {
   // Write session compaction summary — crash-safe so hook path never throws.
   try {
     const db  = require('./db.cjs');
+    db.initialize(null, null);
     const raw = db.raw();
+    if (!raw) throw new Error('DB not initialized');
+
     // Top 5 files by edit count for this session
     const topFiles = raw.prepare(`
       SELECT file_path, COUNT(*) as cnt
@@ -226,7 +229,9 @@ function end() {
       patterns:    patterns,
       summary_at:  new Date().toISOString(),
     });
-  } catch (_) {}
+  } catch (err) {
+    process.stderr.write(`session: compaction summary failed — ${err.message}\n`);
+  }
 
   _session = null;
 }

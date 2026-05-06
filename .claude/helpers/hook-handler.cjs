@@ -218,7 +218,7 @@ async function dispatch(event) {
             `without a voice-of-reason review.\n` +
             `You MUST dispatch the voice-of-reason agent before responding or continuing the pipeline.\n` +
             `After voice-of-reason returns its verdict, run:\n` +
-            `  node C:/GIT/vaultflow/.claude/helpers/hook-handler.cjs clear-review\n`;
+            `  node ${__filename} clear-review\n`;
           additionalContext = reviewNotice + (additionalContext || '');
         }
       }
@@ -530,6 +530,10 @@ async function dispatch(event) {
           subagentPayload.subagent_type || '', 100);
         const agent = agentType || sanitizeString(agentDesc || 'unknown', 100);
 
+        // Skip routing if we have no meaningful agent identity — avoids polluting
+        // model_performance with anonymous 'unknown' rows from parse failures.
+        if (!agentType && !agentDesc) break;
+
         // model is not in the hook payload when the Agent tool is called without
         // an explicit model override. Resolve it from devteam-config agent_models.
         const TIER_MAP = {
@@ -537,6 +541,9 @@ async function dispatch(event) {
           'sonnet': 'claude-sonnet-4-6', 'Mid': 'claude-sonnet-4-6',
           'haiku': 'claude-haiku-4-5-20251001', 'Low': 'claude-haiku-4-5-20251001',
         };
+        const MODEL_LADDER_SET = new Set([
+          'claude-opus-4-7', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001',
+        ]);
         let model = sanitizeString(
           (subagentPayload.tool_input && subagentPayload.tool_input.model) ||
           subagentPayload.model || '', 100);
@@ -546,7 +553,9 @@ async function dispatch(event) {
             const _dtPath  = _path.join(_os.homedir(), '.claude', 'devteam-config.json');
             const _dtCfg   = _fs.existsSync(_dtPath) ? JSON.parse(_fs.readFileSync(_dtPath, 'utf8')) : {};
             const _tier    = (_dtCfg.agent_models && _dtCfg.agent_models[agentType]) || 'sonnet';
-            model = TIER_MAP[_tier] || _tier;
+            const _resolved = TIER_MAP[_tier] || _tier;
+            // Only accept a resolved model if it's on the known ladder
+            model = MODEL_LADDER_SET.has(_resolved) ? _resolved : 'claude-sonnet-4-6';
           } catch (_) { model = 'claude-sonnet-4-6'; }
         }
         if (!model) model = 'unknown';
