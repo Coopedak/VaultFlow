@@ -87,7 +87,7 @@ model_routing:
     - project-manager      # always top tier — orchestration errors are catastrophic
     - security-reviewer    # always top tier — missed vulnerabilities are catastrophic
   demotion_threshold: 0.95     # approval rate required before demotion eligible
-  demotion_min_sessions: 10    # minimum verdicts before demotion considered
+  demotion_min_sessions: 10    # minimum completed sessions and reviewed verdicts before demotion
 
 dashboard:
   port: 7700

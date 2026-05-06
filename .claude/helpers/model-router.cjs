@@ -4,9 +4,9 @@
  * model-router.cjs — automatic model tier demotion for sub-agents
  *
  * WHY: Sub-agents that consistently receive voice-of-reason APPROVED verdicts
- * may be over-provisioned. This module tracks per-(agent, model, task_type)
- * approval rates and recommends a cheaper tier when the rate exceeds the
- * configured demotion_threshold over enough verdicts.
+ * and have enough completed sessions on the current model may be over-provisioned.
+ * This module tracks per-(agent, model, task_type) approval rates plus session
+ * counts and recommends a cheaper tier only when both guards are satisfied.
  *
  * Pinned agents (project-manager, security-reviewer) are never demoted —
  * failures in these roles are catastrophic.
@@ -100,10 +100,33 @@ function recordVerdict(agent, model, taskType, approved) {
 }
 
 /**
+ * Record one completed run/session on a model for an agent/taskType triple.
+ * Crash-safe — never throws.
+ *
+ * @param {string} agent
+ * @param {string} model
+ * @param {string} [taskType='general']
+ */
+function recordSession(agent, model, taskType) {
+  try {
+    const db = getDb();
+    db.initialize(null, null);
+    db.recordModelSession(
+      String(agent    || 'unknown'),
+      String(model    || 'unknown'),
+      String(taskType || 'general')
+    );
+  } catch (err) {
+    process.stderr.write(`[model-router] recordSession error — ${err.message}\n`);
+  }
+}
+
+/**
  * Check if an agent/model/taskType triple meets the demotion criteria.
  *
  * Returns true when:
  *   - A performance row exists for the triple (or falls back to task_type='general')
+ *   - sessions_on_model >= getDemotionMinSessions()
  *   - verdicts_total >= getDemotionMinSessions()
  *   - verdicts_approved / verdicts_total >= getDemotionThreshold()
  *
@@ -131,6 +154,7 @@ function demotionEligible(agent, model, taskType) {
     const minSessions = getDemotionMinSessions();
     const threshold   = getDemotionThreshold();
 
+    if (row.sessions_on_model < minSessions) return false;
     if (row.verdicts_total < minSessions) return false;
 
     const rate = row.verdicts_approved / row.verdicts_total;
@@ -349,6 +373,7 @@ if (require.main === module && process.argv.includes('--status')) {
 
 module.exports = {
   recordVerdict,
+  recordSession,
   demotionEligible,
   getRecommendedModel,
   checkAndDemote,

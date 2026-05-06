@@ -378,7 +378,7 @@
       <table id="sessions-table">
         <thead><tr>
           <th>Started</th><th>Project</th><th>Duration</th>
-          <th>Edits</th><th>Commands</th><th>Errors</th><th>Platform</th>
+          <th>Edits</th><th>Commands</th><th>Errors</th><th>Platform / CLI / Model</th>
         </tr></thead>
         <tbody id="sessions-body"><tr><td colspan="7" class="loading">Loading…</td></tr></tbody>
       </table>
@@ -521,6 +521,14 @@
         <p>Archive SQLite edit_events, sessions, tool_calls, and prompts to Parquet. Run nightly via Ralph Loop 18 or manually here.</p>
         <button class="btn-action" id="btn-flush">Flush Now</button>
         <div class="ctrl-status" id="status-flush"></div>
+      </div>
+
+      <!-- Retrieval Learning -->
+      <div class="control-card">
+        <h2>Learning Loop</h2>
+        <p>Mine retrieval feedback, promote high-signal retrieval patterns, and show the strongest winning and failing query shapes.</p>
+        <button class="btn-action" id="btn-learning">Run Learning Loop</button>
+        <div class="ctrl-status mono" id="status-learning" style="white-space:pre-wrap;max-height:240px;overflow:auto"></div>
       </div>
 
       <!-- Backfill -->

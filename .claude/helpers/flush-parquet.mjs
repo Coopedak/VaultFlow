@@ -95,10 +95,10 @@ export async function queryHotFiles(days = 30) {
 }
 
 /**
- * Flush tool_calls and prompts tables to Parquet.
+ * Flush tool_calls, prompts, and retrieval feedback tables to Parquet.
  * Complements flushParquet() which covers edit_events + sessions.
  *
- * @returns {Promise<{toolCallsFlushed: number, promptsFlushed: number, parquetDir: string}>}
+ * @returns {Promise<{toolCallsFlushed: number, promptsFlushed: number, retrievalFeedbackFlushed: number, parquetDir: string}>}
  */
 export async function flushTelemetry() {
   const cfg        = loadConfig();
@@ -112,9 +112,10 @@ export async function flushTelemetry() {
   try {
     const result = await db.flushTelemetryToParquet(metricsRoot, parquetDir);
     return {
-      toolCallsFlushed: result.toolCallsFlushed,
-      promptsFlushed:   result.promptsFlushed,
-      parquetDir:       path.join(metricsRoot, parquetDir),
+      toolCallsFlushed:        result.toolCallsFlushed,
+      promptsFlushed:          result.promptsFlushed,
+      retrievalFeedbackFlushed: result.retrievalFeedbackFlushed,
+      parquetDir:              path.join(metricsRoot, parquetDir),
     };
   } finally {
     db.close();
@@ -208,10 +209,11 @@ async function main() {
       console.log(`[flush-parquet] Edit events flushed:  ${r1.editsFlushed}`);
       console.log(`[flush-parquet] Sessions flushed:     ${r1.sessionsFlushed}`);
 
-      // Flush tool_calls + prompts
+      // Flush tool_calls + prompts + retrieval feedback
       const r2 = await db.flushTelemetryToParquet(metricsRoot, parquetDir);
       console.log(`[flush-parquet] Tool calls flushed:   ${r2.toolCallsFlushed}`);
       console.log(`[flush-parquet] Prompts flushed:      ${r2.promptsFlushed}`);
+      console.log(`[flush-parquet] Retrieval flushed:   ${r2.retrievalFeedbackFlushed}`);
 
       console.log(`[flush-parquet] Parquet dir: ${parquetFull}`);
     } finally {

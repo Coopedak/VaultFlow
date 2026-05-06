@@ -79,7 +79,7 @@ function collectData(conn) {
   ).map(r => r.name);
 
   const counts = {};
-  for (const t of ['edit_events','sessions','patterns','memory_entries','tool_calls','prompts','dictionary','vault_agents','vault_tools','project_stacks']) {
+  for (const t of ['edit_events','sessions','session_summaries','patterns','memory_entries','tool_calls','prompts','dictionary','vault_agents','vault_tools','project_stacks','retrieval_docs','retrieval_feedback']) {
     try { counts[t] = conn.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get().n; }
     catch (_) { counts[t] = 0; }
   }
@@ -96,7 +96,7 @@ function collectData(conn) {
 
   const recentSessions = safeQuery(conn, `
     SELECT id, started_at, ended_at, duration_ms,
-           platform, cwd, project, edits, commands, tasks, errors
+           platform, cli, model, cwd, project, edits, commands, tasks, errors
     FROM   sessions
     ORDER  BY started_at DESC
     LIMIT  20

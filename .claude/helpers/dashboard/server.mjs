@@ -94,7 +94,7 @@ app.get('/api/status', (_req, res) => {
         "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
       ).all().map(r => r.name);
       const counts = {};
-      for (const t of ['edit_events','sessions','patterns','memory_entries','tool_calls','prompts','dictionary','vault_agents','vault_tools','project_stacks']) {
+      for (const t of ['edit_events','sessions','session_summaries','patterns','memory_entries','tool_calls','prompts','dictionary','vault_agents','vault_tools','project_stacks','retrieval_docs','retrieval_feedback']) {
         try { counts[t] = conn.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get().n; }
         catch (_) { counts[t] = 0; }
       }
@@ -117,7 +117,7 @@ app.get('/api/sessions', (_req, res) => {
   try {
     const rows = withRawDb(conn => conn.prepare(`
       SELECT id, started_at, ended_at, duration_ms,
-             platform, cwd, project,
+             platform, cli, model, cwd, project,
              edits, commands, tasks, errors
       FROM   sessions
       ORDER  BY started_at DESC
@@ -412,7 +412,17 @@ app.post('/api/flush', async (_req, res) => {
   } catch (err) { apiErr(res, err); }
 });
 
-// ── 14. POST /api/backfill ────────────────────────────────────────────────
+// ── 14. POST /api/learning/run ────────────────────────────────────────────
+
+app.post('/api/learning/run', (_req, res) => {
+  try {
+    ensureDb();
+    const result = db.runRetrievalLearningLoop();
+    res.json({ ok: true, ...result });
+  } catch (err) { apiErr(res, err); }
+});
+
+// ── 15. POST /api/backfill ────────────────────────────────────────────────
 
 app.post('/api/backfill', (req, res) => {
   try {
@@ -434,7 +444,7 @@ app.post('/api/backfill', (req, res) => {
   } catch (err) { apiErr(res, err); }
 });
 
-// ── 15. GET /api/watcher/status ───────────────────────────────────────────
+// ── 16. GET /api/watcher/status ───────────────────────────────────────────
 
 app.get('/api/watcher/status', (_req, res) => {
   const pidFile = path.join(METRICS, 'watcher.pid');
@@ -454,7 +464,7 @@ app.get('/api/watcher/status', (_req, res) => {
   } catch (err) { apiErr(res, err); }
 });
 
-// ── 16. POST /api/watcher/start ───────────────────────────────────────────
+// ── 17. POST /api/watcher/start ───────────────────────────────────────────
 
 app.post('/api/watcher/start', (_req, res) => {
   try {
@@ -474,7 +484,7 @@ app.post('/api/watcher/start', (_req, res) => {
   } catch (err) { apiErr(res, err); }
 });
 
-// ── 17. POST /api/watcher/stop ────────────────────────────────────────────
+// ── 18. POST /api/watcher/stop ────────────────────────────────────────────
 
 app.post('/api/watcher/stop', (_req, res) => {
   try {
@@ -489,7 +499,7 @@ app.post('/api/watcher/stop', (_req, res) => {
   } catch (err) { apiErr(res, err); }
 });
 
-// ── 18. POST /api/dict/import ─────────────────────────────────────────────
+// ── 19. POST /api/dict/import ─────────────────────────────────────────────
 
 app.post('/api/dict/import', async (_req, res) => {
   try {
@@ -503,7 +513,7 @@ app.post('/api/dict/import', async (_req, res) => {
   } catch (err) { apiErr(res, err); }
 });
 
-// ── 19. GET /api/memory ───────────────────────────────────────────────────
+// ── 20. GET /api/memory ───────────────────────────────────────────────────
 
 app.get('/api/memory', (req, res) => {
   try {
@@ -520,7 +530,7 @@ app.get('/api/memory', (req, res) => {
   } catch (err) { apiErr(res, err); }
 });
 
-// ── 20. GET /api/config ───────────────────────────────────────────────────
+// ── 21. GET /api/config ───────────────────────────────────────────────────
 
 app.get('/api/config', (_req, res) => {
   try {
@@ -550,7 +560,7 @@ app.post('/api/audit', (_req, res) => {
     const results = [];
 
     // 1. FTS5 integrity checks
-    const ftsNames = ['memory_fts', 'prompts_fts', 'dictionary_fts', 'vault_tools_fts'];
+    const ftsNames = ['memory_fts', 'prompts_fts', 'dictionary_fts', 'vault_tools_fts', 'tool_calls_fts', 'session_summaries_fts', 'retrieval_docs_fts'];
     for (const fts of ftsNames) {
       try {
         const row = db.raw().prepare(`INSERT INTO ${fts}(${fts}) VALUES('integrity-check')`).run();
@@ -608,7 +618,40 @@ app.post('/api/audit', (_req, res) => {
       results.push({ check: 'memory_fts orphans', status: 'fail', detail: e.message });
     }
 
-    // 6. DB file size
+    try {
+      const { orphans } = db.raw().prepare(`
+        SELECT COUNT(*) AS orphans FROM tool_calls_fts f
+        WHERE NOT EXISTS (SELECT 1 FROM tool_calls t WHERE t.id = f.rowid)
+      `).get();
+      results.push({ check: 'tool_calls_fts orphans', status: orphans === 0 ? 'ok' : 'warn',
+        detail: `${orphans} orphaned FTS rows` });
+    } catch (e) {
+      results.push({ check: 'tool_calls_fts orphans', status: 'fail', detail: e.message });
+    }
+
+    try {
+      const { orphans } = db.raw().prepare(`
+        SELECT COUNT(*) AS orphans FROM session_summaries_fts f
+        WHERE NOT EXISTS (SELECT 1 FROM session_summaries s WHERE s.rowid = f.rowid)
+      `).get();
+      results.push({ check: 'session_summaries_fts orphans', status: orphans === 0 ? 'ok' : 'warn',
+        detail: `${orphans} orphaned FTS rows` });
+    } catch (e) {
+      results.push({ check: 'session_summaries_fts orphans', status: 'fail', detail: e.message });
+    }
+
+    try {
+      const { orphans } = db.raw().prepare(`
+        SELECT COUNT(*) AS orphans FROM retrieval_docs_fts f
+        WHERE NOT EXISTS (SELECT 1 FROM retrieval_docs d WHERE d.id = f.rowid)
+      `).get();
+      results.push({ check: 'retrieval_docs_fts orphans', status: orphans === 0 ? 'ok' : 'warn',
+        detail: `${orphans} orphaned FTS rows` });
+    } catch (e) {
+      results.push({ check: 'retrieval_docs_fts orphans', status: 'fail', detail: e.message });
+    }
+
+    // 8. DB file size
     try {
       const dbPath = path.join(METRICS, DB_FILE);
       const { size } = fs.statSync(dbPath);

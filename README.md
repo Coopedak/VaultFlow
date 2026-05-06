@@ -31,6 +31,27 @@ Every Claude Code session automatically:
 
 ## Installation
 
+### What ships in GitHub
+
+This repository is **not** a blank starter repo. A fresh clone includes the real VaultFlow source:
+
+- hook handlers and the SQLite/DuckDB data layer
+- the dashboard server + static dashboard generator
+- the TUI
+- tracked CLI launchers for Claude, Copilot, and Codex
+- config templates, scripts, and helper tooling
+
+### What stays local
+
+These do **not** ship in GitHub and are created/configured per machine:
+
+- `config/vaultflow.yaml` / `config/vaultflow.local.yaml`
+- `metrics_root/` runtime data (`vaultflow.db`, Parquet files, discoveries, watcher logs, session JSON)
+- local Copilot / Codex session history on your machine
+- generated launcher logs and desktop build output
+
+So yes: **other people can clone and install the repo**, but they still need to create their own config and runtime data locally.
+
 ### 1. Install dependencies
 
 ```bash
@@ -279,7 +300,14 @@ For Copilot on Windows you can also create a desktop shortcut:
 npm run copilot:tracked:shortcut
 ```
 
-That shortcut opens the real Copilot CLI through `scripts\tracked-cli.mjs`, which records a VaultFlow session start/end plus launch metadata in SQLite.
+The tracked wrappers now also add a **live VaultFlow feedback loop** when you launch Copilot or Codex with an initial prompt:
+
+- searches a refined SQLite / FTS5 retrieval layer built from prompts, tool calls, and session summaries
+- expands natural-language queries, reranks hits by project / CLI / recency / success state, and pulls the latest same-project session summary
+- prepends a compact background context block before the actual user task
+- records which retrieval hits were injected vs ignored and whether the run ended in success or failure
+
+That shortcut opens the real Copilot CLI through `scripts\tracked-cli.mjs`, which records a VaultFlow session start/end, launch metadata, and context-injection telemetry in SQLite.
 
 Generate a self-contained HTML analytics dashboard. Opens in any browser — no server required.
 
@@ -289,7 +317,16 @@ npm run dashboard:open       # generate + open in default browser
 npm run dashboard:serve      # start Express API server on localhost:7700
 ```
 
-The generated `dashboard.html` includes 9 tabs: Overview, Sessions, Hot Files, Tool Calls, Patterns, Prompts, Stacks, Agents, Dictionary.
+The generated `dashboard.html` includes the main operational tabs: Overview, Sessions, Hot Files, Tool Calls, Patterns, Prompts, Stacks, Agents, Dictionary, Discoveries, Memory, Verdicts, and Control.
+
+The **Control** tab includes the manual operational actions, including:
+
+- Parquet flush
+- memory backfill
+- dictionary import
+- watcher control
+- health audit
+- the retrieval **Learning Loop**
 
 ### Watcher
 
@@ -358,7 +395,7 @@ node .claude/helpers/backfill.mjs --dry-run   # parse only, no DB writes
 
 ### Flush to Parquet
 
-Move SQLite hot-store rows to Parquet cold archive.
+ Move SQLite hot-store rows to Parquet cold archive, including retrieval-feedback rows used for offline ranking analysis.
 
 ```bash
 npm run flush
@@ -639,8 +676,11 @@ All runtime data lives in `metrics_root` (configured in `vaultflow.yaml`). Nothi
 metrics_root/
 ├── vaultflow.db              SQLite database (all tables)
 ├── parquet/
-│   ├── edit_events.parquet   Flushed edit history
-│   └── sessions.parquet      Flushed session history
+│   ├── edit_events.parquet        Flushed edit history
+│   ├── sessions.parquet           Flushed session history
+│   ├── tool_calls.parquet         Flushed tool-call telemetry
+│   ├── prompts.parquet            Flushed prompt telemetry
+│   └── retrieval_feedback.parquet Retrieval-loop feedback for offline tuning
 ├── discoveries/              DISCOVERY.md stubs (auto-promoted patterns)
 ├── sessions/                 Per-session JSON snapshots
 ├── pending-insights.jsonl    Append-only insight buffer (cleared on consolidate)

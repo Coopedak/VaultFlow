@@ -174,6 +174,78 @@ const SCHEMA_SQL = `
     UNIQUE(tool_name, input_hash, session_id)
   );
 
+  CREATE VIRTUAL TABLE IF NOT EXISTS tool_calls_fts USING fts5(
+    tool_name, input_json,
+    content='tool_calls',
+    content_rowid='id'
+  );
+
+  CREATE TRIGGER IF NOT EXISTS tool_calls_ai
+    AFTER INSERT ON tool_calls BEGIN
+      INSERT INTO tool_calls_fts(rowid, tool_name, input_json)
+      VALUES (new.id, new.tool_name, COALESCE(new.input_json, ''));
+    END;
+
+  CREATE TRIGGER IF NOT EXISTS tool_calls_au
+    AFTER UPDATE ON tool_calls BEGIN
+      INSERT INTO tool_calls_fts(tool_calls_fts, rowid, tool_name, input_json)
+        VALUES ('delete', old.id, old.tool_name, COALESCE(old.input_json, ''));
+      INSERT INTO tool_calls_fts(rowid, tool_name, input_json)
+        VALUES (new.id, new.tool_name, COALESCE(new.input_json, ''));
+    END;
+
+  CREATE TRIGGER IF NOT EXISTS tool_calls_ad
+    AFTER DELETE ON tool_calls BEGIN
+      INSERT INTO tool_calls_fts(tool_calls_fts, rowid, tool_name, input_json)
+        VALUES ('delete', old.id, old.tool_name, COALESCE(old.input_json, ''));
+    END;
+
+  -- Unified retrieval documents: cleaned/search-optimized representations of
+  -- prompts, tool calls, and session summaries used by the live context loop.
+  CREATE TABLE IF NOT EXISTS retrieval_docs (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_type    TEXT    NOT NULL,
+    source_id      TEXT    NOT NULL,
+    session_id     TEXT,
+    timestamp      TEXT    NOT NULL,
+    project        TEXT,
+    cli            TEXT,
+    model          TEXT,
+    command_family TEXT,
+    success_state  TEXT,
+    title          TEXT    DEFAULT '',
+    body           TEXT    DEFAULT '',
+    search_text    TEXT    DEFAULT '',
+    metadata_json  TEXT    DEFAULT '',
+    UNIQUE(source_type, source_id)
+  );
+
+  CREATE VIRTUAL TABLE IF NOT EXISTS retrieval_docs_fts USING fts5(
+    title, body, search_text,
+    content='retrieval_docs',
+    content_rowid='id'
+  );
+
+  CREATE TRIGGER IF NOT EXISTS retrieval_docs_ai
+    AFTER INSERT ON retrieval_docs BEGIN
+      INSERT INTO retrieval_docs_fts(rowid, title, body, search_text)
+      VALUES (new.id, COALESCE(new.title, ''), COALESCE(new.body, ''), COALESCE(new.search_text, ''));
+    END;
+
+  CREATE TRIGGER IF NOT EXISTS retrieval_docs_au
+    AFTER UPDATE ON retrieval_docs BEGIN
+      INSERT INTO retrieval_docs_fts(retrieval_docs_fts, rowid, title, body, search_text)
+        VALUES ('delete', old.id, COALESCE(old.title, ''), COALESCE(old.body, ''), COALESCE(old.search_text, ''));
+      INSERT INTO retrieval_docs_fts(rowid, title, body, search_text)
+        VALUES (new.id, COALESCE(new.title, ''), COALESCE(new.body, ''), COALESCE(new.search_text, ''));
+    END;
+
+  CREATE TRIGGER IF NOT EXISTS retrieval_docs_ad
+    AFTER DELETE ON retrieval_docs BEGIN
+      INSERT INTO retrieval_docs_fts(retrieval_docs_fts, rowid, title, body, search_text)
+        VALUES ('delete', old.id, COALESCE(old.title, ''), COALESCE(old.body, ''), COALESCE(old.search_text, ''));
+    END;
+
   -- Prompt history for similarity search and skill routing telemetry.
   CREATE TABLE IF NOT EXISTS prompts (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -202,6 +274,26 @@ const SCHEMA_SQL = `
       INSERT INTO prompts_fts(prompts_fts, rowid, prompt_text)
       VALUES ('delete', old.id, old.prompt_text);
     END;
+
+  CREATE TABLE IF NOT EXISTS retrieval_feedback (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    batch_id       TEXT,
+    timestamp      TEXT    NOT NULL,
+    session_id     TEXT,
+    query_text     TEXT,
+    source_type    TEXT,
+    source_id      TEXT,
+    project        TEXT,
+    cli            TEXT,
+    model          TEXT,
+    command_family TEXT,
+    success_state  TEXT,
+    action         TEXT    NOT NULL,
+    rank           REAL,
+    rerank_score   REAL,
+    useful         INTEGER,
+    metadata_json  TEXT    DEFAULT ''
+  );
 
   -- Detected tech stacks per project. Populated by stack-detector.mjs on
   -- session start and injected as context.
@@ -331,6 +423,32 @@ const SCHEMA_SQL = `
     summary_at   TEXT
   );
 
+  CREATE VIRTUAL TABLE IF NOT EXISTS session_summaries_fts USING fts5(
+    project, top_files, patterns,
+    content='session_summaries',
+    content_rowid='rowid'
+  );
+
+  CREATE TRIGGER IF NOT EXISTS session_summaries_ai
+    AFTER INSERT ON session_summaries BEGIN
+      INSERT INTO session_summaries_fts(rowid, project, top_files, patterns)
+      VALUES (new.rowid, COALESCE(new.project, ''), COALESCE(new.top_files, ''), COALESCE(new.patterns, ''));
+    END;
+
+  CREATE TRIGGER IF NOT EXISTS session_summaries_au
+    AFTER UPDATE ON session_summaries BEGIN
+      INSERT INTO session_summaries_fts(session_summaries_fts, rowid, project, top_files, patterns)
+        VALUES ('delete', old.rowid, COALESCE(old.project, ''), COALESCE(old.top_files, ''), COALESCE(old.patterns, ''));
+      INSERT INTO session_summaries_fts(rowid, project, top_files, patterns)
+        VALUES (new.rowid, COALESCE(new.project, ''), COALESCE(new.top_files, ''), COALESCE(new.patterns, ''));
+    END;
+
+  CREATE TRIGGER IF NOT EXISTS session_summaries_ad
+    AFTER DELETE ON session_summaries BEGIN
+      INSERT INTO session_summaries_fts(session_summaries_fts, rowid, project, top_files, patterns)
+        VALUES ('delete', old.rowid, COALESCE(old.project, ''), COALESCE(old.top_files, ''), COALESCE(old.patterns, ''));
+    END;
+
   -- Model performance tracking for automatic tier demotion.
   -- One row per (agent, model, task_type) triple; current=1 marks the active model.
   CREATE TABLE IF NOT EXISTS model_performance (
@@ -351,6 +469,10 @@ const SCHEMA_SQL = `
   CREATE INDEX IF NOT EXISTS idx_edit_events_timestamp ON edit_events(timestamp);
   CREATE INDEX IF NOT EXISTS idx_tool_calls_session    ON tool_calls(session_id);
   CREATE INDEX IF NOT EXISTS idx_prompts_session       ON prompts(session_id);
+  CREATE INDEX IF NOT EXISTS idx_retrieval_docs_source ON retrieval_docs(source_type, source_id);
+  CREATE INDEX IF NOT EXISTS idx_retrieval_docs_ts     ON retrieval_docs(timestamp);
+  CREATE INDEX IF NOT EXISTS idx_retrieval_feedback_batch ON retrieval_feedback(batch_id);
+  CREATE INDEX IF NOT EXISTS idx_retrieval_feedback_ts    ON retrieval_feedback(timestamp);
   CREATE INDEX IF NOT EXISTS idx_memory_source         ON memory_entries(source);
   CREATE INDEX IF NOT EXISTS idx_patterns_fire         ON patterns(fire_count);
   CREATE INDEX IF NOT EXISTS idx_model_perf_agent      ON model_performance(agent);
@@ -385,6 +507,400 @@ function parquetShardPath(dir, baseName, stamp) {
 
 function parquetGlobPath(dir, baseName) {
   return path.join(dir, `${baseName}*.parquet`);
+}
+
+function safeJsonParse(raw, fallback) {
+  try { return JSON.parse(raw); } catch (_) { return fallback; }
+}
+
+const ANSI_REGEX = /\u001B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g;
+const FTS_STOPWORDS = new Set([
+  'a', 'an', 'and', 'are', 'at', 'be', 'for', 'from', 'how', 'in', 'into',
+  'is', 'it', 'of', 'on', 'or', 'that', 'the', 'this', 'to', 'was', 'with',
+]);
+const FTS_SYNONYMS = {
+  shell:      ['powershell', 'bash', 'terminal', 'command', 'cmd'],
+  powershell: ['shell', 'terminal', 'command'],
+  bash:       ['shell', 'terminal', 'command'],
+  command:    ['shell', 'terminal', 'powershell', 'bash'],
+  terminal:   ['shell', 'command'],
+  background: ['daemon', 'watcher', 'worker'],
+  watcher:    ['background', 'daemon', 'worker'],
+  daemon:     ['background', 'watcher'],
+  error:      ['fail', 'failure', 'crash', 'broken'],
+  fail:       ['error', 'failure', 'crash', 'broken'],
+  failure:    ['error', 'fail', 'crash', 'broken'],
+  crash:      ['error', 'fail', 'failure', 'broken'],
+  broken:     ['error', 'fail', 'failure', 'crash'],
+  summary:    ['session', 'patterns', 'files'],
+  session:    ['summary', 'history'],
+  prompt:     ['task', 'request', 'instruction'],
+};
+
+function stripAnsi(text) {
+  return String(text || '').replace(ANSI_REGEX, ' ');
+}
+
+function flattenSearchValue(value, prefix = '', depth = 0, out = []) {
+  if (value == null || depth > 3 || out.length >= 32) return out;
+  if (Array.isArray(value)) {
+    for (const item of value) flattenSearchValue(item, prefix, depth + 1, out);
+    return out;
+  }
+
+  if (typeof value === 'object') {
+    for (const [key, val] of Object.entries(value)) {
+      if (val == null) continue;
+      if (/^(id|hash|ts|timestamp|started_at|ended_at)$/i.test(key)) continue;
+      const nextPrefix = prefix ? `${prefix} ${key}` : key;
+      flattenSearchValue(val, nextPrefix, depth + 1, out);
+      if (out.length >= 32) break;
+    }
+    return out;
+  }
+
+  const leaf = typeof value === 'string'
+    ? value
+    : (typeof value === 'number' || typeof value === 'boolean' ? String(value) : '');
+  if (!leaf) return out;
+  out.push(prefix ? `${prefix} ${leaf}` : leaf);
+  return out;
+}
+
+function normalizeSearchText(raw, maxLen = 2000) {
+  const base = typeof raw === 'string'
+    ? raw
+    : flattenSearchValue(raw).join(' ');
+  let text = stripAnsi(base)
+    .replace(/\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z\b/g, ' ')
+    .replace(/\b\d{1,2}:\d{2}:\d{2}\b/g, ' ')
+    .replace(/https?:\/\/\S+/gi, ' ')
+    .replace(/[{}[\]"]/g, ' ')
+    .replace(/[|`]+/g, ' ')
+    .replace(/[\\/]+/g, ' ')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/[^\w.\-: ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+
+  if (text.length > maxLen) text = text.slice(0, maxLen);
+  return text;
+}
+
+function quoteFtsToken(token) {
+  return `"${String(token || '').replace(/"/g, '""')}"`;
+}
+
+function tokenizeSearchQuery(raw) {
+  return normalizeSearchText(raw, 400)
+    .split(/\s+/)
+    .filter(token => token.length > 1 && !FTS_STOPWORDS.has(token))
+    .slice(0, 6);
+}
+
+function buildExpandedFtsQuery(raw) {
+  const tokens = tokenizeSearchQuery(raw);
+  if (tokens.length === 0) return ftsPhrase(normalizeSearchText(raw, 200) || raw);
+
+  const groups = tokens.map((token) => {
+    const expanded = new Set([token]);
+    const singular = token.endsWith('s') ? token.slice(0, -1) : token;
+    if (singular && singular !== token) expanded.add(singular);
+    for (const synonym of FTS_SYNONYMS[token] || []) expanded.add(synonym);
+    if (FTS_SYNONYMS[singular]) {
+      for (const synonym of FTS_SYNONYMS[singular]) expanded.add(synonym);
+    }
+    return `(${[...expanded].map(quoteFtsToken).join(' OR ')})`;
+  });
+
+  return groups.join(' AND ');
+}
+
+function getQuerySignals(raw) {
+  const text = normalizeSearchText(raw, 400);
+  return {
+    wantsFailure: /\b(error|fail|failure|crash|broken|timeout|stuck)\b/.test(text),
+    wantsShell: /\b(shell|powershell|bash|command|terminal|background|watcher|daemon)\b/.test(text),
+    wantsSummary: /\b(summary|session|patterns|files|recent)\b/.test(text),
+  };
+}
+
+function recencyBoost(timestamp) {
+  if (!timestamp) return 0;
+  const ts = new Date(timestamp).getTime();
+  if (!Number.isFinite(ts)) return 0;
+  const ageMs = Date.now() - ts;
+  if (ageMs < 24 * 60 * 60 * 1000) return -2.0;
+  if (ageMs < 7 * 24 * 60 * 60 * 1000) return -1.2;
+  if (ageMs < 30 * 24 * 60 * 60 * 1000) return -0.5;
+  return 0;
+}
+
+function rerankRetrievalDocs(rows, query, options) {
+  const opts = options || {};
+  const signals = getQuerySignals(query);
+
+  return rows.map((row) => {
+    let score = typeof row.rank === 'number' ? row.rank : 0;
+    if (opts.project && row.project && row.project === opts.project) score -= 3.0;
+    if (opts.cli && row.cli && row.cli === opts.cli) score -= 1.5;
+    if (opts.model && row.model && row.model === opts.model) score -= 1.0;
+    score += recencyBoost(row.timestamp);
+
+    if (signals.wantsShell && row.command_family === 'shell') score -= 1.5;
+    if (signals.wantsSummary && row.source_type === 'session_summary') score -= 0.8;
+    if (signals.wantsFailure) {
+      if (row.success_state === 'failure') score -= 1.4;
+      if (row.success_state === 'success') score += 0.4;
+    } else if (row.success_state === 'success') {
+      score -= 0.6;
+    }
+
+    return {
+      ...row,
+      rerank_score: Number(score.toFixed(4)),
+      metadata: safeJsonParse(row.metadata_json, {}),
+    };
+  }).sort((a, b) => a.rerank_score - b.rerank_score || a.rank - b.rank);
+}
+
+function getSessionMetadata(sessionId) {
+  if (!_db || !sessionId) return {};
+  return _db.prepare(`
+    SELECT project, cli, model, errors
+    FROM   sessions
+    WHERE  id = ?
+    LIMIT  1
+  `).get(sessionId) || {};
+}
+
+function deriveCommandFamily(toolName, payload) {
+  const lowerName = String(toolName || '').toLowerCase();
+  const command = normalizeSearchText(payload?.command || payload?.cmd || payload?.tool_name || '', 200);
+  if (lowerName.includes('shell') || lowerName.includes('bash') || lowerName.includes('powershell') || command) return 'shell';
+  if (lowerName.includes('watcher') || lowerName.includes('daemon') || lowerName.includes('background')) return 'background';
+  if (lowerName.includes('search')) return 'search';
+  if (lowerName.includes('read')) return 'read';
+  if (lowerName.includes('write') || lowerName.includes('edit')) return 'write';
+  if (lowerName.includes('prompt')) return 'prompt';
+  return 'general';
+}
+
+function deriveSuccessState(toolName, payload, fallbackErrors) {
+  const lowerName = String(toolName || '').toLowerCase();
+  if (payload && (payload.exitCode != null || payload.exit_code != null)) {
+    const exitCode = payload.exitCode != null ? payload.exitCode : payload.exit_code;
+    return Number(exitCode) === 0 ? 'success' : 'failure';
+  }
+  if (lowerName.includes('error') || lowerName.includes('fail')) return 'failure';
+  if (lowerName.includes('complete') || lowerName.includes('shutdown') || lowerName.includes('success')) return 'success';
+  if (typeof fallbackErrors === 'number') return fallbackErrors > 0 ? 'failure' : 'success';
+  return 'unknown';
+}
+
+function summarizeToolCall(toolName, payload, rawInput) {
+  const segments = [];
+  if (payload?.command || payload?.cmd) segments.push(`command ${payload.command || payload.cmd}`);
+  if (payload?.cwd) segments.push(`cwd ${payload.cwd}`);
+  if (payload?.toolName) segments.push(`tool ${payload.toolName}`);
+  if (payload?.message) segments.push(`message ${payload.message}`);
+  if (payload?.contextPreview) segments.push(`context ${payload.contextPreview}`);
+  if (payload?.prompt) segments.push(`prompt ${payload.prompt}`);
+  if (payload?.exitCode != null || payload?.exit_code != null) {
+    segments.push(`exit ${payload.exitCode != null ? payload.exitCode : payload.exit_code}`);
+  }
+  if (segments.length === 0) {
+    segments.push(normalizeSearchText(rawInput || payload || '', 400));
+  }
+  return segments.join(' | ').slice(0, 800);
+}
+
+function buildSessionSummaryBody(obj) {
+  const project = obj.project || 'unknown';
+  const topFiles = Array.isArray(obj.top_files) ? obj.top_files : [];
+  const patterns = Array.isArray(obj.patterns) ? obj.patterns : [];
+  const toolCounts = _db.prepare(`
+    SELECT tool_name, COUNT(*) AS call_count
+    FROM   tool_calls
+    WHERE  session_id = ?
+    GROUP  BY tool_name
+    ORDER  BY call_count DESC, tool_name ASC
+    LIMIT  3
+  `).all(obj.session_id);
+  const recentTools = _db.prepare(`
+    SELECT tool_name, input_json
+    FROM   tool_calls
+    WHERE  session_id = ?
+    ORDER  BY timestamp DESC
+    LIMIT  6
+  `).all(obj.session_id);
+
+  const commandHighlights = [];
+  for (const row of recentTools) {
+    const snippet = summarizeToolCall(row.tool_name, safeJsonParse(row.input_json, null), row.input_json);
+    if (!snippet) continue;
+    commandHighlights.push(`${row.tool_name}: ${snippet}`);
+    if (commandHighlights.length >= 2) break;
+  }
+
+  const durationMin = Math.max(1, Math.round((obj.duration_ms || 0) / 60000));
+  return [
+    `project ${project}`,
+    `duration ${durationMin}m`,
+    `files ${topFiles.slice(0, 5).join(', ') || 'none'}`,
+    `patterns ${patterns.slice(0, 3).join(', ') || 'none'}`,
+    `tools ${toolCounts.map((row) => `${row.tool_name} x${row.call_count}`).join(', ') || 'none'}`,
+    `recent ${commandHighlights.join(' ; ') || 'none'}`,
+  ].join(' | ');
+}
+
+function upsertRetrievalDoc(doc) {
+  if (!_db) throw new Error('db.upsertRetrievalDoc: call initialize() first');
+
+  _db.prepare(`
+    INSERT INTO retrieval_docs
+      (source_type, source_id, session_id, timestamp, project, cli, model, command_family,
+       success_state, title, body, search_text, metadata_json)
+    VALUES
+      (@source_type, @source_id, @session_id, @timestamp, @project, @cli, @model, @command_family,
+       @success_state, @title, @body, @search_text, @metadata_json)
+    ON CONFLICT(source_type, source_id) DO UPDATE SET
+      session_id     = COALESCE(excluded.session_id, retrieval_docs.session_id),
+      timestamp      = COALESCE(excluded.timestamp, retrieval_docs.timestamp),
+      project        = COALESCE(excluded.project, retrieval_docs.project),
+      cli            = COALESCE(excluded.cli, retrieval_docs.cli),
+      model          = COALESCE(excluded.model, retrieval_docs.model),
+      command_family = COALESCE(excluded.command_family, retrieval_docs.command_family),
+      success_state  = COALESCE(excluded.success_state, retrieval_docs.success_state),
+      title          = COALESCE(excluded.title, retrieval_docs.title),
+      body           = COALESCE(excluded.body, retrieval_docs.body),
+      search_text    = COALESCE(excluded.search_text, retrieval_docs.search_text),
+      metadata_json  = COALESCE(excluded.metadata_json, retrieval_docs.metadata_json)
+  `).run({
+    source_type:    doc.source_type,
+    source_id:      String(doc.source_id),
+    session_id:     doc.session_id || null,
+    timestamp:      doc.timestamp || new Date().toISOString(),
+    project:        doc.project || null,
+    cli:            doc.cli || null,
+    model:          doc.model || null,
+    command_family: doc.command_family || null,
+    success_state:  doc.success_state || null,
+    title:          doc.title || '',
+    body:           doc.body || '',
+    search_text:    doc.search_text || normalizeSearchText(`${doc.title || ''} ${doc.body || ''}`),
+    metadata_json:  doc.metadata_json || '{}',
+  });
+}
+
+function backfillRetrievalDocs() {
+  if (!_db) throw new Error('db.backfillRetrievalDocs: call initialize() first');
+
+  const counts = _db.prepare(`
+    SELECT
+      (SELECT COUNT(*) FROM prompts) +
+      (SELECT COUNT(*) FROM tool_calls) +
+      (SELECT COUNT(*) FROM session_summaries) AS source_count,
+      (SELECT COUNT(*) FROM retrieval_docs) AS doc_count
+  `).get() || { source_count: 0, doc_count: 0 };
+
+  if ((counts.doc_count || 0) >= (counts.source_count || 0)) return;
+
+  _db.exec('BEGIN');
+  try {
+    const prompts = _db.prepare(`
+      SELECT id, timestamp, session_id, prompt_text, skill_routed
+      FROM   prompts
+    `).all();
+    for (const row of prompts) {
+      const meta = getSessionMetadata(row.session_id);
+      upsertRetrievalDoc({
+        source_type:   'prompt',
+        source_id:     row.id,
+        session_id:    row.session_id,
+        timestamp:     row.timestamp,
+        project:       meta.project || null,
+        cli:           meta.cli || null,
+        model:         meta.model || null,
+        command_family:'prompt',
+        success_state: deriveSuccessState(row.skill_routed, null, meta.errors),
+        title:         row.skill_routed ? `Prompt ${row.skill_routed}` : 'Prompt',
+        body:          row.prompt_text,
+        search_text:   normalizeSearchText(row.prompt_text, 1600),
+        metadata_json: JSON.stringify({ skill_routed: row.skill_routed || null }),
+      });
+    }
+
+    const toolCalls = _db.prepare(`
+      SELECT id, timestamp, session_id, tool_name, input_json
+      FROM   tool_calls
+    `).all();
+    for (const row of toolCalls) {
+      const payload = safeJsonParse(row.input_json, null);
+      const meta = getSessionMetadata(row.session_id);
+      const summary = summarizeToolCall(row.tool_name, payload, row.input_json);
+      upsertRetrievalDoc({
+        source_type:    'tool_call',
+        source_id:      row.id,
+        session_id:     row.session_id,
+        timestamp:      row.timestamp,
+        project:        meta.project || null,
+        cli:            meta.cli || null,
+        model:          meta.model || null,
+        command_family: deriveCommandFamily(row.tool_name, payload),
+        success_state:  deriveSuccessState(row.tool_name, payload, meta.errors),
+        title:          row.tool_name,
+        body:           summary,
+        search_text:    normalizeSearchText(`${row.tool_name} ${summary}`),
+        metadata_json:  JSON.stringify({
+          tool_name: row.tool_name,
+          raw: typeof row.input_json === 'string' ? row.input_json.slice(0, 1200) : '',
+        }),
+      });
+    }
+
+    const summaries = _db.prepare(`
+      SELECT session_id, project, duration_ms, top_files, patterns, summary_at
+      FROM   session_summaries
+    `).all();
+    for (const row of summaries) {
+      const topFiles = safeJsonParse(row.top_files, []);
+      const patterns = safeJsonParse(row.patterns, []);
+      const meta = getSessionMetadata(row.session_id);
+      const body = buildSessionSummaryBody({
+        session_id: row.session_id,
+        project: row.project || meta.project || null,
+        duration_ms: row.duration_ms || 0,
+        top_files: topFiles,
+        patterns,
+      });
+      upsertRetrievalDoc({
+        source_type:   'session_summary',
+        source_id:     row.session_id,
+        session_id:    row.session_id,
+        timestamp:     row.summary_at,
+        project:       row.project || meta.project || null,
+        cli:           meta.cli || null,
+        model:         meta.model || null,
+        command_family:'summary',
+        success_state: deriveSuccessState('session_summary', null, meta.errors),
+        title:         `Session summary ${row.project || meta.project || 'unknown'}`,
+        body,
+        search_text:   normalizeSearchText(body, 2000),
+        metadata_json: JSON.stringify({
+          top_files: topFiles,
+          patterns,
+          duration_ms: row.duration_ms || 0,
+        }),
+      });
+    }
+
+    _db.exec('COMMIT');
+  } catch (err) {
+    _db.exec('ROLLBACK');
+    throw err;
+  }
 }
 
 function hasParquetArchive(dir, baseName) {
@@ -522,6 +1038,28 @@ function initialize(metricsRoot, dbFile) {
       if (!err.message.includes('duplicate column')) {
         process.stderr.write(`[db] migration warning: ${err.message}\n`);
       }
+    }
+  }
+
+  try { _db.exec(`INSERT INTO tool_calls_fts(tool_calls_fts) VALUES ('rebuild')`); } catch (err) {
+    if (!err.message.includes('no such table')) {
+      process.stderr.write(`[db] tool_calls_fts rebuild warning: ${err.message}\n`);
+    }
+  }
+
+  try { _db.exec(`INSERT INTO session_summaries_fts(session_summaries_fts) VALUES ('rebuild')`); } catch (err) {
+    if (!err.message.includes('no such table')) {
+      process.stderr.write(`[db] session_summaries_fts rebuild warning: ${err.message}\n`);
+    }
+  }
+
+  try { backfillRetrievalDocs(); } catch (err) {
+    process.stderr.write(`[db] retrieval docs backfill warning: ${err.message}\n`);
+  }
+
+  try { _db.exec(`INSERT INTO retrieval_docs_fts(retrieval_docs_fts) VALUES ('rebuild')`); } catch (err) {
+    if (!err.message.includes('no such table')) {
+      process.stderr.write(`[db] retrieval_docs_fts rebuild warning: ${err.message}\n`);
     }
   }
 }
@@ -942,7 +1480,7 @@ function searchMemory(query, limit) {
     WHERE  memory_fts MATCH ?
     ORDER  BY rank
     LIMIT  ?
-  `).all(ftsPhrase(query), limit || 10);
+  `).all(buildExpandedFtsQuery(query), limit || 10);
 }
 
 /**
@@ -963,10 +1501,63 @@ function searchPatterns(query, limit) {
     WHERE  patterns_fts MATCH ?
     ORDER  BY rank
     LIMIT  ?
-  `).all(ftsPhrase(query), limit || 10);
+  `).all(buildExpandedFtsQuery(query), limit || 10);
 }
 
 // ── tool call telemetry ───────────────────────────────────────────────────
+
+function normalizeSearchArgs(limitOrOptions, maybeOptions, defaultLimit) {
+  if (typeof limitOrOptions === 'object' && limitOrOptions !== null) {
+    return {
+      limit: Number(limitOrOptions.limit) || defaultLimit,
+      options: limitOrOptions,
+    };
+  }
+  return {
+    limit: Number(limitOrOptions) || defaultLimit,
+    options: maybeOptions || {},
+  };
+}
+
+function searchRetrievalDocs(query, limitOrOptions, maybeOptions) {
+  if (!_db) throw new Error('db.searchRetrievalDocs: call initialize() first');
+
+  const { limit, options } = normalizeSearchArgs(limitOrOptions, maybeOptions, 10);
+  const sourceTypes = Array.isArray(options.sourceTypes) && options.sourceTypes.length > 0
+    ? options.sourceTypes
+    : null;
+  const params = [buildExpandedFtsQuery(query)];
+  const filters = ['retrieval_docs_fts MATCH ?'];
+  if (sourceTypes) {
+    filters.push(`d.source_type IN (${sourceTypes.map(() => '?').join(', ')})`);
+    params.push(...sourceTypes);
+  }
+  params.push(Math.max(limit * 5, 15));
+
+  const rows = _db.prepare(`
+    SELECT d.id,
+           d.source_type,
+           d.source_id,
+           d.session_id,
+           d.timestamp,
+           d.project,
+           d.cli,
+           d.model,
+           d.command_family,
+           d.success_state,
+           d.title,
+           d.body,
+           d.metadata_json,
+           bm25(retrieval_docs_fts) AS rank
+    FROM   retrieval_docs_fts f
+    JOIN   retrieval_docs d ON d.id = f.rowid
+    WHERE  ${filters.join(' AND ')}
+    ORDER  BY rank
+    LIMIT  ?
+  `).all(...params);
+
+  return rerankRetrievalDocs(rows, query, options).slice(0, limit);
+}
 
 /**
  * Record a tool call. Detects duplicates via SHA256(inputJson) within the
@@ -982,13 +1573,46 @@ function recordToolCall(sessionId, toolName, inputJson) {
 
   const inputHash = sha256(inputJson || '');
   const now       = new Date().toISOString();
+  const payload   = safeJsonParse(inputJson, null);
 
   const info = _db.prepare(`
     INSERT OR IGNORE INTO tool_calls (timestamp, session_id, tool_name, input_hash, input_json)
     VALUES (?, ?, ?, ?, ?)
   `).run(now, sessionId, toolName, inputHash, inputJson || null);
 
-  return { isDuplicate: info.changes === 0, inputHash };
+  const row = _db.prepare(`
+    SELECT id, timestamp
+    FROM   tool_calls
+    WHERE  session_id = ? AND tool_name = ? AND input_hash = ?
+    LIMIT  1
+  `).get(sessionId, toolName, inputHash);
+  const meta = getSessionMetadata(sessionId);
+  const summary = summarizeToolCall(toolName, payload, inputJson);
+  const successState = deriveSuccessState(toolName, payload, meta.errors);
+  const rowId = row ? Number(row.id) : null;
+
+  if (rowId != null) {
+    upsertRetrievalDoc({
+      source_type:    'tool_call',
+      source_id:      rowId,
+      session_id:     sessionId,
+      timestamp:      row?.timestamp || now,
+      project:        meta.project || null,
+      cli:            meta.cli || null,
+      model:          meta.model || null,
+      command_family: deriveCommandFamily(toolName, payload),
+      success_state:  successState,
+      title:          toolName,
+      body:           summary,
+      search_text:    normalizeSearchText(`${toolName} ${summary}`),
+      metadata_json:  JSON.stringify({
+        tool_name: toolName,
+        raw: typeof inputJson === 'string' ? inputJson.slice(0, 1200) : '',
+      }),
+    });
+  }
+
+  return { isDuplicate: info.changes === 0, inputHash, rowId };
 }
 
 /**
@@ -1012,6 +1636,50 @@ function getSessionToolSummary(sessionId) {
   `).all(sessionId);
 }
 
+/**
+ * Search tool call history using SQLite FTS5 + BM25 ranking.
+ *
+ * @param {string} query
+ * @param {number} [limit=5]
+ * @returns {Array<{id, timestamp, session_id, tool_name, input_json, rank}>}
+ */
+function searchToolCalls(query, limitOrOptions, maybeOptions) {
+  if (!_db) throw new Error('db.searchToolCalls: call initialize() first');
+
+  const { limit, options } = normalizeSearchArgs(limitOrOptions, maybeOptions, 5);
+  const docs = searchRetrievalDocs(query, {
+    ...options,
+    limit,
+    sourceTypes: ['tool_call'],
+  });
+
+  if (docs.length === 0) return [];
+  const ids = docs.map(doc => Number(doc.source_id)).filter(Number.isFinite);
+  if (ids.length === 0) return [];
+
+  const rows = _db.prepare(`
+    SELECT id, timestamp, session_id, tool_name, input_json
+    FROM   tool_calls
+    WHERE  id IN (${ids.map(() => '?').join(', ')})
+  `).all(...ids);
+  const byId = new Map(rows.map(row => [Number(row.id), row]));
+
+  return docs.map((doc) => {
+    const row = byId.get(Number(doc.source_id));
+    if (!row) return null;
+    return {
+      ...row,
+      project: doc.project,
+      cli: doc.cli,
+      model: doc.model,
+      command_family: doc.command_family,
+      success_state: doc.success_state,
+      rank: doc.rank,
+      rerank_score: doc.rerank_score,
+    };
+  }).filter(Boolean);
+}
+
 // ── prompt history + similarity ───────────────────────────────────────────
 
 /**
@@ -1024,10 +1692,29 @@ function getSessionToolSummary(sessionId) {
 function recordPrompt(sessionId, promptText, skillRouted) {
   if (!_db) throw new Error('db.recordPrompt: call initialize() first');
 
-  _db.prepare(`
+  const now = new Date().toISOString();
+  const info = _db.prepare(`
     INSERT INTO prompts (timestamp, session_id, prompt_text, skill_routed)
     VALUES (?, ?, ?, ?)
-  `).run(new Date().toISOString(), sessionId, promptText, skillRouted || null);
+  `).run(now, sessionId, promptText, skillRouted || null);
+
+  const promptId = Number(info.lastInsertRowid);
+  const meta = getSessionMetadata(sessionId);
+  upsertRetrievalDoc({
+    source_type:   'prompt',
+    source_id:     promptId,
+    session_id:    sessionId,
+    timestamp:     now,
+    project:       meta.project || null,
+    cli:           meta.cli || null,
+    model:         meta.model || null,
+    command_family:'prompt',
+    success_state: deriveSuccessState(skillRouted, null, meta.errors),
+    title:         skillRouted ? `Prompt ${skillRouted}` : 'Prompt',
+    body:          promptText,
+    search_text:   normalizeSearchText(promptText, 1600),
+    metadata_json: JSON.stringify({ skill_routed: skillRouted || null }),
+  });
 }
 
 /**
@@ -1038,22 +1725,39 @@ function recordPrompt(sessionId, promptText, skillRouted) {
  * @param {number} [limit=5]
  * @returns {Array<{id, timestamp, session_id, prompt_text, skill_routed, rank}>}
  */
-function searchSimilarPrompts(query, limit) {
+function searchSimilarPrompts(query, limitOrOptions, maybeOptions) {
   if (!_db) throw new Error('db.searchSimilarPrompts: call initialize() first');
 
-  return _db.prepare(`
-    SELECT p.id,
-           p.timestamp,
-           p.session_id,
-           p.prompt_text,
-           p.skill_routed,
-           bm25(prompts_fts) AS rank
-    FROM   prompts_fts f
-    JOIN   prompts p ON p.id = f.rowid
-    WHERE  prompts_fts MATCH ?
-    ORDER  BY rank
-    LIMIT  ?
-  `).all(ftsPhrase(query), limit || 5);
+  const { limit, options } = normalizeSearchArgs(limitOrOptions, maybeOptions, 5);
+  const docs = searchRetrievalDocs(query, {
+    ...options,
+    limit,
+    sourceTypes: ['prompt'],
+  });
+
+  if (docs.length === 0) return [];
+  const ids = docs.map(doc => Number(doc.source_id)).filter(Number.isFinite);
+  if (ids.length === 0) return [];
+
+  const rows = _db.prepare(`
+    SELECT id, timestamp, session_id, prompt_text, skill_routed
+    FROM   prompts
+    WHERE  id IN (${ids.map(() => '?').join(', ')})
+  `).all(...ids);
+  const byId = new Map(rows.map(row => [Number(row.id), row]));
+
+  return docs.map((doc) => {
+    const row = byId.get(Number(doc.source_id));
+    if (!row) return null;
+    return {
+      ...row,
+      project: doc.project,
+      cli: doc.cli,
+      model: doc.model,
+      rank: doc.rank,
+      rerank_score: doc.rerank_score,
+    };
+  }).filter(Boolean);
 }
 
 // ── tech stack detection ──────────────────────────────────────────────────
@@ -1148,7 +1852,7 @@ function searchDictionary(query, limit) {
     WHERE  dictionary_fts MATCH ?
     ORDER  BY rank
     LIMIT  ?
-  `).all(ftsPhrase(query), limit || 10);
+  `).all(buildExpandedFtsQuery(query), limit || 10);
 }
 
 /**
@@ -1237,7 +1941,7 @@ function searchVaultTools(query, limit) {
     WHERE  vault_tools_fts MATCH ?
     ORDER  BY rank
     LIMIT  ?
-  `).all(ftsPhrase(query), limit || 10);
+  `).all(buildExpandedFtsQuery(query), limit || 10);
 }
 
 // ── agent registry ────────────────────────────────────────────────────────
@@ -1381,6 +2085,138 @@ function getDictionaryTermSet() {
   return new Set(rows.map(r => r.t));
 }
 
+/**
+ * Record retrieval-loop feedback so ranking can be tuned from real outcomes.
+ *
+ * @param {object} event
+ */
+function recordRetrievalFeedback(event) {
+  if (!_db) throw new Error('db.recordRetrievalFeedback: call initialize() first');
+
+  _db.prepare(`
+    INSERT INTO retrieval_feedback
+      (batch_id, timestamp, session_id, query_text, source_type, source_id, project, cli, model,
+       command_family, success_state, action, rank, rerank_score, useful, metadata_json)
+    VALUES
+      (@batch_id, @timestamp, @session_id, @query_text, @source_type, @source_id, @project, @cli, @model,
+       @command_family, @success_state, @action, @rank, @rerank_score, @useful, @metadata_json)
+  `).run({
+    batch_id:       event.batch_id || null,
+    timestamp:      event.timestamp || new Date().toISOString(),
+    session_id:     event.session_id || null,
+    query_text:     event.query_text || null,
+    source_type:    event.source_type || null,
+    source_id:      event.source_id != null ? String(event.source_id) : null,
+    project:        event.project || null,
+    cli:            event.cli || null,
+    model:          event.model || null,
+    command_family: event.command_family || null,
+    success_state:  event.success_state || null,
+    action:         event.action || 'candidate',
+    rank:           event.rank != null ? event.rank : null,
+    rerank_score:   event.rerank_score != null ? event.rerank_score : null,
+    useful:         event.useful != null ? event.useful : null,
+    metadata_json:  event.metadata_json || '{}',
+  });
+}
+
+/**
+ * Analyze retrieval feedback and promote stable retrieval patterns back into
+ * the main patterns table so future runs can benefit from successful shapes.
+ *
+ * @returns {{
+ *   batchesReviewed: number,
+ *   strategiesReviewed: number,
+ *   promotedPatterns: string[],
+ *   topStrategies: Array<object>,
+ *   topFailures: Array<object>
+ * }}
+ */
+function runRetrievalLearningLoop() {
+  if (!_db) throw new Error('db.runRetrievalLearningLoop: call initialize() first');
+
+  const batchesReviewed = (_db.prepare(`
+    SELECT COUNT(DISTINCT batch_id) AS cnt
+    FROM   retrieval_feedback
+    WHERE  batch_id IS NOT NULL
+  `).get() || { cnt: 0 }).cnt || 0;
+
+  const topStrategies = _db.prepare(`
+    SELECT rf.project,
+           COALESCE(rf.cli, 'unknown') AS cli,
+           COALESCE(rf.source_type, 'unknown') AS source_type,
+           COALESCE(rf.command_family, 'general') AS command_family,
+           COUNT(*) AS sample_count,
+           SUM(CASE WHEN outcome.action = 'run_success' THEN 1 ELSE 0 END) AS success_count
+    FROM   retrieval_feedback rf
+    JOIN   retrieval_feedback outcome
+           ON outcome.batch_id = rf.batch_id
+          AND outcome.source_type = 'batch'
+          AND outcome.action IN ('run_success', 'run_failure')
+    WHERE  rf.action = 'injected'
+    GROUP  BY rf.project,
+              COALESCE(rf.cli, 'unknown'),
+              COALESCE(rf.source_type, 'unknown'),
+              COALESCE(rf.command_family, 'general')
+    ORDER  BY success_count DESC, sample_count DESC, rf.project ASC
+    LIMIT  12
+  `).all().map((row) => {
+    const sampleCount = Number(row.sample_count) || 0;
+    const successCount = Number(row.success_count) || 0;
+    return {
+      project: row.project || 'unknown',
+      cli: row.cli || 'unknown',
+      source_type: row.source_type || 'unknown',
+      command_family: row.command_family || 'general',
+      sample_count: sampleCount,
+      success_count: successCount,
+      success_rate: sampleCount > 0 ? Number((successCount / sampleCount).toFixed(3)) : 0,
+    };
+  });
+
+  const promotedPatterns = [];
+  for (const strategy of topStrategies) {
+    if (strategy.sample_count < 2 || strategy.success_rate < 0.6) continue;
+    const patternKey = [
+      'retrieval',
+      strategy.project || 'unknown',
+      strategy.cli || 'unknown',
+      strategy.source_type || 'unknown',
+      strategy.command_family || 'general',
+      'success',
+    ].join(':');
+    upsertPattern(patternKey, 'retrieval-learning');
+    promotedPatterns.push(patternKey);
+  }
+
+  const topFailures = _db.prepare(`
+    SELECT project,
+           COALESCE(cli, 'unknown') AS cli,
+           query_text,
+           COUNT(*) AS failure_count
+    FROM   retrieval_feedback
+    WHERE  action = 'run_failure'
+      AND  query_text IS NOT NULL
+      AND  TRIM(query_text) != ''
+    GROUP  BY project, cli, query_text
+    ORDER  BY failure_count DESC, project ASC
+    LIMIT  5
+  `).all().map((row) => ({
+    project: row.project || 'unknown',
+    cli: row.cli || 'unknown',
+    query_text: row.query_text,
+    failure_count: Number(row.failure_count) || 0,
+  }));
+
+  return {
+    batchesReviewed: Number(batchesReviewed) || 0,
+    strategiesReviewed: topStrategies.length,
+    promotedPatterns,
+    topStrategies,
+    topFailures,
+  };
+}
+
 // ── telemetry flush ───────────────────────────────────────────────────────
 
 /**
@@ -1389,7 +2225,7 @@ function getDictionaryTermSet() {
  *
  * @param {string} [metricsRoot]
  * @param {string} [parquetDir]
- * @returns {Promise<{toolCallsFlushed: number, promptsFlushed: number}>}
+ * @returns {Promise<{toolCallsFlushed: number, promptsFlushed: number, retrievalFeedbackFlushed: number}>}
  */
 async function flushTelemetryToParquet(metricsRoot, parquetDir) {
   const cfg  = loadConfig();
@@ -1403,9 +2239,11 @@ async function flushTelemetryToParquet(metricsRoot, parquetDir) {
   const dbPath          = path.join(root, (cfg && cfg.storage && cfg.storage.db_file) || 'vaultflow.db');
   const toolsParquet    = path.join(pDirFull, (cfg && cfg.storage && cfg.storage.tool_calls_parquet) || 'tool_calls.parquet');
   const promptsParquet  = path.join(pDirFull, (cfg && cfg.storage && cfg.storage.prompts_parquet) || 'prompts.parquet');
+  const retrievalParquet = path.join(pDirFull, (cfg && cfg.storage && cfg.storage.retrieval_feedback_parquet) || 'retrieval_feedback.parquet');
   const flushStamp      = parquetShardSuffix();
   const toolsShard      = parquetShardPath(pDirFull, 'tool_calls', flushStamp);
   const promptsShard    = parquetShardPath(pDirFull, 'prompts', flushStamp);
+  const retrievalShard  = parquetShardPath(pDirFull, 'retrieval_feedback', flushStamp);
 
   ensureDir(pDirFull);
 
@@ -1448,7 +2286,24 @@ async function flushTelemetryToParquet(metricsRoot, parquetDir) {
       );
     }
 
-    return { toolCallsFlushed, promptsFlushed };
+    const rfCount = await duckQuery(conn,
+      `SELECT COUNT(*) AS cnt FROM sqlite_scan('${db_}', 'retrieval_feedback') WHERE timestamp > '${lf_}'`
+    );
+    const retrievalFeedbackFlushed = rfCount[0]?.cnt || 0;
+
+    if (retrievalFeedbackFlushed > 0) {
+      const rp_ = duckEsc(retrievalShard);
+      await duckRun(conn,
+        `COPY (SELECT * FROM sqlite_scan('${db_}', 'retrieval_feedback') WHERE timestamp > '${lf_}')
+         TO '${rp_}' (FORMAT PARQUET)`
+      );
+    }
+
+    if (retrievalFeedbackFlushed > 0 && !fs.existsSync(retrievalParquet)) {
+      fs.copyFileSync(retrievalShard, retrievalParquet);
+    }
+
+    return { toolCallsFlushed, promptsFlushed, retrievalFeedbackFlushed };
   });
 
   fs.writeFileSync(sentinelPath, new Date().toISOString(), 'utf8');
@@ -1483,6 +2338,30 @@ function recordModelVerdict(agent, model, taskType, approved) {
         verdicts_approved = verdicts_approved + ?
     WHERE agent = ? AND model = ? AND task_type = ?
   `).run(approved ? 1 : 0, agent, model, type);
+}
+
+/**
+ * Record one completed session/task for an agent/model/taskType triple.
+ *
+ * @param {string} agent
+ * @param {string} model
+ * @param {string} taskType
+ */
+function recordModelSession(agent, model, taskType) {
+  if (!_db) throw new Error('db.recordModelSession: call initialize() first');
+
+  const type = taskType || 'general';
+
+  _db.prepare(`
+    INSERT OR IGNORE INTO model_performance (agent, model, task_type, verdicts_total, verdicts_approved, sessions_on_model, current)
+    VALUES (?, ?, ?, 0, 0, 0, 1)
+  `).run(agent, model, type);
+
+  _db.prepare(`
+    UPDATE model_performance
+    SET sessions_on_model = sessions_on_model + 1
+    WHERE agent = ? AND model = ? AND task_type = ?
+  `).run(agent, model, type);
 }
 
 /**
@@ -1555,6 +2434,9 @@ function upsertModelPerformance(agent, model, fields) {
 function writeSessionSummary(obj) {
   if (!_db) throw new Error('db.writeSessionSummary: call initialize() first');
 
+  const topFiles = Array.isArray(obj.top_files) ? obj.top_files : [];
+  const patterns = Array.isArray(obj.patterns) ? obj.patterns : [];
+
   _db.prepare(`
     INSERT OR REPLACE INTO session_summaries
       (session_id, project, duration_ms, top_files, patterns, summary_at)
@@ -1564,9 +2446,36 @@ function writeSessionSummary(obj) {
     session_id:  obj.session_id,
     project:     obj.project     || null,
     duration_ms: obj.duration_ms || 0,
-    top_files:   JSON.stringify(Array.isArray(obj.top_files) ? obj.top_files : []),
-    patterns:    JSON.stringify(Array.isArray(obj.patterns)  ? obj.patterns  : []),
+    top_files:   JSON.stringify(topFiles),
+    patterns:    JSON.stringify(patterns),
     summary_at:  obj.summary_at  || new Date().toISOString(),
+  });
+
+  const meta = getSessionMetadata(obj.session_id);
+  const body = buildSessionSummaryBody({
+    ...obj,
+    project: obj.project || meta.project || null,
+    top_files: topFiles,
+    patterns,
+  });
+  upsertRetrievalDoc({
+    source_type:   'session_summary',
+    source_id:     obj.session_id,
+    session_id:    obj.session_id,
+    timestamp:     obj.summary_at || new Date().toISOString(),
+    project:       obj.project || meta.project || null,
+    cli:           meta.cli || null,
+    model:         meta.model || null,
+    command_family:'summary',
+    success_state: deriveSuccessState('session_summary', null, meta.errors),
+    title:         `Session summary ${obj.project || meta.project || 'unknown'}`,
+    body,
+    search_text:   normalizeSearchText(body, 2000),
+    metadata_json: JSON.stringify({
+      top_files: topFiles,
+      patterns,
+      duration_ms: obj.duration_ms || 0,
+    }),
   });
 }
 
@@ -1593,6 +2502,47 @@ function getLatestSessionSummary(project) {
   try { row.top_files = JSON.parse(row.top_files); } catch (_) { row.top_files = []; }
   try { row.patterns  = JSON.parse(row.patterns);  } catch (_) { row.patterns  = []; }
   return row;
+}
+
+/**
+ * Search session summaries using SQLite FTS5 + BM25 ranking.
+ *
+ * @param {string} query
+ * @param {number} [limit=5]
+ * @returns {Array<{session_id, project, duration_ms, top_files, patterns, summary_at, rank}>}
+ */
+function searchSessionSummaries(query, limitOrOptions, maybeOptions) {
+  if (!_db) throw new Error('db.searchSessionSummaries: call initialize() first');
+
+  const { limit, options } = normalizeSearchArgs(limitOrOptions, maybeOptions, 5);
+  const docs = searchRetrievalDocs(query, {
+    ...options,
+    limit,
+    sourceTypes: ['session_summary'],
+  });
+
+  if (docs.length === 0) return [];
+  const sessionIds = docs.map(doc => String(doc.source_id));
+  const rows = _db.prepare(`
+    SELECT session_id, project, duration_ms, top_files, patterns, summary_at
+    FROM   session_summaries
+    WHERE  session_id IN (${sessionIds.map(() => '?').join(', ')})
+  `).all(...sessionIds);
+  const byId = new Map(rows.map(row => [String(row.session_id), row]));
+
+  return docs.map((doc) => {
+    const row = byId.get(String(doc.source_id));
+    if (!row) return null;
+    return {
+      ...row,
+      top_files: safeJsonParse(row.top_files, []),
+      patterns: safeJsonParse(row.patterns, []),
+      cli: doc.cli,
+      model: doc.model,
+      rank: doc.rank,
+      rerank_score: doc.rerank_score,
+    };
+  }).filter(Boolean);
 }
 
 /**
@@ -1631,6 +2581,10 @@ module.exports = {
   // tool call deduplication
   recordToolCall,
   getSessionToolSummary,
+  searchRetrievalDocs,
+  searchToolCalls,
+  recordRetrievalFeedback,
+  runRetrievalLearningLoop,
   // prompt history + similarity
   recordPrompt,
   searchSimilarPrompts,
@@ -1653,6 +2607,7 @@ module.exports = {
   getVerdictSummary,
   // model routing
   recordModelVerdict,
+  recordModelSession,
   getModelPerformance,
   upsertModelPerformance,
   // session-end helpers
@@ -1663,6 +2618,7 @@ module.exports = {
   // session compaction
   writeSessionSummary,
   getLatestSessionSummary,
+  searchSessionSummaries,
   // Parquet archival
   flushToParquet,
   flushTelemetryToParquet,

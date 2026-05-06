@@ -43,7 +43,7 @@ function reviewFlagPath() {
   return _path.join(getMetricsRoot(), 'pending-review.json');
 }
 
-function writeReviewFlag(agentInfo) {
+function writeReviewFlag(agentInfo, extra) {
   const p = reviewFlagPath();
   if (!p || !getMetricsRoot()) return;
   try {
@@ -51,6 +51,7 @@ function writeReviewFlag(agentInfo) {
       flagged_at:  new Date().toISOString(),
       agent:       agentInfo || 'unknown',
       cleared:     false,
+      ...(extra || {}),
     }, null, 2), 'utf8');
   } catch (_) {}
 }
@@ -92,6 +93,75 @@ const DANGEROUS_PATTERNS = [
   /format\s+c:/i,
   /del\s+\/s\s+\/q\s+c:\\/i,
 ];
+
+function parseReviewVerdict(verdict) {
+  const text = String(verdict || '').trim().toLowerCase();
+  if (!text) return { approved: null, normalized: 'unknown' };
+
+  if (/\b(approved|approve|pass|passed|accepted|success|okay|ok)\b/.test(text)) {
+    return { approved: true, normalized: 'approved' };
+  }
+
+  if (/\b(rejected|reject|fail|failed|denied|deny|blocked|block|not approved|changes requested)\b/.test(text)) {
+    return { approved: false, normalized: 'rejected' };
+  }
+
+  return { approved: null, normalized: 'neutral' };
+}
+
+function resolveModelForAgent(agentType, explicitModel) {
+  const TIER_MAP = {
+    'opus': 'claude-opus-4-7',   'Top': 'claude-opus-4-7',
+    'sonnet': 'claude-sonnet-4-6', 'Mid': 'claude-sonnet-4-6',
+    'haiku': 'claude-haiku-4-5-20251001', 'Low': 'claude-haiku-4-5-20251001',
+  };
+  const MODEL_LADDER_SET = new Set([
+    'claude-opus-4-7', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001',
+  ]);
+
+  let model = sanitizeString(explicitModel || '', 100);
+  if (!model && agentType) {
+    try {
+      const _os     = require('os');
+      const _dtPath = _path.join(_os.homedir(), '.claude', 'devteam-config.json');
+      const _dtCfg  = _fs.existsSync(_dtPath) ? JSON.parse(_fs.readFileSync(_dtPath, 'utf8')) : {};
+      const _tier   = (_dtCfg.agent_models && _dtCfg.agent_models[agentType]) || 'sonnet';
+      const _resolved = TIER_MAP[_tier] || _tier;
+      model = MODEL_LADDER_SET.has(_resolved) ? _resolved : 'claude-sonnet-4-6';
+    } catch (_) { model = 'claude-sonnet-4-6'; }
+  }
+  return model || 'unknown';
+}
+
+function resolveSubagentRoutingContext(subagentPayload, agentDesc) {
+  const agentType = sanitizeString(
+    (subagentPayload.tool_input && subagentPayload.tool_input.subagent_type) ||
+    subagentPayload.subagent_type || '', 100
+  );
+  const agent = agentType || sanitizeString(agentDesc || 'unknown', 100);
+  const model = resolveModelForAgent(
+    agentType,
+    (subagentPayload.tool_input && subagentPayload.tool_input.model) || subagentPayload.model || ''
+  );
+  const taskType = sanitizeString(
+    (subagentPayload.tool_input && subagentPayload.tool_input.task_type) ||
+    subagentPayload.task_type || 'general', 100
+  );
+  return { agentType, agent, model, taskType };
+}
+
+function writeModelRecommendation(metricsRoot, agent, demotion) {
+  if (!metricsRoot || !demotion) return;
+  const recPath = _path.join(metricsRoot, 'model-recommendations.json');
+  let recs = {};
+  try { recs = JSON.parse(_fs.readFileSync(recPath, 'utf8')); } catch (_) {}
+  recs[agent] = {
+    model:        demotion.to,
+    demoted_from: demotion.from,
+    updated_at:   new Date().toISOString(),
+  };
+  _fs.writeFileSync(recPath, JSON.stringify(recs, null, 2), 'utf8');
+}
 
 function readStdin() {
   return new Promise((resolve) => {
@@ -334,6 +404,30 @@ async function dispatch(event) {
         process.stderr.write(`[vaultflow] clear-review: verdict record error — ${err.message}\n`);
       }
 
+      try {
+        const router = require('./model-router.cjs');
+        const flagAgent = sanitizeString(flag && flag.agent_type || agentType, 100) || agentType;
+        const flagModel = sanitizeString(flag && flag.model || '', 100);
+        const flagTaskType = sanitizeString(flag && flag.task_type || 'general', 100);
+        const verdictInfo = parseReviewVerdict(verdict);
+        if (flagAgent && flagModel && verdictInfo.approved !== null) {
+          router.recordVerdict(flagAgent, flagModel, flagTaskType, verdictInfo.approved);
+          const demotion = router.checkAndDemote(flagAgent, flagTaskType);
+          if (demotion) {
+            writeModelRecommendation(getMetricsRoot(), flagAgent, demotion);
+            process.stderr.write(
+              `[vaultflow] clear-review: model-router wrote recommendation for "${flagAgent}": ${demotion.from} → ${demotion.to}\n`
+            );
+          }
+        } else if (flagAgent && flagModel) {
+          process.stderr.write(
+            `[vaultflow] clear-review: model-router skipped non-binary verdict "${verdict}" for "${flagAgent}"\n`
+          );
+        }
+      } catch (err) {
+        process.stderr.write(`[vaultflow] clear-review: model-router error — ${err.message}\n`);
+      }
+
       clearReviewFlag();
       process.stderr.write('[vaultflow] clear-review: pending review flag cleared\n');
       break;
@@ -478,9 +572,14 @@ async function dispatch(event) {
         (subagentPayload.subagent_type) ||
         ''
       ).toLowerCase();
+      const routingCtx = resolveSubagentRoutingContext(subagentPayload, agentDesc);
       if (!agentDesc.includes('voice-of-reason') && !agentDesc.includes('clear-review')) {
         const agentLabel = sanitizeString(agentDesc || 'sub-agent', 200);
-        writeReviewFlag(agentLabel);
+        writeReviewFlag(agentLabel, {
+          agent_type: routingCtx.agent,
+          model: routingCtx.model,
+          task_type: routingCtx.taskType,
+        });
         process.stderr.write(`[vaultflow] post-subagent: review flag set for "${agentLabel}"\n`);
       } else {
         clearReviewFlag();
@@ -530,74 +629,20 @@ async function dispatch(event) {
         process.stderr.write(`[vaultflow] post-subagent: agent-context error — ${err.message}\n`);
       }
 
-      // ── model routing — record verdict and check for demotion ─────────────
+      // ── model routing — record session usage for the actual worker agent ───
       try {
         const router  = require('./model-router.cjs');
-        const _yaml2  = require('js-yaml');
-        const _cfgP2  = require('../../config/resolve.cjs');
-        const _cfg2   = _fs.existsSync(_cfgP2) ? _yaml2.load(_fs.readFileSync(_cfgP2, 'utf8')) : {};
-        const _metrics2 = (_cfg2.paths && _cfg2.paths.metrics_root) || '';
-
-        // subagent_type is the reliable agent identifier (e.g. "reviewer-code",
-        // "developer-fullstack"). It lives at tool_input.subagent_type in the
-        // Claude Code SubagentStop payload.
-        const agentType = sanitizeString(
-          (subagentPayload.tool_input && subagentPayload.tool_input.subagent_type) ||
-          subagentPayload.subagent_type || '', 100);
-        const agent = agentType || sanitizeString(agentDesc || 'unknown', 100);
+        const { agentType, agent, model, taskType } = routingCtx;
 
         // Skip routing if we have no meaningful agent identity — avoids polluting
         // model_performance with anonymous 'unknown' rows from parse failures.
         if (!agentType && !agentDesc) break;
+        if (agentDesc.includes('voice-of-reason') || agentDesc.includes('clear-review')) break;
 
-        // model is not in the hook payload when the Agent tool is called without
-        // an explicit model override. Resolve it from devteam-config agent_models.
-        const TIER_MAP = {
-          'opus': 'claude-opus-4-7',   'Top': 'claude-opus-4-7',
-          'sonnet': 'claude-sonnet-4-6', 'Mid': 'claude-sonnet-4-6',
-          'haiku': 'claude-haiku-4-5-20251001', 'Low': 'claude-haiku-4-5-20251001',
-        };
-        const MODEL_LADDER_SET = new Set([
-          'claude-opus-4-7', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001',
-        ]);
-        let model = sanitizeString(
-          (subagentPayload.tool_input && subagentPayload.tool_input.model) ||
-          subagentPayload.model || '', 100);
-        if (!model && agentType) {
-          try {
-            const _os      = require('os');
-            const _dtPath  = _path.join(_os.homedir(), '.claude', 'devteam-config.json');
-            const _dtCfg   = _fs.existsSync(_dtPath) ? JSON.parse(_fs.readFileSync(_dtPath, 'utf8')) : {};
-            const _tier    = (_dtCfg.agent_models && _dtCfg.agent_models[agentType]) || 'sonnet';
-            const _resolved = TIER_MAP[_tier] || _tier;
-            // Only accept a resolved model if it's on the known ladder
-            model = MODEL_LADDER_SET.has(_resolved) ? _resolved : 'claude-sonnet-4-6';
-          } catch (_) { model = 'claude-sonnet-4-6'; }
-        }
-        if (!model) model = 'unknown';
-
-        const type    = sanitizeString(
-          (subagentPayload.tool_input && subagentPayload.tool_input.task_type) ||
-          subagentPayload.task_type || 'general', 100);
-        const approved = true; // SubagentStop fires on completion — treat as success
-
-        router.recordVerdict(agent, model, type, approved);
-
-        const demotion = router.checkAndDemote(agent, type);
-        if (demotion && _metrics2) {
-          const recPath = _path.join(_metrics2, 'model-recommendations.json');
-          let recs = {};
-          try { recs = JSON.parse(_fs.readFileSync(recPath, 'utf8')); } catch (_) {}
-          recs[agent] = {
-            model:        demotion.to,
-            demoted_from: demotion.from,
-            updated_at:   new Date().toISOString(),
-          };
-          _fs.writeFileSync(recPath, JSON.stringify(recs, null, 2), 'utf8');
-          process.stderr.write(
-            `[vaultflow] post-subagent: model-router wrote recommendation for "${agent}": ${demotion.from} → ${demotion.to}\n`
-          );
-        }
+        router.recordSession(agent, model, taskType);
+        process.stderr.write(
+          `[vaultflow] post-subagent: model-router recorded session for "${agent}" on ${model} (${taskType})\n`
+        );
       } catch (err) {
         process.stderr.write(`[vaultflow] post-subagent: model-router error — ${err.message}\n`);
       }

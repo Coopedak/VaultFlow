@@ -123,10 +123,13 @@ async function loadOverview() {
   const stats = status ? [
     { label: 'Edit Events',   value: fmtNum(status.counts.edit_events) },
     { label: 'Sessions',      value: fmtNum(status.counts.sessions) },
+    { label: 'Summaries',     value: fmtNum(status.counts.session_summaries) },
     { label: 'Patterns',      value: fmtNum(status.counts.patterns) },
     { label: 'Memory Entries',value: fmtNum(status.counts.memory_entries) },
     { label: 'Tool Calls',    value: fmtNum(status.counts.tool_calls) },
     { label: 'Prompts',       value: fmtNum(status.counts.prompts) },
+    { label: 'Retrieval Docs',value: fmtNum(status.counts.retrieval_docs) },
+    { label: 'Feedback Rows', value: fmtNum(status.counts.retrieval_feedback) },
     { label: 'Dict Terms',    value: fmtNum(status.counts.dictionary) },
     { label: 'Agents',        value: fmtNum(status.counts.vault_agents) },
   ] : [];
@@ -203,7 +206,7 @@ async function loadSessions() {
       <td>${fmtNum(r.edits)}</td>
       <td>${fmtNum(r.commands)}</td>
       <td>${r.errors ? `<span class="badge badge-yellow">${r.errors}</span>` : '—'}</td>
-      <td class="mono">${r.platform || '—'}</td>
+      <td class="mono">${[r.platform, r.cli, r.model].filter(Boolean).join(' · ') || '—'}</td>
     </tr>
   `).join('');
 }
@@ -590,6 +593,51 @@ document.getElementById('btn-flush').addEventListener('click', async () => {
     ctrlStatus('status-flush', lines.join('\n') || 'Done', 'ok');
   } catch (e) {
     ctrlStatus('status-flush', `Error: ${e.message}`, 'err');
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// Retrieval learning loop
+document.getElementById('btn-learning').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-learning');
+  btn.disabled = true;
+  ctrlStatus('status-learning', 'Running retrieval learning loop…');
+  try {
+    const r = await fetch('/api/learning/run', { method: 'POST' });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || r.statusText);
+
+    const lines = [
+      `batches reviewed: ${data.batchesReviewed ?? 0}`,
+      `strategies reviewed: ${data.strategiesReviewed ?? 0}`,
+      `patterns promoted: ${(data.promotedPatterns || []).length}`,
+    ];
+
+    if (Array.isArray(data.promotedPatterns) && data.promotedPatterns.length) {
+      lines.push('', 'promoted patterns:');
+      for (const pattern of data.promotedPatterns.slice(0, 8)) {
+        lines.push(`- ${pattern}`);
+      }
+    }
+
+    if (Array.isArray(data.topStrategies) && data.topStrategies.length) {
+      lines.push('', 'top strategies:');
+      for (const row of data.topStrategies.slice(0, 5)) {
+        lines.push(`- ${row.project} / ${row.cli} / ${row.source_type} / ${row.command_family} => ${(row.success_rate * 100).toFixed(0)}% (${row.success_count}/${row.sample_count})`);
+      }
+    }
+
+    if (Array.isArray(data.topFailures) && data.topFailures.length) {
+      lines.push('', 'failure hotspots:');
+      for (const row of data.topFailures.slice(0, 3)) {
+        lines.push(`- ${row.project} / ${row.cli} (${row.failure_count}) ${trunc(row.query_text, 90)}`);
+      }
+    }
+
+    ctrlStatus('status-learning', lines.join('\n') || 'Done', 'ok');
+  } catch (e) {
+    ctrlStatus('status-learning', `Error: ${e.message}`, 'err');
   } finally {
     btn.disabled = false;
   }

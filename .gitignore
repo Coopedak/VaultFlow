@@ -3,6 +3,11 @@ node_modules/
 
 # generated dashboard output
 .claude/helpers/dashboard/dashboard.html
+.claude/helpers/dashboard/dashboard-launcher.log
+
+# generated desktop launcher output
+desktop/VaultFlow.DashboardLauncher/bin/
+desktop/VaultFlow.DashboardLauncher/obj/
 
 # vaultflow runtime data (lives in metrics_root, not the repo)
 *.db
