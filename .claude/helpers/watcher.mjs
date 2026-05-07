@@ -476,7 +476,7 @@ function ingestCopilotEvent(db, evt, sessionIdHint, filePath) {
 
     case 'user.message':
       state.commands += 1;
-      db.recordPrompt(candidateId, data.content || '', 'copilot');
+      db.recordPrompt(candidateId, data.content || '', { source: 'copilot' });
       db.upsertSession({
         id: candidateId,
         started_at: state.startedAt || evt.timestamp,
@@ -697,7 +697,7 @@ function ingestCodexEvent(db, evt, filePath) {
               .map(item => item.text);
             for (const text of texts) {
               state.commands += 1;
-              db.recordPrompt(sessionId, text, 'codex');
+              db.recordPrompt(sessionId, text, { source: 'codex' });
             }
             db.upsertSession({
               id: sessionId,

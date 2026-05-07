@@ -371,11 +371,12 @@ async function loadPrompts() {
   }
 
   const body = document.getElementById('prompts-body');
-  if (!recent.length) { body.innerHTML = '<tr><td colspan="3" class="loading">No prompts yet</td></tr>'; return; }
+  if (!recent.length) { body.innerHTML = '<tr><td colspan="4" class="loading">No prompts yet</td></tr>'; return; }
   body.innerHTML = recent.map(r => `
     <tr>
       <td class="mono">${fmtDate(r.timestamp)}</td>
       <td>${trunc(r.prompt_preview, 100)}</td>
+      <td>${r.source ? `<span class="badge badge-blue">${r.source}</span>` : '—'}</td>
       <td>${r.skill_routed ? `<span class="badge badge-purple">${r.skill_routed}</span>` : '—'}</td>
     </tr>
   `).join('');

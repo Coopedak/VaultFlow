@@ -333,7 +333,10 @@ async function main() {
   }));
 
   if (injected.originalPrompt) {
-    db.recordPrompt(sessionId, injected.originalPrompt, `tracked:${tool}`);
+    db.recordPrompt(sessionId, injected.originalPrompt, {
+      source: `tracked:${tool}`,
+      skillRouted: injected.routing?.skill || null,
+    });
     db.recordToolCall(sessionId, 'TrackedCliContextInjected', JSON.stringify({
       tool,
       project,
@@ -368,7 +371,7 @@ async function main() {
     }
     process.stderr.write(`[vaultflow tracked-cli] Injected live context for ${tool} (${project}).\n`);
   } else if (finalArgs.length > 0) {
-    db.recordPrompt(sessionId, finalArgs.join(' '), `tracked:${tool}`);
+    db.recordPrompt(sessionId, finalArgs.join(' '), { source: `tracked:${tool}` });
   } else if (tool === 'copilot' || tool === 'codex') {
     process.stderr.write(`[vaultflow tracked-cli] No initial prompt detected for ${tool}; live context injection only applies when a prompt is provided.\n`);
   }

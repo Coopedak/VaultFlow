@@ -226,7 +226,7 @@ async function dispatch(event) {
         const sess = session.get();
         if (sess) {
           sessionId = sess.id;
-          db.recordPrompt(sessionId, prompt, routing.skill);
+          db.recordPrompt(sessionId, prompt, { skillRouted: routing.skill, source: 'claude' });
         }
 
         // ── vault tool usage tracking ───────────────────────────────────
@@ -667,9 +667,8 @@ async function dispatch(event) {
       const sess = session.restore();
       if (!sess || !sess.id) break;
 
-      const routing  = router.routeTask(promptText);
-      const skillTag = routing.skill ? `[copilot:${routing.skill}]` : '[copilot]';
-      db.recordPrompt(sess.id, promptText, skillTag);
+      const routing = router.routeTask(promptText);
+      db.recordPrompt(sess.id, promptText, { skillRouted: routing.skill, source: 'copilot' });
 
       if (routing.skill) {
         process.stderr.write(`[vaultflow] copilot-prompt: routed to ${routing.skill} (${(routing.confidence || 0).toFixed(2)})\n`);

@@ -260,7 +260,7 @@ app.get('/api/prompts/recent', (_req, res) => {
       const recent = conn.prepare(`
         SELECT id, timestamp, session_id,
                substr(prompt_text, 1, 120) AS prompt_preview,
-               skill_routed
+               skill_routed, source
         FROM   prompts
         ORDER  BY timestamp DESC
         LIMIT  30

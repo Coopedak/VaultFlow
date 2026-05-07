@@ -163,7 +163,7 @@ function collectData(conn) {
   const recentPrompts = safeQuery(conn, `
     SELECT id, timestamp, session_id,
            substr(prompt_text, 1, 120) AS prompt_preview,
-           skill_routed
+           skill_routed, source
     FROM   prompts
     ORDER  BY timestamp DESC
     LIMIT  20
@@ -309,6 +309,7 @@ function buildHtml(data) {
 
   const promptRows = d.recentPrompts.map(p => row(
     fmtDate(p.timestamp),
+    p.source || '—',
     p.skill_routed || '—',
     `<span title="${(p.prompt_preview || '').replace(/"/g, '&quot;')}">${
       (p.prompt_preview || '').slice(0, 60).replace(/</g, '&lt;')}…</span>`
@@ -458,7 +459,7 @@ function buildHtml(data) {
     </div>
     <div class="panel" style="grid-column:1/-1">
       <h3>Recent Prompts</h3>
-      ${tableHtml(['Timestamp','Skill Routed','Preview'], promptRows)}
+      ${tableHtml(['Timestamp','Source','Skill Routed','Preview'], promptRows)}
     </div>
   </div>
 </section>

@@ -687,6 +687,22 @@ function deriveCommandFamily(toolName, payload) {
   return 'general';
 }
 
+// CLI/origin tags that historically leaked into prompts.skill_routed.
+// Used both as a guard in recordPrompt (reject these as skill names) and
+// as the predicate set for the one-shot backfill in initialize().
+const KNOWN_CLI_SOURCES = new Set([
+  'claude', 'copilot', 'codex', 'watcher',
+  'tracked:claude', 'tracked:copilot', 'tracked:codex',
+  'tui:claude', 'tui:copilot', 'tui:codex',
+]);
+
+function buildPromptTitle(source, skillRouted) {
+  if (source && skillRouted) return `Prompt [${source}] → ${skillRouted}`;
+  if (source)                 return `Prompt [${source}]`;
+  if (skillRouted)            return `Prompt → ${skillRouted}`;
+  return 'Prompt';
+}
+
 function deriveSuccessState(toolName, payload, fallbackErrors) {
   const lowerName = String(toolName || '').toLowerCase();
   if (payload && (payload.exitCode != null || payload.exit_code != null)) {
@@ -810,7 +826,7 @@ function backfillRetrievalDocs() {
   _db.exec('BEGIN');
   try {
     const prompts = _db.prepare(`
-      SELECT id, timestamp, session_id, prompt_text, skill_routed
+      SELECT id, timestamp, session_id, prompt_text, skill_routed, source
       FROM   prompts
     `).all();
     for (const row of prompts) {
@@ -821,14 +837,14 @@ function backfillRetrievalDocs() {
         session_id:    row.session_id,
         timestamp:     row.timestamp,
         project:       meta.project || null,
-        cli:           meta.cli || null,
+        cli:           meta.cli || row.source || null,
         model:         meta.model || null,
         command_family:'prompt',
         success_state: deriveSuccessState(row.skill_routed, null, meta.errors),
-        title:         row.skill_routed ? `Prompt ${row.skill_routed}` : 'Prompt',
+        title:         buildPromptTitle(row.source, row.skill_routed),
         body:          row.prompt_text,
         search_text:   normalizeSearchText(row.prompt_text, 1600),
-        metadata_json: JSON.stringify({ skill_routed: row.skill_routed || null }),
+        metadata_json: JSON.stringify({ skill_routed: row.skill_routed || null, source: row.source || null }),
       });
     }
 
@@ -1033,12 +1049,104 @@ function initialize(metricsRoot, dbFile) {
     'ALTER TABLE sessions ADD COLUMN cli_version TEXT',
     'ALTER TABLE sessions ADD COLUMN model TEXT',
     'ALTER TABLE sessions ADD COLUMN model_provider TEXT',
+    // v3: separate origin-CLI tag from skill-routing tag in prompts.
+    // skill_routed had been overloaded with CLI tags ('copilot','codex',
+    // 'tracked:*','tui:*'), corrupting routing analytics. source is now the
+    // single source of truth for "which CLI generated this prompt".
+    'ALTER TABLE prompts ADD COLUMN source TEXT',
   ]) {
     try { _db.exec(migration); } catch (err) {
       if (!err.message.includes('duplicate column')) {
         process.stderr.write(`[db] migration warning: ${err.message}\n`);
       }
     }
+  }
+
+  // One-shot backfill: split CLI tags out of prompts.skill_routed into prompts.source.
+  // Idempotent — every WHERE clause stops matching once its rewrite is done.
+  try {
+    // Phase 1a: composite '[copilot:skillname]' originally written by an older
+    // hook-handler. Split into source='copilot' + skill_routed='skillname'.
+    // Handled in either column because an earlier partial backfill may have
+    // moved the composite into source whole.
+    _db.exec(`
+      UPDATE prompts
+      SET source       = COALESCE(source, 'copilot'),
+          skill_routed = SUBSTR(skill_routed, 10, LENGTH(skill_routed) - 10)
+      WHERE skill_routed LIKE '[copilot:%]';
+
+      UPDATE prompts
+      SET skill_routed = COALESCE(skill_routed, SUBSTR(source, 10, LENGTH(source) - 10)),
+          source       = 'copilot'
+      WHERE source LIKE '[copilot:%]';
+    `);
+
+    // Phase 1b: simple CLI tags ('copilot','codex','tracked:*','tui:*') that
+    // ended up in skill_routed because callers passed them as the legacy 3rd arg.
+    const polluted = _db.prepare(`
+      SELECT COUNT(*) AS c FROM prompts
+      WHERE skill_routed IS NOT NULL
+        AND (
+          skill_routed IN ('copilot','codex','claude','watcher')
+          OR skill_routed LIKE 'tracked:%'
+          OR skill_routed LIKE 'tui:%'
+        )
+    `).get();
+
+    if (polluted && polluted.c > 0) {
+      _db.exec(`
+        UPDATE prompts
+        SET source       = COALESCE(source, skill_routed),
+            skill_routed = NULL
+        WHERE skill_routed IN ('copilot','codex','claude','watcher')
+           OR skill_routed LIKE 'tracked:%'
+           OR skill_routed LIKE 'tui:%';
+      `);
+      process.stderr.write(`[db] backfill: split ${polluted.c} CLI tag(s) out of prompts.skill_routed into prompts.source\n`);
+    }
+
+    // Phase 2: fill any remaining null source values from the owning session's cli.
+    _db.exec(`
+      UPDATE prompts
+      SET source = (SELECT cli FROM sessions WHERE sessions.id = prompts.session_id)
+      WHERE source IS NULL;
+    `);
+
+    // Phase 3: rewrite stale retrieval_docs titles + metadata for prompts.
+    // upsertRetrievalDoc COALESCEs on conflict (it's designed for partial
+    // updates), so it cannot overwrite a non-null title. Use direct UPDATE.
+    //
+    // Idempotency anchor: the new metadata_json always includes "source",
+    // the old (pre-fix) form never did. Filtering on the absence of "source"
+    // in metadata_json means each row is rewritten exactly once.
+    const stale = _db.prepare(`
+      SELECT p.id, p.skill_routed, p.source
+      FROM   prompts p
+      JOIN   retrieval_docs r
+        ON   r.source_type = 'prompt'
+       AND   r.source_id   = CAST(p.id AS TEXT)
+      WHERE  (r.title LIKE 'Prompt %' OR r.title = 'Prompt')
+        AND  (r.metadata_json IS NULL OR r.metadata_json NOT LIKE '%"source"%')
+    `).all();
+    if (stale.length > 0) {
+      const upd = _db.prepare(`
+        UPDATE retrieval_docs
+        SET    title         = ?,
+               metadata_json = ?
+        WHERE  source_type   = 'prompt'
+          AND  source_id     = ?
+      `);
+      for (const row of stale) {
+        upd.run(
+          buildPromptTitle(row.source, row.skill_routed),
+          JSON.stringify({ skill_routed: row.skill_routed || null, source: row.source || null }),
+          String(row.id),
+        );
+      }
+      process.stderr.write(`[db] backfill: re-derived ${stale.length} retrieval_docs prompt title(s)\n`);
+    }
+  } catch (err) {
+    process.stderr.write(`[db] prompts source backfill warning: ${err.message}\n`);
   }
 
   try { _db.exec(`INSERT INTO tool_calls_fts(tool_calls_fts) VALUES ('rebuild')`); } catch (err) {
@@ -1687,33 +1795,56 @@ function searchToolCalls(query, limitOrOptions, maybeOptions) {
  *
  * @param {string} sessionId
  * @param {string} promptText
- * @param {string} [skillRouted]   Skill the router matched (may be null)
+ * @param {{ skillRouted?: string|null, source?: string|null } | string} [opts]
+ *        Options object. Legacy form: a bare string is accepted as skillRouted
+ *        for back-compat with hook-handler call sites that pass router output
+ *        positionally. CLI tags ('copilot','codex',etc.) MUST be passed via
+ *        `{ source }` — passing them as the legacy string raises an error so the
+ *        skill_routed/source corruption can never recur silently.
  */
-function recordPrompt(sessionId, promptText, skillRouted) {
+function recordPrompt(sessionId, promptText, opts) {
   if (!_db) throw new Error('db.recordPrompt: call initialize() first');
 
-  const now = new Date().toISOString();
+  let skillRouted = null;
+  let source      = null;
+  if (typeof opts === 'string') {
+    skillRouted = opts;
+  } else if (opts && typeof opts === 'object') {
+    skillRouted = opts.skillRouted ?? null;
+    source      = opts.source ?? null;
+  }
+
+  if (skillRouted && KNOWN_CLI_SOURCES.has(skillRouted)) {
+    throw new Error(
+      `db.recordPrompt: '${skillRouted}' is a CLI source, not a skill name. ` +
+      `Pass it as { source: '${skillRouted}' } instead.`
+    );
+  }
+
+  const meta = getSessionMetadata(sessionId);
+  if (!source) source = meta.cli || null;
+
+  const now  = new Date().toISOString();
   const info = _db.prepare(`
-    INSERT INTO prompts (timestamp, session_id, prompt_text, skill_routed)
-    VALUES (?, ?, ?, ?)
-  `).run(now, sessionId, promptText, skillRouted || null);
+    INSERT INTO prompts (timestamp, session_id, prompt_text, skill_routed, source)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(now, sessionId, promptText, skillRouted, source);
 
   const promptId = Number(info.lastInsertRowid);
-  const meta = getSessionMetadata(sessionId);
   upsertRetrievalDoc({
     source_type:   'prompt',
     source_id:     promptId,
     session_id:    sessionId,
     timestamp:     now,
     project:       meta.project || null,
-    cli:           meta.cli || null,
+    cli:           meta.cli || source || null,
     model:         meta.model || null,
     command_family:'prompt',
     success_state: deriveSuccessState(skillRouted, null, meta.errors),
-    title:         skillRouted ? `Prompt ${skillRouted}` : 'Prompt',
+    title:         buildPromptTitle(source, skillRouted),
     body:          promptText,
     search_text:   normalizeSearchText(promptText, 1600),
-    metadata_json: JSON.stringify({ skill_routed: skillRouted || null }),
+    metadata_json: JSON.stringify({ skill_routed: skillRouted || null, source: source || null }),
   });
 }
 
@@ -1740,7 +1871,7 @@ function searchSimilarPrompts(query, limitOrOptions, maybeOptions) {
   if (ids.length === 0) return [];
 
   const rows = _db.prepare(`
-    SELECT id, timestamp, session_id, prompt_text, skill_routed
+    SELECT id, timestamp, session_id, prompt_text, skill_routed, source
     FROM   prompts
     WHERE  id IN (${ids.map(() => '?').join(', ')})
   `).all(...ids);

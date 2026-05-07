@@ -67,7 +67,7 @@ export function recordSessionStart(session, { initialPrompt = '' } = {}) {
       initialPrompt: Boolean(initialPrompt),
     });
     if (initialPrompt) {
-      store.recordPrompt(session.id, initialPrompt, `tui:${session.tool}`);
+      store.recordPrompt(session.id, initialPrompt, { source: `tui:${session.tool}` });
     }
   } catch {
   }

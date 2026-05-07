@@ -4,13 +4,27 @@
 #
 # Derives metrics_root from vaultflow.yaml automatically — no hardcoded paths.
 
-$__vf_config = Join-Path $PSScriptRoot 'vaultflow.yaml'
-if (-not (Test-Path $__vf_config)) { $__vf_config = Join-Path $PSScriptRoot 'vaultflow.local.yaml' }
-if (-not (Test-Path $__vf_config)) { $__vf_config = Join-Path $PSScriptRoot 'vaultflow.example.yaml' }
+# Authority order matches CLAUDE.md: .local.yaml is the user's real config,
+# .yaml is an alternate name (gitignored), .example.yaml is the committed template.
+$__vf_config = $null
+foreach ($candidate in @('vaultflow.local.yaml', 'vaultflow.yaml', 'vaultflow.example.yaml')) {
+    $path = Join-Path $PSScriptRoot $candidate
+    if (Test-Path $path) { $__vf_config = $path; break }
+}
 
-$__vf_metricsRoot = (Get-Content $__vf_config | Select-String 'metrics_root').ToString() -replace '^[^:]+:\s*["'']?([^"'']+)["'']?\s*$','$1'
-$__vf_metricsRoot = $__vf_metricsRoot.Replace('/', '\').Trim()
+if (-not $__vf_config) {
+    Write-Warning "vaultflow-shell-tracker: no config found under $PSScriptRoot — tracker disabled"
+    return
+}
 
+# Pull the metrics_root key, ignoring commented lines. Validate before use.
+$__vf_match = Select-String -Path $__vf_config -Pattern '^\s*metrics_root\s*:\s*["'']?([^"''#\r\n]+)["'']?' | Select-Object -First 1
+if (-not $__vf_match) {
+    Write-Warning "vaultflow-shell-tracker: metrics_root not found in $__vf_config — tracker disabled"
+    return
+}
+
+$__vf_metricsRoot = $__vf_match.Matches[0].Groups[1].Value.Trim().Replace('/', '\')
 $global:__vf_jsonl = Join-Path $__vf_metricsRoot 'shell-commands.jsonl'
 $null = New-Item -ItemType Directory -Force -Path $__vf_metricsRoot -ErrorAction SilentlyContinue
 
