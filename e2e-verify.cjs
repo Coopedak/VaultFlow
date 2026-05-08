@@ -26,7 +26,7 @@ check(
 const noiseFile = 'C:\\Users\\YOU\\.claude\\rules\\foo.md';
 const noisy     = deriveProject(noiseFile);
 check(
-  `${noiseFile} → null (was producing "rules"/"YOU")`,
+  `${noiseFile} → null (was producing "rules"/<username>)`,
   noisy === null,
   `got "${noisy}"`
 );
