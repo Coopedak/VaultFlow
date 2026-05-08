@@ -4,6 +4,20 @@ All notable changes to vaultflow are documented here.
 
 ---
 
+## [1.5.0] — 2026-05-08
+
+### Added (patterns adopted from claude-mem audit — see CLAUDE-MEM-REVIEW.md)
+- **`<private>...</private>` tag stripping** at the recordPrompt / recordToolCall edge. Tags remain visible to the model in-conversation but never reach prompts.prompt_text or tool_calls.input_json. Hash dedup runs on the stripped payload so two calls differing only in private content still dedupe. (Note: the strip was bundled into the v1.4.0 commit alongside the hardening pass; calling it out here for traceability.)
+- **PreToolUse(Read) → file-context injection** (`.claude/helpers/pre-read.cjs`). When the model is about to Read a file > 1.5KB, vaultflow queries past edits/memory for that path and returns a compact preamble via `hookSpecificOutput.additionalContext`. Wired into `.claude/settings.json` as a `Read`-matched PreToolUse hook.
+- **Shell read-intent parser** (`.claude/helpers/shell-intent.cjs`). Hand-rolled tokenizer (no `shell-quote` dep added) that extracts file paths from Bash commands using `cat|head|tail|less|more|bat|view|nl|tac|file|wc` etc. Lets vaultflow capture *intent to read* before the file is touched.
+
+Deferred for a future pass:
+- Structured session-summary XML schema (request/investigated/learned/completed/next_steps).
+- 3-layer retrieval contract (search → timeline → get_observations) — the actual mechanism behind claude-mem's "10x token efficiency" marketing claim.
+
+### Tests
+- 28 new tests across `privateTags.test.mjs`, `shellIntent.test.mjs`, `preRead.test.mjs`. Total suite: 50/50 passing.
+
 ## [1.4.0] — 2026-05-08
 
 ### Fixed (deep-audit hardening pass)

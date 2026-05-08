@@ -9,6 +9,15 @@
             "command": "node C:/GIT/vaultflow/.claude/helpers/hook-handler.cjs pre-bash"
           }
         ]
+      },
+      {
+        "matcher": "Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node C:/GIT/vaultflow/.claude/helpers/pre-read.cjs"
+          }
+        ]
       }
     ],
     "PostToolUse": [
