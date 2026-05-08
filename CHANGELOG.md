@@ -4,6 +4,27 @@ All notable changes to vaultflow are documented here.
 
 ---
 
+## [1.6.0] — 2026-05-08
+
+### Added
+- **Cross-CLI memory injection.** SessionStart hook now returns `additionalContext` with the recent session summaries and top memory hits for the current project, so Claude starts every conversation with prior-session awareness. The same recent-activity block is also baked into `AGENTS.md` and `.github/copilot-instructions.md` via `gen-context.mjs`, so Codex and Copilot see the same context on their next start.
+- **Always-on watcher with reboot survival.** New `ensure-watcher.mjs` helper any CLI can call to idempotently start the daemon. New `install-watcher-task.ps1` registers a Windows scheduled task `VaultflowWatcher` at logon so the watcher restarts after reboots without depending on which CLI launched first. The Claude SessionStart bg path now delegates to `ensureWatcher()`.
+- **Periodic context refresh from the watcher.** Every 10 min (override via `VAULTFLOW_GEN_CONTEXT_INTERVAL_MS`) the watcher drains a dirty-project set and spawns detached `gen-context` runs for projects with edits since the last tick. Copilot/Codex see fresh `AGENTS.md` / `copilot-instructions.md` even between Claude sessions.
+- **`pre-subagent` hook + `active-subagent.json` tracker.** New `PreToolUse:Task` matcher writes the active subagent's identity to a small JSON file; `post-subagent` clears it; `post-edit` reads it. Patterns now attribute correctly to the subagent (developer-backend, researcher, etc.) instead of writing null.
+- **Dictionary origin tagging.** `session-auto` entries now carry origin (`user` / `ai`) and tool (`claude` / `copilot` / `codex`). Stop hook reads the Claude transcript_path JSONL to harvest assistant terms tagged `session-auto:ai:claude`. All 443 pre-existing entries relabeled by best-source attribution.
+- **`db.recomputeSessionAggregates(id)` + `recomputeAllSessionAggregates()`.** Derives `edits` / `commands` / `duration_ms` from event tables. Wired into `session.end()` and `closeStaleSessions()` so dashboard rows stop showing zeros. 181 historical sessions backfilled.
+- **`db.getRecentSessionSummaries(project, N)`.** Returns last N non-empty summaries; powers the SessionStart context block and the gen-context recent-activity injection.
+
+### Fixed
+- **SessionStart latency: 53s → ~1s.** Heavy work (`doImport`, `stack-detect`, `gen-context`, watcher start) moved to detached `session-start-bg.mjs`; the foreground hook only registers the session and emits the context block.
+- **`vault_agents.trigger_pattern` blank for 105/120 rows.** `backfill.mjs` and `post-edit.cjs` now parse YAML frontmatter `description:` and store it as both description and trigger_pattern. Backfill restored 87 of 120 trigger_patterns; remaining 33 lack frontmatter.
+- **Patterns coverage was Claude-only.** `db.recordEdit` now also fires `upsertPattern` so watcher-recorded edits (Copilot, Codex, raw editor) generate pattern rows just like Claude's `post-edit` did.
+
+### Privacy
+- Untracked auto-generated context files (`AGENTS.md`, `.github/copilot-instructions.md`, `.cursor/rules/wiki.mdc`) and stale audit docs (`AUDIT-FINDINGS.md`, `AUDIT-FIX-PLAN.md`); added to `.gitignore`. Replaced hardcoded usernames in test fixtures and `e2e-verify.cjs`. Public history rewritten via `git filter-repo` to remove all historical occurrences of the maintainer's username/email.
+
+---
+
 ## [1.5.0] — 2026-05-08
 
 ### Added (patterns adopted from claude-mem audit — see CLAUDE-MEM-REVIEW.md)

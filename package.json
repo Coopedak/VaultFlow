@@ -1,6 +1,6 @@
 {
   "name": "vaultflow",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "Claude Code intelligence layer — session tracking, FTS5 memory, skill routing, DISCOVERY pipeline",
   "type": "module",
   "bin": {
