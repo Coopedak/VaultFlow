@@ -1,7 +1,7 @@
 /**
  * dashboard/server.mjs — vaultflow analytics dashboard
  *
- * Express server exposing 12 read-only API endpoints over the vaultflow
+ * Express server exposing 24 read-only API endpoints over the vaultflow
  * SQLite DB + Parquet archive, plus static file serving for the SPA.
  *
  * Usage:
@@ -16,6 +16,7 @@ import { createRequire }  from 'node:module';
 import { fileURLToPath }  from 'node:url';
 import path               from 'node:path';
 import fs                 from 'node:fs';
+import os                 from 'node:os';
 
 const require    = createRequire(import.meta.url);
 const __dirname  = path.dirname(fileURLToPath(import.meta.url));
@@ -34,7 +35,7 @@ function loadConfig() {
 }
 
 const cfg         = loadConfig();
-const METRICS     = cfg.paths   && cfg.paths.metrics_root   || path.join(process.env.USERPROFILE || '', 'vault', 'methodology', '.metrics');
+const METRICS     = (cfg.paths   && cfg.paths.metrics_root)   || path.join(process.env.USERPROFILE || os.homedir(), 'vault', 'methodology', '.metrics');
 const DB_FILE     = cfg.storage && cfg.storage.db_file      || 'vaultflow.db';
 const PARQUET_DIR = cfg.storage && cfg.storage.parquet_dir  || 'parquet';
 const PORT        = cfg.dashboard && cfg.dashboard.port     || 7700;
@@ -143,20 +144,27 @@ app.get('/api/sessions/summary', (_req, res) => {
         ORDER  BY day ASC
       `).all();
       const totals = conn.prepare(`
-        SELECT COUNT(*)         AS total_sessions,
-               SUM(edits)       AS total_edits,
-               SUM(commands)    AS total_commands,
-               AVG(duration_ms) AS avg_duration_ms,
-               MAX(started_at)  AS last_session
+        SELECT COUNT(*)            AS total_sessions,
+               SUM(CASE WHEN ended_at IS NOT NULL THEN 1 ELSE 0 END) AS closed_sessions,
+               SUM(CASE WHEN ended_at IS NULL     THEN 1 ELSE 0 END) AS active_sessions,
+               SUM(edits)          AS total_edits,
+               SUM(commands)       AS total_commands,
+               -- AVG silently skips NULL duration_ms (active sessions). Surfacing
+               -- closed_sessions next to it lets the UI show the basis honestly.
+               AVG(duration_ms)    AS avg_duration_ms,
+               MAX(started_at)     AS last_session
         FROM   sessions
         WHERE  started_at >= datetime('now', '-30 days')
       `).get();
       const byProject = conn.prepare(`
-        SELECT project, COUNT(*) AS sessions, SUM(edits) AS edits
+        -- Bucket NULL projects into "(unknown)" so the chart shows them
+        -- instead of silently dropping 22% of sessions.
+        SELECT COALESCE(NULLIF(project, ''), '(unknown)') AS project,
+               COUNT(*) AS sessions,
+               SUM(edits) AS edits
         FROM   sessions
         WHERE  started_at >= datetime('now', '-30 days')
-          AND  project IS NOT NULL
-        GROUP  BY project
+        GROUP  BY COALESCE(NULLIF(project, ''), '(unknown)')
         ORDER  BY sessions DESC
         LIMIT  10
       `).all();
@@ -201,6 +209,8 @@ app.post('/api/patterns/:id/promote', (req, res) => {
   if (!Number.isFinite(id) || id < 1) {
     return res.status(400).json({ error: 'id must be a positive integer' });
   }
+  // Open a writable connection (rawDb above is read-only) but route through the
+  // same try/finally pattern so a thrown apiErr never leaks the handle.
   const { DatabaseSync } = require('node:sqlite');
   const conn = new DatabaseSync(path.join(METRICS, DB_FILE));
   try {

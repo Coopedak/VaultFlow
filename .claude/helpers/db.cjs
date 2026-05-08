@@ -32,6 +32,27 @@ function ftsPhrase(raw) {
   return `"${escaped}"`;
 }
 
+// Strip <private>...</private> blocks (and the tags themselves) from any
+// captured user content before it lands in persistent storage. Mirrors the
+// claude-mem privacy primitive — tags remain visible to the model in the live
+// conversation, but secrets, scratch credentials, and PII never reach the DB
+// or FTS index. Applied at the recordPrompt / recordToolCall edge.
+//   "before <private>foo</private> after" → "before  after"
+const PRIVATE_TAG_RE = /<private>[\s\S]*?<\/private>/gi;
+function stripPrivateTags(input) {
+  if (input == null) return input;
+  if (typeof input === 'string') return input.replace(PRIVATE_TAG_RE, '');
+  // Object / array: stringify, strip, parse back. If parse fails, fall back
+  // to walking string fields recursively.
+  try {
+    const json = JSON.stringify(input);
+    const stripped = json.replace(PRIVATE_TAG_RE, '');
+    return JSON.parse(stripped);
+  } catch (_) {
+    return input;
+  }
+}
+
 // ── lazy-loaded heavy deps ────────────────────────────────────────────────
 let _DatabaseSync = null;  // node:sqlite DatabaseSync
 let _DuckDBInst   = null;  // @duckdb/node-api DuckDBInstance
@@ -1258,7 +1279,9 @@ function upsertSession(session) {
     platform:    session.platform    ?? null,
     cli:         session.cli         ?? null,
     cli_version: session.cli_version ?? null,
-    model:       session.model       ?? null,
+    // Normalize model on write so analytics queries don't fragment on
+    // dot/dash and case variants. See normalizeModelName().
+    model:       normalizeModelName(session.model)       ?? null,
     model_provider: session.model_provider ?? null,
     cwd:         session.cwd         ?? null,
     edits:       session.edits       ?? null,
@@ -1679,6 +1702,10 @@ function searchRetrievalDocs(query, limitOrOptions, maybeOptions) {
 function recordToolCall(sessionId, toolName, inputJson) {
   if (!_db) throw new Error('db.recordToolCall: call initialize() first');
 
+  // Strip <private>...</private> blocks before any persistence. The hash is
+  // computed on the cleaned payload so two calls that differ only in their
+  // private content still dedupe correctly.
+  inputJson = stripPrivateTags(inputJson);
   const inputHash = sha256(inputJson || '');
   const now       = new Date().toISOString();
   const payload   = safeJsonParse(inputJson, null);
@@ -1804,6 +1831,15 @@ function searchToolCalls(query, limitOrOptions, maybeOptions) {
  */
 function recordPrompt(sessionId, promptText, opts) {
   if (!_db) throw new Error('db.recordPrompt: call initialize() first');
+
+  // Strip <private>...</private> blocks before any persistence — see
+  // stripPrivateTags(). Applied first so emptiness checks see the cleaned text.
+  promptText = stripPrivateTags(promptText);
+
+  // Empty / whitespace-only prompts come from hooks where input.prompt is
+  // missing — recording them produces noise rows with no recoverable text.
+  // Drop them silently rather than poisoning the prompts/retrieval tables.
+  if (typeof promptText !== 'string' || !promptText.trim()) return;
 
   let skillRouted = null;
   let source      = null;
@@ -2754,4 +2790,88 @@ module.exports = {
   flushToParquet,
   flushTelemetryToParquet,
   queryEditFrequency,
+  closeStaleSessions,
+  normalizeModelName,
 };
+
+/**
+ * Close stale sessions that started > `cutoffHours` ago and never received an
+ * SessionEnd hook. The fix uses the timestamp of the last tool_call/edit_event
+ * tied to the session as `ended_at` (best-available signal). Sessions with no
+ * activity at all are closed at `started_at + 1 ms` so duration is >= 0.
+ *
+ * Idempotent — only touches rows where ended_at IS NULL.
+ *
+ * @param {number} [cutoffHours=12] Minimum age before a session is considered orphaned.
+ * @returns {{ closed: number, examined: number }}
+ */
+function closeStaleSessions(cutoffHours = 12) {
+  if (!_db) throw new Error('db.closeStaleSessions: call initialize() first');
+
+  const cutoff = new Date(Date.now() - cutoffHours * 3600 * 1000).toISOString();
+
+  // For each candidate, compute MAX(timestamp) across tool_calls + edit_events.
+  // If neither table has any rows for the session, fall back to started_at.
+  const candidates = _db.prepare(`
+    SELECT id, started_at FROM sessions
+    WHERE (ended_at IS NULL OR ended_at = '')
+      AND started_at < ?
+  `).all(cutoff);
+
+  if (!candidates.length) return { closed: 0, examined: 0 };
+
+  const lastActivity = _db.prepare(`
+    SELECT MAX(t) AS last FROM (
+      SELECT MAX(timestamp) AS t FROM tool_calls   WHERE session_id = ?
+      UNION ALL
+      SELECT MAX(timestamp) AS t FROM edit_events  WHERE session_id = ?
+      UNION ALL
+      SELECT MAX(timestamp) AS t FROM prompts      WHERE session_id = ?
+    )
+  `);
+
+  const update = _db.prepare(`
+    UPDATE sessions
+       SET ended_at    = @ended_at,
+           duration_ms = @duration_ms
+     WHERE id          = @id
+  `);
+
+  let closed = 0;
+  for (const c of candidates) {
+    const row = lastActivity.get(c.id, c.id, c.id);
+    const endedAt = row && row.last
+      ? row.last
+      : new Date(new Date(c.started_at).getTime() + 1).toISOString();
+    const startMs = new Date(c.started_at).getTime();
+    const endMs   = new Date(endedAt).getTime();
+    const duration = Number.isFinite(startMs) && Number.isFinite(endMs)
+      ? Math.max(0, endMs - startMs)
+      : 0;
+    update.run({ id: c.id, ended_at: endedAt, duration_ms: duration });
+    closed++;
+  }
+
+  return { closed, examined: candidates.length };
+}
+
+/**
+ * Canonicalize model identifiers so analytic joins don't fragment.
+ *   "claude-sonnet-4.6"        → "claude-sonnet-4-6"
+ *   "claude-sonnet-4-6-20250514"→ "claude-sonnet-4-6"
+ *   "GPT-5"                    → "gpt-5"
+ *   "gpt-5.4-mini"             → "gpt-5-4-mini"
+ * Returns null for falsy input.
+ */
+function normalizeModelName(model) {
+  if (!model) return null;
+  const s = String(model).trim().toLowerCase();
+  if (!s) return null;
+  // Strip a trailing date suffix (8 digits) Anthropic appends to some IDs.
+  let n = s.replace(/-(\d{8})$/, '');
+  // Replace dots with dashes so "claude-sonnet-4.6" matches "claude-sonnet-4-6".
+  n = n.replace(/\./g, '-');
+  // Collapse repeated dashes.
+  n = n.replace(/-+/g, '-');
+  return n;
+}

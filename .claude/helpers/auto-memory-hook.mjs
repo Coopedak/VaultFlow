@@ -17,6 +17,14 @@ import { fileURLToPath }                            from 'node:url';
 import { createRequire }                            from 'node:module';
 import { glob }                                     from 'glob';
 
+// stderr writes can fail with EPIPE when the parent process closed our pipe
+// before we finished writing log lines. The unhandled exception then crashes
+// the hook, taking the entire SessionStart with it. Treat stderr as best-effort.
+function safeWrite(msg) {
+  try { process.stderr.write(msg); } catch (_) { /* ignore EPIPE etc */ }
+}
+process.stderr.on('error', () => { /* ignore broken pipe — best-effort logging */ });
+
 // ── CJS interop ───────────────────────────────────────────────────────────
 // db.cjs and js-yaml are CommonJS modules; load them via require() from ESM.
 const require = createRequire(import.meta.url);
@@ -187,7 +195,7 @@ export async function doImport() {
   try {
     ensureDb();
   } catch (err) {
-    process.stderr.write(`auto-memory-hook doImport: db init failed: ${err.message}\n`);
+    safeWrite(`auto-memory-hook doImport: db init failed: ${err.message}\n`);
     return { filesLoaded, entriesLoaded };
   }
 
@@ -216,7 +224,7 @@ export async function doImport() {
       const matches = await glob(pattern, { absolute: true, windowsPathsNoEscape: true });
       for (const m of matches) filePaths.add(m);
     } catch (err) {
-      process.stderr.write(`auto-memory-hook doImport: glob failed for "${pattern}": ${err.message}\n`);
+      safeWrite(`auto-memory-hook doImport: glob failed for "${pattern}": ${err.message}\n`);
     }
   }
 
@@ -233,7 +241,7 @@ export async function doImport() {
       filesLoaded++;
       entriesLoaded += entries.length;
     } catch (err) {
-      process.stderr.write(`auto-memory-hook doImport: skipped "${filePath}": ${err.message}\n`);
+      safeWrite(`auto-memory-hook doImport: skipped "${filePath}": ${err.message}\n`);
     }
   }
 
@@ -245,12 +253,12 @@ export async function doImport() {
         const { importFromDirectory } = await import('./dict.mjs');
         const dictResult = await importFromDirectory(domainDir);
         if (dictResult.imported > 0) {
-          process.stderr.write(
+          safeWrite(
             `[vaultflow] doImport: dictionary — ${dictResult.imported} terms from ${dictResult.files} files\n`
           );
         }
       } catch (err) {
-        process.stderr.write(`auto-memory-hook doImport: dict import error: ${err.message}\n`);
+        safeWrite(`auto-memory-hook doImport: dict import error: ${err.message}\n`);
       }
     }
   }
@@ -357,7 +365,7 @@ export async function doSync() {
       recentEdits = await db.queryEditFrequency(getMetricsRoot(), getParquetDir(), 30);
     } catch (err) {
       // Degraded mode: no edit data — skip reordering
-      process.stderr.write(`auto-memory-hook doSync: queryEditFrequency failed: ${err.message}\n`);
+      safeWrite(`auto-memory-hook doSync: queryEditFrequency failed: ${err.message}\n`);
       return { reordered, entriesScored };
     }
 
@@ -405,7 +413,7 @@ export async function doSync() {
     reordered = true;
   } catch (err) {
     // Must not crash the Stop hook
-    process.stderr.write(`auto-memory-hook doSync: ${err.message}\n`);
+    safeWrite(`auto-memory-hook doSync: ${err.message}\n`);
   }
 
   return { reordered, entriesScored };

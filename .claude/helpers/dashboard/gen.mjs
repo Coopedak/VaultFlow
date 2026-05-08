@@ -35,7 +35,7 @@ function loadConfig() {
 }
 
 const cfg         = loadConfig();
-const METRICS     = cfg?.paths?.metrics_root     || path.join(process.env.USERPROFILE || '', 'vault', 'methodology', '.metrics');
+const METRICS     = cfg?.paths?.metrics_root     || path.join(process.env.USERPROFILE || require('node:os').homedir(), 'vault', 'methodology', '.metrics');
 const DB_FILE     = cfg?.storage?.db_file        || 'vaultflow.db';
 const PARQUET_DIR = cfg?.storage?.parquet_dir    || 'parquet';
 

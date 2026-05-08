@@ -4,6 +4,7 @@ const path = require('path');
 const fs   = require('fs');
 const os   = require('os');
 const crypto = require('crypto');
+const { deriveProject } = require('./project-id.cjs');
 
 // ── lazy-loaded deps ──────────────────────────────────────────────────────
 let _yaml = null;
@@ -81,8 +82,31 @@ function isRecent(isoTimestamp) {
   return (Date.now() - new Date(isoTimestamp).getTime()) < TEN_MIN_MS;
 }
 
+function sniffModel() {
+  return process.env.CLAUDE_CODE_MODEL
+      || process.env.ANTHROPIC_MODEL
+      || process.env.CLAUDE_MODEL
+      || null;
+}
+
+function sniffModelProvider(model) {
+  if (!model) return null;
+  if (model.startsWith('claude')) return 'anthropic';
+  if (model.startsWith('gpt') || model.startsWith('o1') || model.startsWith('o3') || model.startsWith('o4')) return 'openai';
+  if (model.startsWith('gemini')) return 'google';
+  return null;
+}
+
+function sniffCliVersion() {
+  return process.env.CLAUDE_CODE_VERSION
+      || process.env.CLAUDECODE_VERSION
+      || process.env.npm_package_version
+      || null;
+}
+
 function newSession() {
   const cwd = process.cwd();
+  const model = sniffModel();
   return {
     id:          crypto.randomUUID(),
     startedAt:   new Date().toISOString(),
@@ -98,7 +122,12 @@ function newSession() {
       tasks:    0,
       errors:   0,
     },
-    project:            path.basename(cwd) || null,
+    // Project comes from the git root of the working dir, never just basename
+    // (which produced "YOU", "GIT", "system32" historically).
+    project:        deriveProject(cwd),
+    model,
+    modelProvider:  sniffModelProvider(model),
+    cliVersion:     sniffCliVersion(),
     // Skill injection tracking — used by skill-loader.mjs to suppress
     // redundant injections within the same session.
     lastInjectedSkill:  null,
@@ -114,18 +143,21 @@ function dbUpsert(session) {
     const metricsRoot = cfg && cfg.paths && cfg.paths.metrics_root;
     db.initialize(metricsRoot, null);
     db.upsertSession({
-      id:          session.id,
-      started_at:  session.startedAt,
-      ended_at:    session.endedAt,
-      duration_ms: session.durationMs,
-      platform:    session.platform,
-      cli:         'claude',
-      cwd:         session.cwd,
-      edits:       session.metrics.edits,
-      commands:    session.metrics.commands,
-      tasks:       session.metrics.tasks,
-      errors:      session.metrics.errors,
-      project:     session.project,
+      id:             session.id,
+      started_at:     session.startedAt,
+      ended_at:       session.endedAt,
+      duration_ms:    session.durationMs,
+      platform:       session.platform,
+      cli:            'claude',
+      cli_version:    session.cliVersion || null,
+      model:          session.model || null,
+      model_provider: session.modelProvider || null,
+      cwd:            session.cwd,
+      edits:          session.metrics.edits,
+      commands:       session.metrics.commands,
+      tasks:          session.metrics.tasks,
+      errors:         session.metrics.errors,
+      project:        session.project,
     });
   } catch (err) {
     // DB write failure must not crash hooks — log to stderr only
@@ -153,6 +185,19 @@ function start() {
     _session = existing;
     writeCurrentJson(_session);
     return _session;
+  }
+
+  // Sweep stale sessions before creating a new one. Sessions whose Stop /
+  // SessionEnd hook never fired (IDE killed, crash, kill -9) get an ended_at
+  // derived from their last tool_call/edit_event so analytics aren't biased
+  // by 22% of sessions perpetually appearing "active". Idempotent.
+  try {
+    const db = require('./db.cjs');
+    const cfg = loadConfig();
+    db.initialize(cfg && cfg.paths && cfg.paths.metrics_root, null);
+    db.closeStaleSessions(12);
+  } catch (err) {
+    process.stderr.write(`session: stale-session sweep skipped — ${err.message}\n`);
   }
 
   _session = newSession();

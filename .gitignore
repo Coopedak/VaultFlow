@@ -34,3 +34,11 @@ config/vaultflow.local.yaml
 # env / secrets
 .env
 .env.*
+
+# claude-mem audit research scrapes (large; reproducible from web)
+.firecrawl/
+
+# claude code session lock + per-machine settings
+.claude/scheduled_tasks.lock
+.claude/settings.local.json
+.debug-hook.log

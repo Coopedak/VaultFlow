@@ -32,23 +32,9 @@ function resolveFilePaths(toolName, toolInput) {
   return toolInput.file_path ? [toolInput.file_path] : [];
 }
 
-/**
- * Derive project name from a file path: the segment of the path that sits
- * two levels below a known project root anchor (e.g. C:\GIT\<project>\...).
- * Falls back to the directory name directly containing the file.
- */
-function deriveProject(filePath) {
-  if (!filePath) return null;
-  const parts = filePath.replace(/\\/g, '/').split('/');
-  // Walk up looking for a GIT or Projects segment and take the next part
-  for (let i = 0; i < parts.length - 1; i++) {
-    if (parts[i].toUpperCase() === 'GIT' || parts[i] === 'Projects') {
-      return parts[i + 1] || null;
-    }
-  }
-  // Fallback: basename of immediate parent directory
-  return path.basename(path.dirname(filePath)) || null;
-}
+// Project derivation lives in project-id.cjs so post-edit, watcher, session,
+// and copilot-resume all share one source of truth (and one bug surface).
+const { deriveProject } = require('./project-id.cjs');
 
 /**
  * Build the pattern key from a file path: '<ext>::<parent-dir-basename>'.
@@ -230,10 +216,19 @@ function refreshToolIndex(db, filePath) {
     entries.push({ name, desc });
   }
 
+  // Tools live alongside the index file: prefer `<id>/`, fall back to `<id>.md`.
+  const toolsRoot = path.dirname(filePath);
   let count = 0;
   for (const { name, desc } of entries) {
-    const toolId = name.toLowerCase().replace(/[^a-z0-9-]/g, '-');
-    try { db.upsertVaultTool(toolId, name, desc, null, ''); count++; } catch (_) {}
+    const toolId   = name.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+    const toolDir  = path.join(toolsRoot, toolId);
+    const toolFile = path.join(toolsRoot, `${toolId}.md`);
+    let toolPath = null;
+    try {
+      if (fs.existsSync(toolDir)) toolPath = toolDir;
+      else if (fs.existsSync(toolFile)) toolPath = toolFile;
+    } catch (_) {}
+    try { db.upsertVaultTool(toolId, name, desc, toolPath, ''); count++; } catch (_) {}
   }
   process.stderr.write(`post-edit: refreshed tool index — ${count} tools upserted\n`);
 }

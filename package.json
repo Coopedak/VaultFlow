@@ -1,6 +1,6 @@
 {
   "name": "vaultflow",
-  "version": "1.2.0",
+  "version": "1.4.0",
   "description": "Claude Code intelligence layer — session tracking, FTS5 memory, skill routing, DISCOVERY pipeline",
   "type": "module",
   "bin": {
@@ -38,7 +38,7 @@
     "install-shell-tracker": "node scripts/install-shell-tracker.mjs",
     "install-shell-tracker:check": "node scripts/install-shell-tracker.mjs --check",
     "install-shell-tracker:uninstall": "node scripts/install-shell-tracker.mjs --uninstall",
-    "test": "node --test tests/",
+    "test": "node --test tests/*.test.mjs",
     "model-status": "node .claude/helpers/model-router.cjs --status",
     "mcp-server": "node .claude/helpers/mcp-server.cjs",
     "tui": "node tui/index.mjs",

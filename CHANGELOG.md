@@ -4,6 +4,24 @@ All notable changes to vaultflow are documented here.
 
 ---
 
+## [1.4.0] — 2026-05-08
+
+### Fixed (deep-audit hardening pass)
+- **Sessions never close** — Stop/SessionEnd hook misses (IDE crash, kill -9) left 22% of sessions perpetually open. New `db.closeStaleSessions(cutoffHours)` runs on every `session.start()` and closes orphans using the latest `tool_call`/`edit_event`/`prompt` timestamp for that session.
+- **Project detection produces garbage** — `deriveProject()` walked up looking for the literal string `GIT` and otherwise fell back to `path.basename(path.dirname(filePath))`, producing labels like `system32`, `.claude`, `memory`, `rules`, `YOU`. Replaced with shared `project-id.cjs` helper that walks up to the nearest `.git` directory and returns null (not the noisy basename) when no project root is found. Applied across `post-edit.cjs`, `watcher.mjs`, `session.cjs`, and `copilot-resume.cjs`.
+- **Watcher sessions missing `cli` and `project`** — generic watcher session rows are now created with `cli='watcher'` and a derived project so analytics aren't biased.
+- **Claude sessions missing `model`/`model_provider`/`cli_version`** — `session.cjs` now sniffs `CLAUDE_CODE_MODEL` / `ANTHROPIC_MODEL` / `CLAUDE_CODE_VERSION` env vars and infers `model_provider` from the model prefix.
+- **Model name fragmentation** — `claude-sonnet-4.6` and `claude-sonnet-4-6` and `claude-sonnet-4-6-20250514` were stored as three separate rows. New `db.normalizeModelName()` is applied on `upsertSession` to canonicalize on write.
+- **`vault_tools.path` 100% NULL** — `backfill.mjs` and `post-edit.cjs` now derive each tool's path from `<index-dir>/<tool-id>/` or `<index-dir>/<tool-id>.md` instead of always passing `null`.
+- **Empty `prompt_text` rows** — `db.recordPrompt` returns early on empty/whitespace input rather than inserting blank rows from missing hook payloads.
+- **Dashboard env-var precedence bug** — `process.env.USERPROFILE || '' + 'vault/...'` evaluated as `USERPROFILE || 'vault/...'`; fixed in both `server.mjs` and `gen.mjs`.
+- **Dashboard `byProject` dropped NULL projects** — now buckets them as `(unknown)` so the chart shows the full picture.
+- **Dashboard `avg_duration_ms` was silently biased** — now exposes `closed_sessions` and `active_sessions` alongside the average so the basis is honest.
+- **EPIPE crash in `auto-memory-hook.mjs`** — stderr writes were synchronous and a closed pipe killed the SessionStart hook. All writes now go through a safe wrapper plus a stderr error listener.
+- **Rogue `C:GITvaultflowdocs` folder** — string-concat artifact removed from repo root.
+- **`npm test` broken on Node 24** — `node --test tests/` no longer auto-globs; switched to explicit pattern.
+- **Dashboard "12 endpoints" doc drift** — actually has 24, comment corrected.
+
 ## [1.1.0] — 2026-05-05
 
 ### Added

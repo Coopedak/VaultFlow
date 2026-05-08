@@ -12,6 +12,7 @@
 
 const path = require('node:path');
 const fs   = require('node:fs');
+const { deriveProject } = require('./project-id.cjs');
 
 // ── config ────────────────────────────────────────────────────────────────
 
@@ -48,7 +49,10 @@ if (!raw) {
 
 // ── args ──────────────────────────────────────────────────────────────────
 
-const project = process.argv[2] || path.basename(process.cwd());
+// Prefer the project name derived from the git root; falls back to cwd basename
+// only if we couldn't find a .git/anchor (otherwise we get bogus values like
+// "YOU" for C:\Users\YOU\ or "GIT" for C:\GIT\).
+const project = process.argv[2] || deriveProject(process.cwd()) || path.basename(process.cwd());
 
 // ── queries (each individually crash-safe) ────────────────────────────────
 

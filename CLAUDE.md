@@ -13,7 +13,7 @@ tech stack detection, tool call deduplication, and a Parquet cold archive.
 | Runtime | Node.js 22+ (CJS hooks + ESM helpers) |
 | Hot store | SQLite via node:sqlite built-in (FTS5 + WAL) |
 | Cold archive | Apache Parquet via @duckdb/node-api (Lambda architecture) |
-| Dashboard | Express 4 + Chart.js SPA |
+| Dashboard | Express 4 + Chart.js SPA (24 read-only API endpoints) |
 | AI agents | Codex CLI via `.agents/config.toml` (15 enabled) |
 | Package manager | npm |
 

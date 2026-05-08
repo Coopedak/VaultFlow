@@ -70,6 +70,9 @@ function ensureSession(db) {
     return _session.id;
   }
 
+  const cwd = process.cwd();
+  const project = deriveProject(cwd);
+
   // Close previous session if any
   if (_session.id) {
     try {
@@ -79,7 +82,9 @@ function ensureSession(db) {
         ended_at:    new Date().toISOString(),
         duration_ms: now - _session.startedAt,
         platform:    'watcher',
-        cwd:         process.cwd(),
+        cli:         'watcher',
+        project,
+        cwd,
       });
     } catch (_) {}
   }
@@ -93,7 +98,9 @@ function ensureSession(db) {
       id,
       started_at: new Date(now).toISOString(),
       platform:   'watcher',
-      cwd:        process.cwd(),
+      cli:        'watcher',
+      project,
+      cwd,
     });
   } catch (_) {}
 
@@ -144,16 +151,8 @@ function shouldIgnore(filePath) {
   return IGNORE_PATTERNS.some(r => r.test(filePath));
 }
 
-function deriveProject(filePath) {
-  // Walk up looking for a GIT or Projects segment
-  const parts = filePath.replace(/\\/g, '/').split('/');
-  for (let i = parts.length - 1; i >= 0; i--) {
-    if (parts[i] === 'GIT' || parts[i] === 'Projects') {
-      return parts[i + 1] || 'unknown';
-    }
-  }
-  return path.basename(path.dirname(filePath)) || 'unknown';
-}
+// Shared with post-edit / session / copilot-resume — see project-id.cjs.
+const { deriveProject } = require('./project-id.cjs');
 
 // ── shell history tracking (Option A + B) ────────────────────────────────
 
@@ -332,7 +331,10 @@ function pollShellJsonl(db) {
 }
 
 function getCopilotProject(cwd) {
-  return cwd ? path.basename(cwd) || deriveProject(cwd) : 'unknown';
+  // Prefer git-root project name; only fall back to cwd basename if we cannot
+  // resolve a project (the prior order was a bug: basename always wins,
+  // producing "YOU", "GIT", etc.).
+  return cwd ? (deriveProject(cwd) || path.basename(cwd)) : null;
 }
 
 function inferCodexModel(payload) {
@@ -604,7 +606,10 @@ function pollCopilotEvents(db) {
 }
 
 function getCodexProject(cwd) {
-  return cwd ? path.basename(cwd) || deriveProject(cwd) : 'unknown';
+  // Prefer git-root project name; only fall back to cwd basename if we cannot
+  // resolve a project (the prior order was a bug: basename always wins,
+  // producing "YOU", "GIT", etc.).
+  return cwd ? (deriveProject(cwd) || path.basename(cwd)) : null;
 }
 
 function getCodexSessionState(sessionId, evt, filePath) {

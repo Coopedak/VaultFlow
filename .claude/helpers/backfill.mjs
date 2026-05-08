@@ -517,13 +517,26 @@ function backfillTools(cfg, dryRun) {
 
   const content = readFileSync(indexPath, 'utf8');
   const entries = parseIndexFile(content);
+  // tools live alongside index.md as either `<tool-id>/` directories (preferred)
+  // or `<tool-id>.md` files. Derive an absolute path so callers can navigate to
+  // each tool. Without this, vault_tools.path is NULL for every row and the
+  // dashboard / search has no way to surface the tool's source.
+  const toolsRoot = path.dirname(indexPath);
   let registered = 0;
 
   for (const { name, desc } of entries) {
     const toolId = name.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+    const toolDir  = path.join(toolsRoot, toolId);
+    const toolFile = path.join(toolsRoot, `${toolId}.md`);
+    let toolPath = null;
+    try {
+      if (existsSync(toolDir)) toolPath = toolDir;
+      else if (existsSync(toolFile)) toolPath = toolFile;
+    } catch (_) { /* leave as null */ }
+
     if (!dryRun) {
       try {
-        db.upsertVaultTool(toolId, name, desc, null, '');
+        db.upsertVaultTool(toolId, name, desc, toolPath, '');
         registered++;
       } catch (err) {
         process.stderr.write(`[backfill] tool upsert error for '${name}': ${err.message}\n`);
