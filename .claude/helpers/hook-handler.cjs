@@ -302,79 +302,86 @@ async function dispatch(event) {
     }
 
     case 'session-start': {
+      // Foreground work, kept tight (~250ms): register the session, build a
+      // small "what happened recently in this project" context block, and
+      // emit it as additionalContext so the new conversation starts with
+      // prior-session awareness (claude-mem-style memory injection without
+      // the worker service).
+      //
+      // Heavy indexing (doImport, stack-detect, gen-context, watcher daemon)
+      // is detached to session-start-bg.mjs — it would otherwise add 30-50s
+      // of blocking latency for work the model never reads.
       const session = require('./session.cjs');
       const sess    = await session.start();
 
-      // ── memory import ───────────────────────────────────────────────────
+      // ── detach the heavy work ──────────────────────────────────────────
       try {
-        const { doImport } = await import('./auto-memory-hook.mjs');
-        const result = await doImport();
-        process.stderr.write(`[vaultflow] session-start: doImport complete — ${JSON.stringify(result)}\n`);
+        const { spawn } = require('child_process');
+        const bgPath    = _path.resolve(__dirname, 'session-start-bg.mjs');
+        const cwd       = (sess && sess.cwd) || process.cwd();
+        const project   = (sess && sess.project) || _path.basename(cwd);
+
+        const child = spawn(
+          process.execPath,
+          ['--no-warnings', bgPath, cwd, project],
+          { detached: true, stdio: 'ignore' }
+        );
+        child.unref();
       } catch (err) {
-        process.stderr.write(`[vaultflow] session-start: doImport error — ${err.message}\n`);
+        process.stderr.write(`[vaultflow] session-start: bg spawn error — ${err.message}\n`);
       }
 
-      // ── tech stack detection ────────────────────────────────────────────
+      // ── inject recent-session context ──────────────────────────────────
+      // Pull the last 3 non-empty summaries for this project plus the top
+      // few memory hits keyed off the cwd. Format as a compact bulleted
+      // block — terse on purpose, since every line costs context tokens.
       try {
-        const yaml       = require('js-yaml');
-        const fs         = require('fs');
-        const cfgPath    = require('../../config/resolve.cjs');
-        const cfg        = fs.existsSync(cfgPath) ? yaml.load(fs.readFileSync(cfgPath, 'utf8')) : {};
-        const doDetect   = cfg.intelligence && cfg.intelligence.stack_detect_on_session_start !== false;
+        const project = (sess && sess.project) || _path.basename(sess && sess.cwd || '');
+        if (project) {
+          const db = require('./db.cjs');
+          db.initialize(null, null);
 
-        if (doDetect && sess && sess.cwd) {
-          const { detectAndStore } = await import('./stack-detector.mjs');
-          const stacks = await detectAndStore(sess.cwd, sess.project || require('path').basename(sess.cwd));
-          if (stacks.length > 0) {
-            process.stderr.write(`[vaultflow] session-start: stacks detected — ${stacks.join(', ')}\n`);
-          }
-        }
+          const summaries = db.getRecentSessionSummaries(project, 3);
+          const memoryHits = (() => {
+            try { return db.searchMemory(project, 5) || []; } catch (_) { return []; }
+          })();
 
-        // ── gen-context auto-refresh ──────────────────────────────────────
-        // Regenerate copilot-instructions.md, AGENTS.md, and .cursor/rules/wiki.mdc
-        // for the current project on every session start so context files are
-        // always current without manual intervention.
-        if (sess && sess.cwd && fs.existsSync(sess.cwd)) {
-          try {
-            const { generateForProject } = await import('./gen-context.mjs');
-            const gcResult = await generateForProject(sess.cwd);
-            if (gcResult.generated.length > 0) {
-              process.stderr.write(`[vaultflow] session-start: gen-context refreshed ${gcResult.generated.length} file(s)\n`);
+          const lines = [];
+          if (summaries.length) {
+            lines.push(`## vaultflow — recent activity in ${project}`);
+            lines.push('');
+            for (const s of summaries) {
+              const when = (s.summary_at || '').slice(0, 10);
+              const dur  = s.duration_ms ? `${Math.round(s.duration_ms / 60000)}m` : '?';
+              const files = (s.top_files || []).slice(0, 5).join(', ');
+              const pats  = (s.patterns  || []).slice(0, 3).join(', ');
+              lines.push(`- **${when}** (${dur}) — files: ${files || '—'}${pats ? `; patterns: ${pats}` : ''}`);
             }
-          } catch (gcErr) {
-            process.stderr.write(`[vaultflow] session-start: gen-context error — ${gcErr.message}\n`);
           }
-        }
-
-        // ── watcher daemon auto-start ─────────────────────────────────────
-        // Start the file-system watcher daemon if not already running.
-        // This captures edits from background agents, Copilot, Cursor, and
-        // any other tool that doesn't fire Claude Code hooks directly.
-        try {
-          const watchDir = (cfg.paths && cfg.paths.watcher_watch_dir)
-            || (() => {
-                 // Derive from wiki_glob: C:/GIT/*/wiki/... → C:/GIT
-                 const g = cfg.paths && cfg.paths.wiki_glob;
-                 if (g) return g.replace(/\\/g, '/').split('/').slice(0, -3).join('/');
-                 return null;
-               })();
-
-          if (watchDir && fs.existsSync(watchDir)) {
-            const { spawn } = require('child_process');
-            const watcherPath = require('path').resolve(__dirname, 'watcher.mjs');
-            const child = spawn(
-              process.execPath,
-              ['--no-warnings', watcherPath, '--daemon', watchDir],
-              { detached: true, stdio: 'ignore' }
-            );
-            child.unref();
-            process.stderr.write(`[vaultflow] session-start: watcher daemon ensured (${watchDir})\n`);
+          if (memoryHits.length) {
+            if (lines.length) lines.push('');
+            lines.push(`## Top memory matches for "${project}"`);
+            lines.push('');
+            for (const m of memoryHits.slice(0, 5)) {
+              const title  = (m.title  || '').slice(0, 80);
+              const source = (m.source || '').slice(0, 60);
+              lines.push(`- **${title}** — ${source}`);
+            }
           }
-        } catch (err) {
-          process.stderr.write(`[vaultflow] session-start: watcher start error — ${err.message}\n`);
+
+          if (lines.length) {
+            const additionalContext = lines.join('\n');
+            // SessionStart hook spec: hookSpecificOutput wrapper.
+            process.stdout.write(JSON.stringify({
+              hookSpecificOutput: {
+                hookEventName:    'SessionStart',
+                additionalContext,
+              },
+            }));
+          }
         }
       } catch (err) {
-        process.stderr.write(`[vaultflow] session-start: stack-detector error — ${err.message}\n`);
+        process.stderr.write(`[vaultflow] session-start: context inject error — ${err.message}\n`);
       }
 
       break;
@@ -486,6 +493,13 @@ async function dispatch(event) {
     }
 
     case 'post-task': {
+      // Stop hook payload: { session_id, transcript_path, stop_hook_active, ... }
+      // We need transcript_path to harvest AI assistant terms (Claude only — other
+      // tools have their own Stop equivalents that don't pass through here).
+      const stopRaw = await readStdin();
+      let stopPayload = {};
+      try { stopPayload = JSON.parse(stopRaw); } catch (_) {}
+
       const intelligence = require('./intelligence.cjs');
       const result = await intelligence.feedback(true);
       const promoted = (result && result.promoted) || 0;
@@ -494,23 +508,83 @@ async function dispatch(event) {
       }
 
       // ── dictionary term frequency ─────────────────────────────────────────
-      // Terms appearing >= 3 times in session prompts get auto-added.
-      // Runs after the model responds (Stop hook) rather than at session shutdown
-      // to avoid heavy synchronous I/O during process exit.
+      // Terms appearing >= 3 times get auto-added. Each entry is tagged with
+      // `session-auto:<origin>:<tool>` so the dashboard can show whether a
+      // word came from a USER prompt or an AI response, and which model
+      // (claude / copilot / codex) the term originated under.
       try {
         const db = require('./db.cjs');
         db.initialize(null, null);
         const STOP_WORDS = new Set(['this','that','with','from','have','been','will','when','then','what','into','over','also','some','they','them','than','each','more','like','just','even','most','such','only','both','very','here','where','which','your','their','there','these','those','about','after','before','between','should','could','would','other','first','second','third']);
-        const termFreq   = {};
-        for (const row of db.getLastSessionPrompts()) {
-          const words = (row.prompt_text || '').toLowerCase().match(/\b[a-z][a-z0-9_-]{3,}\b/g) || [];
-          for (const w of words) { termFreq[w] = (termFreq[w] || 0) + 1; }
-        }
         const knownTerms = db.getDictionaryTermSet();
-        for (const [term, count] of Object.entries(termFreq)) {
-          if (count >= 3 && !knownTerms.has(term) && !STOP_WORDS.has(term) && term.length >= 5) {
-            db.upsertDictionaryEntry(term, 'pattern', `Auto-detected: appeared ${count}x in session prompts. Review and update definition.`, 'session-auto');
-            process.stderr.write(`[vaultflow] post-task: auto-added dictionary term "${term}" (${count}x in prompts)\n`);
+
+        const tokenize = (text) => (text || '').toLowerCase().match(/\b[a-z][a-z0-9_-]{3,}\b/g) || [];
+
+        // Bucket by tool so user-prompt terms are tagged with the tool that
+        // received them (claude, copilot, codex). Empty source defaults to claude.
+        const byTool = new Map();
+        for (const row of db.getLastSessionPrompts()) {
+          const tool = (row.source || 'claude').replace(/^tracked:/, '');
+          if (!byTool.has(tool)) byTool.set(tool, {});
+          const freq = byTool.get(tool);
+          for (const w of tokenize(row.prompt_text)) {
+            freq[w] = (freq[w] || 0) + 1;
+          }
+        }
+
+        const upsertFromFreq = (freq, originLabel, sourceTag) => {
+          let added = 0;
+          for (const [term, count] of Object.entries(freq)) {
+            if (count >= 3 && !knownTerms.has(term) && !STOP_WORDS.has(term) && term.length >= 5) {
+              db.upsertDictionaryEntry(
+                term,
+                'pattern',
+                `Auto-detected: appeared ${count}x in ${originLabel}. Review and update definition.`,
+                sourceTag
+              );
+              knownTerms.add(term);
+              added++;
+            }
+          }
+          return added;
+        };
+
+        for (const [tool, freq] of byTool) {
+          const n = upsertFromFreq(freq, `${tool} user prompts`, `session-auto:user:${tool}`);
+          if (n > 0) process.stderr.write(`[vaultflow] post-task: ${n} user-prompt terms (${tool})\n`);
+        }
+
+        // ── AI side: parse the Claude transcript for assistant turn text ────
+        // The Stop hook only fires for Claude Code, so AI-derived terms are
+        // tagged `session-auto:ai:claude`. Other tools would need their own
+        // integration to seed the AI dictionary under their own model tag.
+        const transcriptPath = stopPayload && stopPayload.transcript_path;
+        if (transcriptPath) {
+          try {
+            const fsLocal = require('fs');
+            if (fsLocal.existsSync(transcriptPath)) {
+              const raw = fsLocal.readFileSync(transcriptPath, 'utf8');
+              const aiFreq = {};
+              for (const line of raw.split('\n')) {
+                if (!line.trim()) continue;
+                let turn;
+                try { turn = JSON.parse(line); } catch (_) { continue; }
+                if (!turn || turn.type !== 'assistant') continue;
+                const content = turn.message && turn.message.content;
+                if (!Array.isArray(content)) continue;
+                for (const block of content) {
+                  if (block && block.type === 'text' && typeof block.text === 'string') {
+                    for (const w of tokenize(block.text)) {
+                      aiFreq[w] = (aiFreq[w] || 0) + 1;
+                    }
+                  }
+                }
+              }
+              const n = upsertFromFreq(aiFreq, 'claude AI responses', 'session-auto:ai:claude');
+              if (n > 0) process.stderr.write(`[vaultflow] post-task: ${n} AI-output terms (claude)\n`);
+            }
+          } catch (err) {
+            process.stderr.write(`[vaultflow] post-task: transcript parse error — ${err.message}\n`);
           }
         }
       } catch (err) {
@@ -561,10 +635,59 @@ async function dispatch(event) {
       break;
     }
 
+    case 'pre-subagent': {
+      // Fired by PreToolUse:Task. Stash the active subagent's identity in a
+      // small JSON file so post-edit.cjs can attribute pattern fires to the
+      // right agent (developer-backend, researcher, etc.) instead of writing
+      // null. SubagentStop clears the file in post-subagent.
+      const raw = await readStdin();
+      let payload = {};
+      try { payload = JSON.parse(raw); } catch (_) {}
+
+      const agentType = sanitizeString(
+        (payload.tool_input && payload.tool_input.subagent_type) || '', 100
+      );
+      if (!agentType) break;
+
+      try {
+        const _yaml    = require('js-yaml');
+        const _cfgPath = require('../../config/resolve.cjs');
+        const _cfg     = _fs.existsSync(_cfgPath) ? _yaml.load(_fs.readFileSync(_cfgPath, 'utf8')) : {};
+        const _metrics = (_cfg.paths && _cfg.paths.metrics_root) || '';
+        if (_metrics) {
+          _fs.writeFileSync(
+            _path.join(_metrics, 'active-subagent.json'),
+            JSON.stringify({
+              agent: agentType,
+              started_at: new Date().toISOString(),
+              session_id: (payload.session_id) || null,
+            }, null, 2),
+            'utf8'
+          );
+        }
+      } catch (err) {
+        process.stderr.write(`[vaultflow] pre-subagent: write failed — ${err.message}\n`);
+      }
+      break;
+    }
+
     case 'post-subagent': {
       const raw = await readStdin();
       let subagentPayload = {};
       try { subagentPayload = JSON.parse(raw); } catch (_) {}
+
+      // Clear the active-subagent tracker so subsequent edits attribute back
+      // to the parent session, not the just-finished subagent.
+      try {
+        const _yaml    = require('js-yaml');
+        const _cfgPath = require('../../config/resolve.cjs');
+        const _cfg     = _fs.existsSync(_cfgPath) ? _yaml.load(_fs.readFileSync(_cfgPath, 'utf8')) : {};
+        const _metrics = (_cfg.paths && _cfg.paths.metrics_root) || '';
+        if (_metrics) {
+          const trackerPath = _path.join(_metrics, 'active-subagent.json');
+          if (_fs.existsSync(trackerPath)) _fs.unlinkSync(trackerPath);
+        }
+      } catch (_) { /* best-effort cleanup */ }
 
       // Write review flag unless this was voice-of-reason itself completing
       const agentDesc = (

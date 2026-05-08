@@ -153,10 +153,37 @@ function formatStacks(stacks) {
 }
 
 /**
+ * Build a compact bulleted block describing recent vaultflow activity for the
+ * project. This is the same metadata Claude's SessionStart hook injects via
+ * additionalContext — but here it gets baked into the static context files
+ * (AGENTS.md, copilot-instructions.md) so Copilot, Codex, and any other tool
+ * that reads those files at start gets the same prior-session awareness.
+ *
+ * Returns null when there's nothing useful to inject (new project / no
+ * non-empty summaries) so callers can skip the section entirely.
+ */
+function buildRecentActivityBlock(db, projectName) {
+  if (!projectName || !db || typeof db.getRecentSessionSummaries !== 'function') return null;
+  let summaries = [];
+  try { summaries = db.getRecentSessionSummaries(projectName, 3) || []; } catch (_) {}
+  if (!summaries.length) return null;
+
+  const lines = ['## Recent vaultflow Activity', ''];
+  for (const s of summaries) {
+    const when  = (s.summary_at || '').slice(0, 10);
+    const dur   = s.duration_ms ? `${Math.round(s.duration_ms / 60000)}m` : '?';
+    const files = (s.top_files || []).slice(0, 5).join(', ');
+    const pats  = (s.patterns  || []).slice(0, 3).join(', ');
+    lines.push(`- **${when}** (${dur}) — files: ${files || '—'}${pats ? `; patterns: ${pats}` : ''}`);
+  }
+  return lines.join('\n');
+}
+
+/**
  * Generate .github/copilot-instructions.md for a project.
  * Copilot reads this file automatically as project context.
  */
-function genCopilotInstructions(projectPath, projectName, stacks, memoryEntries, infra) {
+function genCopilotInstructions(projectPath, projectName, stacks, memoryEntries, infra, recentBlock) {
   const stackLine = formatStacks(stacks);
   const wikiPath  = path.join(projectPath, 'wiki', 'index.md');
   const hasWiki   = fs.existsSync(wikiPath);
@@ -179,6 +206,10 @@ function genCopilotInstructions(projectPath, projectName, stacks, memoryEntries,
   if (hasLlms)  parts.push(`**Start here:** [\`wiki/llms.txt\`](wiki/llms.txt) — universal AI entry point`);
   if (hasWiki)  parts.push(`**Wiki:** [\`wiki/index.md\`](wiki/index.md) — project knowledge base`);
   if (hasLlms || hasWiki) parts.push('');
+
+  if (recentBlock) {
+    parts.push(recentBlock, '');
+  }
 
   parts.push(
     '## Recent Context (from vaultflow)',
@@ -207,7 +238,7 @@ function genCopilotInstructions(projectPath, projectName, stacks, memoryEntries,
 /**
  * Generate AGENTS.md for a project (Codex CLI entry point).
  */
-function genAgentsMd(projectPath, projectName, stacks, agents, infra) {
+function genAgentsMd(projectPath, projectName, stacks, agents, infra, recentBlock) {
   const stackLine = formatStacks(stacks);
   const wikiPath  = path.join(projectPath, 'wiki', 'llms.txt');
   const hasLlms   = fs.existsSync(wikiPath);
@@ -231,6 +262,7 @@ function genAgentsMd(projectPath, projectName, stacks, agents, infra) {
     `**Stack:** ${stackLine}`,
     hasLlms ? `**Context:** [wiki/llms.txt](wiki/llms.txt)` : '',
     '',
+    ...(recentBlock ? [recentBlock, ''] : []),
     '## Available Agents',
     '',
     '| Agent | Source | Description |',
@@ -384,9 +416,14 @@ export async function generateForProject(projectPath) {
     process.stderr.write(`[gen-context] agent registry unavailable: ${err.message}\n`);
   }
 
+  // Recent activity block — shared across Copilot/Codex outputs so all three
+  // tools (Claude, Copilot, Codex) see the same prior-session awareness from
+  // a single source of truth.
+  const recentBlock = buildRecentActivityBlock(db, projectName);
+
   // Copilot instructions
   try {
-    const p = genCopilotInstructions(projectPath, projectName, stacks, memoryEntries, infra);
+    const p = genCopilotInstructions(projectPath, projectName, stacks, memoryEntries, infra, recentBlock);
     generated.push(p);
   } catch (err) {
     process.stderr.write(`[gen-context] copilot error: ${err.message}\n`);
@@ -394,7 +431,7 @@ export async function generateForProject(projectPath) {
 
   // AGENTS.md
   try {
-    const p = genAgentsMd(projectPath, projectName, stacks, agents, infra);
+    const p = genAgentsMd(projectPath, projectName, stacks, agents, infra, recentBlock);
     generated.push(p);
   } catch (err) {
     process.stderr.write(`[gen-context] agents.md error: ${err.message}\n`);

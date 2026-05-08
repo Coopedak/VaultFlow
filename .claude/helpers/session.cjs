@@ -238,6 +238,17 @@ function end() {
   fs.writeFileSync(archivePath(_session.id), JSON.stringify(_session, null, 2), 'utf8');
   dbUpsert(_session);
 
+  // The in-memory metrics counters were never wired up to the increment paths,
+  // so dbUpsert just wrote zeros. Recompute from the event tables now that
+  // ended_at is set so the dashboard's session list shows real numbers.
+  try {
+    const db = require('./db.cjs');
+    db.initialize(null, null);
+    db.recomputeSessionAggregates(_session.id);
+  } catch (err) {
+    process.stderr.write(`session: aggregate recompute failed — ${err.message}\n`);
+  }
+
   // Overwrite current.json with the closed state so subsequent reads know it ended
   writeCurrentJson(_session);
 

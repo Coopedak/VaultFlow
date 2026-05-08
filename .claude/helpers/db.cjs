@@ -1201,7 +1201,7 @@ function initialize(metricsRoot, dbFile) {
  * @param {string} [project]   Project name (derived by caller from filePath).
  * @param {string} [changeType='edit']  One of: 'edit', 'create', 'delete'.
  */
-function recordEdit(sessionId, filePath, project, changeType) {
+function recordEdit(sessionId, filePath, project, changeType, agent) {
   if (!_db) throw new Error('db.recordEdit: call initialize() first');
 
   _db.prepare(`
@@ -1214,6 +1214,18 @@ function recordEdit(sessionId, filePath, project, changeType) {
     project:     project    || null,
     change_type: changeType || 'edit',
   });
+
+  // Pattern fires used to be wired only into Claude's post-edit hook, which
+  // meant Copilot/Codex/watcher edits never showed up on the Patterns tab.
+  // Folding upsertPattern into recordEdit ensures every recorded edit — no
+  // matter who made it — increments the matching pattern. The agent param is
+  // optional; callers pass it when they know the active subagent.
+  try {
+    const path  = require('path');
+    const ext   = (path.extname(filePath || '') || '').replace('.', '') || 'noext';
+    const dir   = path.basename(path.dirname(filePath || '')) || 'root';
+    upsertPattern(`${ext}::${dir}`, agent || null);
+  } catch (_) { /* pattern bookkeeping is best-effort, never break the edit insert */ }
 }
 
 /**
@@ -2236,7 +2248,7 @@ function promoteVaultTool(id) {
 function getLastSessionPrompts() {
   if (!_db) throw new Error('db.getLastSessionPrompts: call initialize() first');
   return _db.prepare(
-    'SELECT prompt_text FROM prompts WHERE session_id IN (SELECT id FROM sessions ORDER BY started_at DESC LIMIT 1)'
+    'SELECT prompt_text, source FROM prompts WHERE session_id IN (SELECT id FROM sessions ORDER BY started_at DESC LIMIT 1)'
   ).all();
 }
 
@@ -2672,6 +2684,39 @@ function getLatestSessionSummary(project) {
 }
 
 /**
+ * Get the N most recent session summaries for a project. Used by SessionStart
+ * hook to inject prior-session context into the new conversation so Claude
+ * starts with awareness of what was edited / which patterns fired before.
+ *
+ * Empty summaries (no top_files AND no patterns) are filtered out — they add
+ * no signal and only burn injected-context tokens.
+ */
+function getRecentSessionSummaries(project, limit = 3) {
+  if (!_db) throw new Error('db.getRecentSessionSummaries: call initialize() first');
+  if (!project) return [];
+
+  const rows = _db.prepare(`
+    SELECT session_id, project, duration_ms, top_files, patterns, summary_at
+    FROM   session_summaries
+    WHERE  project = ?
+    ORDER  BY summary_at DESC
+    LIMIT  ?
+  `).all(project, limit * 2); // pull double then filter empties
+
+  const out = [];
+  for (const row of rows) {
+    let topFiles = [];
+    let patterns = [];
+    try { topFiles = JSON.parse(row.top_files) || []; } catch (_) {}
+    try { patterns = JSON.parse(row.patterns)  || []; } catch (_) {}
+    if (!topFiles.length && !patterns.length) continue; // skip empties
+    out.push({ ...row, top_files: topFiles, patterns: patterns });
+    if (out.length >= limit) break;
+  }
+  return out;
+}
+
+/**
  * Search session summaries using SQLite FTS5 + BM25 ranking.
  *
  * @param {string} query
@@ -2785,12 +2830,15 @@ module.exports = {
   // session compaction
   writeSessionSummary,
   getLatestSessionSummary,
+  getRecentSessionSummaries,
   searchSessionSummaries,
   // Parquet archival
   flushToParquet,
   flushTelemetryToParquet,
   queryEditFrequency,
   closeStaleSessions,
+  recomputeSessionAggregates,
+  recomputeAllSessionAggregates,
   normalizeModelName,
 };
 
@@ -2849,10 +2897,75 @@ function closeStaleSessions(cutoffHours = 12) {
       ? Math.max(0, endMs - startMs)
       : 0;
     update.run({ id: c.id, ended_at: endedAt, duration_ms: duration });
+    recomputeSessionAggregates(c.id);
     closed++;
   }
 
   return { closed, examined: candidates.length };
+}
+
+/**
+ * Derive per-session aggregate counters from the event tables and write them
+ * back to the sessions row. Until this exists nothing ever incremented
+ * sessions.edits / sessions.commands, so the dashboard's session list showed
+ * empty cells for everything except the rare row where session.cjs.end()
+ * happened to fire.
+ *
+ *   edits    ← COUNT(edit_events.session_id = ?)
+ *   commands ← COUNT(tool_calls.tool_name = 'Bash' for this session)
+ *
+ * Skips errors (no source signal) and tasks (no convention yet). Also
+ * backfills duration_ms when ended_at exists but duration_ms is null.
+ *
+ * @param {string} sessionId
+ */
+function recomputeSessionAggregates(sessionId) {
+  if (!_db) throw new Error('db.recomputeSessionAggregates: call initialize() first');
+  if (!sessionId) return;
+
+  const editsRow = _db.prepare(
+    'SELECT COUNT(*) AS n FROM edit_events WHERE session_id = ?'
+  ).get(sessionId);
+
+  // "commands" historically meant shell invocations. Bash is the only built-in
+  // shell tool; Copilot's powershell:* events also count. Match both.
+  const cmdRow = _db.prepare(`
+    SELECT COUNT(*) AS n FROM tool_calls
+    WHERE session_id = ?
+      AND (tool_name = 'Bash'
+           OR tool_name = 'PowerShell'
+           OR tool_name LIKE 'Copilot:powershell:%'
+           OR tool_name LIKE 'Copilot:bash:%')
+  `).get(sessionId);
+
+  // Backfill duration_ms when ended_at is present but duration is null/0.
+  _db.prepare(`
+    UPDATE sessions
+       SET edits    = @edits,
+           commands = @commands,
+           duration_ms = CASE
+             WHEN duration_ms IS NULL OR duration_ms = 0
+             THEN CAST((julianday(ended_at) - julianday(started_at)) * 86400000 AS INTEGER)
+             ELSE duration_ms
+           END
+     WHERE id = @id
+  `).run({
+    id: sessionId,
+    edits: editsRow ? editsRow.n : 0,
+    commands: cmdRow ? cmdRow.n : 0,
+  });
+}
+
+/**
+ * One-shot backfill across every session in the table. Safe to re-run.
+ *
+ * @returns {{ updated: number }}
+ */
+function recomputeAllSessionAggregates() {
+  if (!_db) throw new Error('db.recomputeAllSessionAggregates: call initialize() first');
+  const rows = _db.prepare('SELECT id FROM sessions').all();
+  for (const r of rows) recomputeSessionAggregates(r.id);
+  return { updated: rows.length };
 }
 
 /**

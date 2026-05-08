@@ -838,6 +838,11 @@ async function startWatcher(watchDir) {
     depth:            8,
   });
 
+  // Set of project names dirtied since the last gen-context refresh tick.
+  // Cleared each refresh interval after spawning regenerations. Lets us only
+  // regenerate projects that actually had edits, not every project we know about.
+  const dirtyProjects = new Set();
+
   const handleChange = (filePath, changeType) => {
     if (shouldIgnore(filePath)) return;
 
@@ -845,6 +850,7 @@ async function startWatcher(watchDir) {
       const sessionId = ensureSession(db);
       const project   = deriveProject(filePath);
       db.recordEdit(sessionId, filePath, project, changeType);
+      if (project) dirtyProjects.add(project);
       log(`${changeType}: ${filePath} [${project}]`);
     } catch (err) {
       log(`recordEdit error: ${err.message}`);
@@ -871,6 +877,46 @@ async function startWatcher(watchDir) {
     pollCopilotEvents(db);
     pollCodexEvents(db);
   }, 3000);
+
+  // ── periodic gen-context refresh ──────────────────────────────────────
+  // Refreshes AGENTS.md, .github/copilot-instructions.md, and .cursor rules
+  // for any project that's been edited since the last tick. This is the
+  // tool-agnostic refresh path: Claude/Copilot/Codex/Cursor all read these
+  // files at start, so the watcher (always running, doesn't depend on which
+  // tool spawned it) becomes the source of fresh context.
+  //
+  // Interval is 10 min by default. Override with VAULTFLOW_GEN_CONTEXT_INTERVAL_MS.
+  // Each project regen is spawned detached so a slow gen-context (~1-2s per
+  // project) never blocks the watcher event loop.
+  const GEN_CONTEXT_INTERVAL_MS = parseInt(
+    process.env.VAULTFLOW_GEN_CONTEXT_INTERVAL_MS || '600000', 10
+  );
+  setInterval(() => {
+    if (dirtyProjects.size === 0) return;
+    const projects = Array.from(dirtyProjects);
+    dirtyProjects.clear();
+
+    const helpersDir = path.dirname(fileURLToPath(import.meta.url));
+    const genCtxPath = path.resolve(helpersDir, 'gen-context.mjs').replace(/\\/g, '/');
+
+    for (const project of projects) {
+      const projectPath = path.join(dir, project);
+      try {
+        if (!fs.existsSync(projectPath)) continue;
+        const child = spawn(
+          process.execPath,
+          ['--no-warnings', '-e',
+            `(async () => { const m = await import(${JSON.stringify('file://' + genCtxPath)}); await m.generateForProject(${JSON.stringify(projectPath)}); })().catch(() => process.exit(1));`,
+          ],
+          { detached: true, stdio: 'ignore' }
+        );
+        child.unref();
+        log(`gen-context refresh queued for ${project}`);
+      } catch (err) {
+        log(`gen-context spawn error for ${project}: ${err.message}`);
+      }
+    }
+  }, GEN_CONTEXT_INTERVAL_MS);
 
   log('Watcher running. Press Ctrl+C to stop.');
 

@@ -27,6 +27,29 @@ const __dirname  = path.dirname(__filename);
 // Load CJS data layer via createRequire — keeps files independent
 const require = createRequire(import.meta.url);
 const db      = require('./db.cjs');
+const yaml    = require('js-yaml');
+
+/**
+ * Parse YAML frontmatter from a markdown string. Returns { description, name }
+ * pulled from the frontmatter block, or empty strings when absent.
+ *
+ * For Claude/Codex/superpowers-style skills, the `description` field is the
+ * agent's TRIGGER PATTERN ("Use when ... triggers ..."), not a generic blurb.
+ * Older code grabbed lines[0] which produced garbage like "name: tool-engineer"
+ * or "---\r" — rendering the dashboard's trigger_pattern column unusable.
+ */
+function parseFrontmatter(raw) {
+  if (!raw || !raw.startsWith('---')) return { description: '', name: '' };
+  const end = raw.indexOf('\n---', 3);
+  if (end === -1) return { description: '', name: '' };
+  const block = raw.slice(3, end).replace(/^\r?\n/, '');
+  let parsed = {};
+  try { parsed = yaml.load(block) || {}; } catch (_) { parsed = {}; }
+  return {
+    description: typeof parsed.description === 'string' ? parsed.description.trim() : '',
+    name:        typeof parsed.name        === 'string' ? parsed.name.trim()        : '',
+  };
+}
 
 // ── config ────────────────────────────────────────────────────────────────
 
@@ -404,29 +427,34 @@ async function backfillAgents(cfg, dryRun) {
       let skillName = null;
       let descText  = '';
 
+      // Skills are either single .md files or a directory with index.md /
+      // SKILL.md inside. Parse YAML frontmatter from whichever applies and
+      // pull `description` — that field is the trigger pattern.
+      let raw = null;
       if (entry.isFile() && entry.name.endsWith('.md') && entry.name !== 'index.md') {
         skillName = entry.name.replace(/\.md$/, '');
-        try {
-          const raw   = readFileSync(path.join(userSkillsDir, entry.name), 'utf8');
-          const lines = raw.split('\n').filter(l => l.trim() && !l.startsWith('#'));
-          descText    = lines[0] ? lines[0].slice(0, 120) : '';
-        } catch (_) {}
+        try { raw = readFileSync(path.join(userSkillsDir, entry.name), 'utf8'); } catch (_) {}
       } else if (entry.isDirectory()) {
         skillName = entry.name;
-        const indexFile = path.join(userSkillsDir, entry.name, 'index.md');
-        if (existsSync(indexFile)) {
-          try {
-            const raw   = readFileSync(indexFile, 'utf8');
-            const lines = raw.split('\n').filter(l => l.trim() && !l.startsWith('#'));
-            descText    = lines[0] ? lines[0].slice(0, 120) : '';
-          } catch (_) {}
+        for (const candidate of ['SKILL.md', 'index.md']) {
+          const file = path.join(userSkillsDir, entry.name, candidate);
+          if (existsSync(file)) {
+            try { raw = readFileSync(file, 'utf8'); } catch (_) {}
+            if (raw) break;
+          }
         }
+      }
+      if (raw) {
+        const fm = parseFrontmatter(raw);
+        descText = fm.description.slice(0, 500);
       }
 
       if (!skillName) continue;
       if (!dryRun) {
         try {
-          db.upsertVaultAgent(skillName, skillName, 'user-skill', descText, null);
+          // Pass descText as BOTH description and trigger_pattern. Skills don't
+          // have a separate "summary" — the description IS the routing trigger.
+          db.upsertVaultAgent(skillName, skillName, 'user-skill', descText, descText);
           registered++;
           userCount++;
         } catch (err) {
@@ -467,23 +495,15 @@ async function backfillAgents(cfg, dryRun) {
 
       let descText = '';
       try {
-        const raw   = readFileSync(agentFile, 'utf8');
-        const lines = raw.split('\n');
-        // First non-empty, non-heading, non-frontmatter line
-        let inFm = lines[0] === '---';
-        for (const line of lines) {
-          if (inFm) { if (line === '---' && descText === '') { inFm = false; } continue; }
-          const t = line.trim();
-          if (t && !t.startsWith('#') && !t.startsWith('|') && !t.startsWith('-')) {
-            descText = t.slice(0, 120);
-            break;
-          }
-        }
+        const raw = readFileSync(agentFile, 'utf8');
+        const fm  = parseFrontmatter(raw);
+        descText  = fm.description.slice(0, 500);
       } catch (_) {}
 
       if (!dryRun) {
         try {
-          db.upsertVaultAgent(agentId, agentName, project ? `project:${project}` : 'project', descText, null);
+          // descText doubles as trigger_pattern — same reasoning as user skills.
+          db.upsertVaultAgent(agentId, agentName, project ? `project:${project}` : 'project', descText, descText);
           registered++;
           projCount++;
         } catch (err) {

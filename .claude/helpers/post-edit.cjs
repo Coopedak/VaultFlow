@@ -151,16 +151,20 @@ function upsertAgentFromFile(db, filePath, kind) {
     source = gitIdx !== -1 ? `project:${parts[gitIdx + 1]}` : 'project';
   }
 
+  // Pull `description` from YAML frontmatter — that's the skill's trigger
+  // pattern. Falls back to '' on missing/malformed frontmatter.
   let desc = '';
   try {
-    const lines = fs.readFileSync(filePath, 'utf8').split('\n');
-    let inFm = lines[0] === '---';
-    for (const line of lines) {
-      if (inFm) { if (line === '---' && desc === '') inFm = false; continue; }
-      const t = line.trim();
-      if (t && !t.startsWith('#') && !t.startsWith('|') && !t.startsWith('-')) {
-        desc = t.slice(0, 120);
-        break;
+    const yaml = require('js-yaml');
+    const raw  = fs.readFileSync(filePath, 'utf8');
+    if (raw.startsWith('---')) {
+      const end = raw.indexOf('\n---', 3);
+      if (end !== -1) {
+        const block = raw.slice(3, end).replace(/^\r?\n/, '');
+        try {
+          const fm = yaml.load(block) || {};
+          if (typeof fm.description === 'string') desc = fm.description.trim().slice(0, 500);
+        } catch (_) { /* malformed YAML — leave desc empty */ }
       }
     }
   } catch (_) {}
@@ -170,7 +174,9 @@ function upsertAgentFromFile(db, filePath, kind) {
     : name;
 
   try {
-    db.upsertVaultAgent(agentId, name, source, desc, null);
+    // description AND trigger_pattern get the same value: the frontmatter
+    // description IS the routing trigger.
+    db.upsertVaultAgent(agentId, name, source, desc, desc);
     process.stderr.write(`post-edit: registered agent "${agentId}" (${source})\n`);
   } catch (err) {
     process.stderr.write(`post-edit: agent upsert error: ${err.message}\n`);
@@ -254,13 +260,36 @@ function run(input) {
     }
     const sessionId = sess.id;
 
-    // Record all edited files (MultiEdit may touch multiple paths)
-    for (const filePath of filePaths) {
-      const project    = deriveProject(filePath);
-      const patternKey = buildPatternKey(filePath);
+    // ── active-subagent attribution ───────────────────────────────────────
+    // PreToolUse:Task writes {metrics_root}/active-subagent.json with the
+    // running subagent's identity; SubagentStop clears it. When set, attribute
+    // pattern fires to that agent so the dashboard's Patterns tab can show
+    // which agent (developer-backend, researcher, etc.) caused the pattern.
+    let activeAgent = null;
+    try {
+      const fsLocal   = require('fs');
+      const pathLocal = require('path');
+      const yaml      = require('js-yaml');
+      const cfgPath   = require('../../config/resolve.cjs');
+      const cfg       = fsLocal.existsSync(cfgPath) ? yaml.load(fsLocal.readFileSync(cfgPath, 'utf8')) : {};
+      const metrics   = (cfg.paths && cfg.paths.metrics_root) || '';
+      if (metrics) {
+        const trackerPath = pathLocal.join(metrics, 'active-subagent.json');
+        if (fsLocal.existsSync(trackerPath)) {
+          const tracker = JSON.parse(fsLocal.readFileSync(trackerPath, 'utf8'));
+          if (tracker && tracker.agent) activeAgent = String(tracker.agent);
+        }
+      }
+    } catch (_) { /* leave activeAgent null on any read failure */ }
 
-      db.recordEdit(sessionId, filePath, project, changeType);
-      db.upsertPattern(patternKey, null);
+    // Record all edited files (MultiEdit may touch multiple paths).
+    // db.recordEdit now also fires upsertPattern internally so the watcher
+    // daemon and Copilot/Codex paths get pattern coverage too — pass the
+    // active subagent through so attribution survives the consolidation.
+    for (const filePath of filePaths) {
+      const project = deriveProject(filePath);
+
+      db.recordEdit(sessionId, filePath, project, changeType, activeAgent);
 
       const regKind = classifyRegistryFile(filePath);
       if (regKind === 'agent' || regKind === 'user-skill') {
