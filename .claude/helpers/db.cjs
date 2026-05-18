@@ -2925,6 +2925,7 @@ module.exports = {
   getLatestSessionSummary,
   getRecentSessionSummaries,
   searchSessionSummaries,
+  backfillMissingSessionSummaries,
   // Parquet archival
   flushToParquet,
   flushTelemetryToParquet,
@@ -3059,6 +3060,68 @@ function recomputeAllSessionAggregates() {
   const rows = _db.prepare('SELECT id FROM sessions').all();
   for (const r of rows) recomputeSessionAggregates(r.id);
   return { updated: rows.length };
+}
+
+/**
+ * Synthesize session_summaries for closed sessions that never got one.
+ *
+ * Claude Code's SessionEnd hook is missed by ~95% of sessions (crash, Ctrl-C,
+ * window close, etc.), so writeSessionSummary in session.cjs only fires for a
+ * small fraction. This walks every closed session with no matching summary
+ * row and computes the same top_files / patterns aggregate that session.end()
+ * would have produced. Idempotent and safe to run on every session start.
+ *
+ * @returns {{ backfilled: number, examined: number }}
+ */
+function backfillMissingSessionSummaries(limit = 200) {
+  if (!_db) throw new Error('db.backfillMissingSessionSummaries: call initialize() first');
+
+  const candidates = _db.prepare(`
+    SELECT s.id, s.project, s.started_at, s.ended_at, s.duration_ms
+      FROM sessions s
+      LEFT JOIN session_summaries ss ON ss.session_id = s.id
+     WHERE s.ended_at IS NOT NULL AND ss.session_id IS NULL
+     ORDER BY s.started_at DESC
+     LIMIT ?
+  `).all(limit);
+
+  if (!candidates.length) return { backfilled: 0, examined: 0 };
+
+  const topFilesStmt = _db.prepare(`
+    SELECT file_path, COUNT(*) AS cnt FROM edit_events
+     WHERE session_id = ?
+     GROUP BY file_path ORDER BY cnt DESC LIMIT 5
+  `);
+  const patternsStmt = _db.prepare(`
+    SELECT pattern_key FROM patterns
+     WHERE last_fired BETWEEN ? AND ?
+     ORDER BY fire_count DESC LIMIT 3
+  `);
+
+  let backfilled = 0;
+  for (const s of candidates) {
+    try {
+      const files = topFilesStmt.all(s.id).map(r => {
+        const idx = Math.max(r.file_path.lastIndexOf('/'), r.file_path.lastIndexOf('\\'));
+        return idx >= 0 ? r.file_path.slice(idx + 1) : r.file_path;
+      });
+      // pattern window: started_at .. ended_at + 60s (cover trailing fires)
+      const endMs = new Date(s.ended_at).getTime() + 60_000;
+      const pats = patternsStmt.all(s.started_at, new Date(endMs).toISOString())
+        .map(r => r.pattern_key);
+
+      writeSessionSummary({
+        session_id:  s.id,
+        project:     s.project || '',
+        duration_ms: s.duration_ms || 0,
+        top_files:   files,
+        patterns:    pats,
+        summary_at:  s.ended_at,
+      });
+      backfilled++;
+    } catch (_) { /* swallow per-row; keep going */ }
+  }
+  return { backfilled, examined: candidates.length };
 }
 
 /**

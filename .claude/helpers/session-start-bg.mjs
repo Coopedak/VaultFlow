@@ -28,6 +28,21 @@ const cwd     = process.argv[2] || process.cwd();
 const project = process.argv[3] || path.basename(cwd);
 
 (async () => {
+  // ── close stale sessions + backfill missing summaries ──────────────────
+  // SessionEnd hooks miss ~95% of sessions (Ctrl-C, crash, window close), so
+  // session_summaries was 5/123 last week. Backfill from edit_events/patterns
+  // before any memory query runs — keeps "recent activity" injection honest.
+  try {
+    const db = require('./db.cjs');
+    db.initialize(null, null);
+    const stale = db.closeStaleSessions(12);
+    if (stale.closed > 0) safeWrite(`[vaultflow:bg] closed ${stale.closed} stale session(s)\n`);
+    const bf = db.backfillMissingSessionSummaries(200);
+    if (bf.backfilled > 0) safeWrite(`[vaultflow:bg] backfilled ${bf.backfilled} session summaries\n`);
+  } catch (err) {
+    safeWrite(`[vaultflow:bg] summary backfill error — ${err.message}\n`);
+  }
+
   // ── project focus surfacing ─────────────────────────────────────────────
   try {
     const { load } = require('./focus.cjs');

@@ -342,8 +342,23 @@ async function dispatch(event) {
           db.initialize(null, null);
 
           const summaries = db.getRecentSessionSummaries(project, 3);
+
+          // Build a richer query than project alone — pull focus headline and
+          // the most-recent session's pattern keys / top files so memory hits
+          // are actually relevant to current work, not always the same top-5.
+          let focusHeadline = '';
+          try {
+            const focusMod = require('./focus.cjs');
+            const f = focusMod.load(project);
+            if (f && f.headline) focusHeadline = f.headline;
+          } catch (_) {}
+          const recentBits = summaries.length
+            ? [...(summaries[0].patterns || []), ...(summaries[0].top_files || [])].slice(0, 8).join(' ')
+            : '';
+          const memQuery = [project, focusHeadline, recentBits].filter(Boolean).join(' ').slice(0, 400);
+
           const memoryHits = (() => {
-            try { return db.searchMemory(project, 5) || []; } catch (_) { return []; }
+            try { return db.searchMemory(memQuery, 5) || []; } catch (_) { return []; }
           })();
 
           const lines = [];
@@ -734,14 +749,30 @@ async function dispatch(event) {
         _db.initialize(null, null);
         const _sess = _session.get();
 
-        let topMemory = [];
-        try { topMemory = _db.searchMemory('agent task context project', 5); } catch (_) {}
-
         let _focus = null;
         try {
           const _focusMod = require('./focus.cjs');
           if (_sess && _sess.project) _focus = _focusMod.load(_sess.project);
         } catch (_) {}
+
+        // Build a context-aware memory query from the actual subagent task,
+        // not a hardcoded string. Order: subagent description > focus headline
+        // > most recent prompt > project name. This is what made every
+        // subagent see the same five stale memories before.
+        const _queryParts = [];
+        if (agentDesc && agentDesc.length > 3) _queryParts.push(agentDesc.slice(0, 200));
+        if (_focus && _focus.headline)         _queryParts.push(_focus.headline.slice(0, 150));
+        if (_sess && _sess.project)            _queryParts.push(_sess.project);
+        try {
+          const lastPrompts = _db.getLastSessionPrompts() || [];
+          if (lastPrompts.length > 0 && lastPrompts[0].prompt_text) {
+            _queryParts.push(String(lastPrompts[0].prompt_text).slice(0, 200));
+          }
+        } catch (_) {}
+        const _memQuery = _queryParts.join(' ').trim() || (_sess && _sess.project) || 'recent activity';
+
+        let topMemory = [];
+        try { topMemory = _db.searchMemory(_memQuery, 5); } catch (_) {}
 
         const agentCtx = {
           db_path:     _path.join(_metrics, _dbFile),
