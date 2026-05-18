@@ -60,8 +60,9 @@ const TOOLS = [
     inputSchema: {
       type: 'object',
       properties: {
-        query: { type: 'string', description: 'Search query' },
-        limit: { type: 'number',  description: 'Max results (1–20, default 5)' },
+        query:     { type: 'string', description: 'Search query' },
+        limit:     { type: 'number', description: 'Max results (1–20, default 5)' },
+        bodyChars: { type: 'number', description: 'Cap per-entry body chars (80–4000, default 400). Lower = fewer tokens.' },
       },
       required: ['query'],
     },
@@ -177,6 +178,23 @@ const TOOLS = [
     },
   },
   {
+    name: 'get_symbol_body',
+    description:
+      'Return just the lines that define a single function/class instead of ' +
+      'reading the whole file. Use INSTEAD of Read when you only need to ' +
+      'understand one symbol. Massive token savings on large files. ' +
+      'Returns null if the symbol is not indexed.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        file:      { type: 'string', description: 'Absolute path to the file' },
+        name:      { type: 'string', description: 'Symbol name (exact)' },
+        max_lines: { type: 'integer', description: 'Cap (default 200)' },
+      },
+      required: ['file', 'name'],
+    },
+  },
+  {
     name: 'find_callers',
     description:
       'Find every function that calls a given function by name. Function-level ' +
@@ -203,12 +221,20 @@ async function callTool(name, args) {
 
     case 'search_memory': {
       const limit   = Math.min(Math.max(1, Math.floor(args.limit || 5)), 20);
+      // Body cap: default 400 chars — most memory entries have a high-signal
+      // first paragraph; the rest is decoration that wastes tokens. Override
+      // with bodyChars when the LLM needs full context.
+      const bodyCap = Math.min(Math.max(80, Math.floor(args.bodyChars || 400)), 4000);
       const results = db.searchMemory(String(args.query || ''), limit);
       if (!results || results.length === 0) {
         return { content: [{ type: 'text', text: 'No memory entries found.' }] };
       }
       const text = results
-        .map(r => `### ${r.title}\n*Source: ${r.source}*\n\n${r.body}`)
+        .map(r => {
+          const body = String(r.body || '');
+          const slim = body.length > bodyCap ? body.slice(0, bodyCap) + '…' : body;
+          return `### ${r.title}\n*Source: ${r.source}*\n\n${slim}`;
+        })
         .join('\n\n---\n\n');
       return { content: [{ type: 'text', text }] };
     }
@@ -381,6 +407,19 @@ async function callTool(name, args) {
       }
       const lines = rows.map(r => `- L${String(r.line).padStart(5)}  ${r.kind.padEnd(10)} ${r.name}`);
       return { content: [{ type: 'text', text: `**Symbols in ${file}** (${rows.length}):\n\n${lines.join('\n')}` }] };
+    }
+
+    case 'get_symbol_body': {
+      const codeGraph = require('./code-graph.cjs');
+      const file = String(args.file || '');
+      const name = String(args.name || '');
+      if (!file || !name) return { content: [{ type: 'text', text: 'Missing required args: file, name' }] };
+      const maxLines = Math.min(Math.max(10, Math.floor(args.max_lines || 200)), 1000);
+      const r = codeGraph.getSymbolBody(db, file, name, maxLines);
+      if (!r) {
+        return { content: [{ type: 'text', text: `Symbol "${name}" not found in ${file}. Run file_symbols to see what's indexed.` }] };
+      }
+      return { content: [{ type: 'text', text: `**${r.name}** in ${r.file} (lines ${r.start_line}-${r.end_line}):\n\n\`\`\`\n${r.body}\n\`\`\`` }] };
     }
 
     case 'find_callers': {

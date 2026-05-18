@@ -325,6 +325,51 @@ function indexFile(db, filePath, project) {
   }
 }
 
+/**
+ * Read just the lines that define one symbol. Replaces a full Read of a
+ * large file with a targeted slice. Saves 90%+ tokens on "show me how X
+ * works" style queries.
+ *
+ * Strategy: find the symbol's line, then read up to the next symbol's
+ * line - 1 (or +maxLines if no next symbol). Returns null if not found.
+ */
+function getSymbolBody(db, filePath, symbolName, maxLines = 200) {
+  db.initialize(null, null);
+  const fs = require('fs');
+  const wsep = filePath.replace(/\//g, '\\');
+  const fsep = filePath.replace(/\\/g, '/');
+
+  const syms = db.raw().prepare(
+    `SELECT name, line FROM code_symbols
+      WHERE (file = ? OR file = ?) ORDER BY line`
+  ).all(wsep, fsep);
+  if (syms.length === 0) return null;
+
+  const idx = syms.findIndex(s => s.name === symbolName);
+  if (idx === -1) return null;
+  const startLine = syms[idx].line;
+  const nextLine  = syms[idx + 1] ? syms[idx + 1].line : null;
+  const endLine   = nextLine
+    ? Math.min(nextLine - 1, startLine + maxLines)
+    : startLine + maxLines;
+
+  let content;
+  try { content = fs.readFileSync(filePath, 'utf8'); }
+  catch (_) {
+    try { content = fs.readFileSync(wsep === filePath ? fsep : wsep, 'utf8'); }
+    catch (_) { return null; }
+  }
+  const lines = content.split('\n');
+  const slice = lines.slice(startLine - 1, endLine).join('\n');
+  return {
+    name: symbolName,
+    file: filePath,
+    start_line: startLine,
+    end_line: Math.min(endLine, lines.length),
+    body: slice,
+  };
+}
+
 function getCallers(db, calleeName, project) {
   db.initialize(null, null);
   const sql = `
@@ -466,4 +511,5 @@ module.exports = {
   searchSymbols,
   getCallers,
   getCallees,
+  getSymbolBody,
 };

@@ -131,7 +131,50 @@ async function main() {
     `).all(`%${baseLike}%`, `%${baseLike}%`, MAX_MEMORY);
   } catch (_) {}
 
-  if (uniqEdits.length === 0 && memory.length === 0) return noop();
+  // Symbol count for the file (used to suggest token-saving alternatives).
+  let symCount = 0;
+  let fileSize = 0;
+  try {
+    symCount = raw.prepare(
+      `SELECT COUNT(*) AS n FROM code_symbols WHERE file = ? OR file = ?`
+    ).get(filePath, filePath.replace(/\\/g, '/')).n || 0;
+  } catch (_) {}
+  try { fileSize = fs.statSync(filePath).size; } catch (_) {}
+
+  if (uniqEdits.length === 0 && memory.length === 0 && symCount === 0) return noop();
+
+  // Dedup: skip if this file was already injected in this session. Cuts
+  // repeated 200-char vaultflow context blocks from N reads down to 1.
+  const sessionId = input.session_id || (input.session && input.session.id) || null;
+  const dedupPath = (() => {
+    try {
+      const yaml = require('js-yaml');
+      const cfgPath = require('../../config/resolve.cjs');
+      if (!fs.existsSync(cfgPath)) return null;
+      const cfg = yaml.load(fs.readFileSync(cfgPath, 'utf8')) || {};
+      const metrics = cfg.paths && cfg.paths.metrics_root;
+      return metrics ? path.join(metrics, 'recent-injections.json') : null;
+    } catch (_) { return null; }
+  })();
+
+  if (sessionId && dedupPath) {
+    try {
+      const state = fs.existsSync(dedupPath)
+        ? JSON.parse(fs.readFileSync(dedupPath, 'utf8'))
+        : {};
+      const seen = state[sessionId] || {};
+      if (seen[filePath]) return noop(); // already injected this file in this session
+      seen[filePath] = Date.now();
+      state[sessionId] = seen;
+      // Trim other sessions older than 24h
+      for (const k of Object.keys(state)) {
+        if (k === sessionId) continue;
+        const newest = Math.max(0, ...Object.values(state[k] || {}));
+        if (Date.now() - newest > 24 * 3600 * 1000) delete state[k];
+      }
+      fs.writeFileSync(dedupPath, JSON.stringify(state), 'utf8');
+    } catch (_) { /* dedup is best-effort; don't fail */ }
+  }
 
   // Build the preamble.
   const lines = [];
@@ -150,6 +193,13 @@ async function main() {
       const snippet = String(m.body || '').replace(/\s+/g, ' ').slice(0, 120);
       lines.push(`    - ${m.title}: ${snippet}`);
     }
+  }
+
+  // Token-saving hint when the file is large AND indexed.
+  if (symCount >= 10 && fileSize > 5000) {
+    lines.push(`  💡 ${symCount} symbols indexed (${Math.round(fileSize/1024)}KB).`);
+    lines.push(`     Save tokens: \`mcp__vaultflow__file_symbols\` for the map, then`);
+    lines.push(`     \`mcp__vaultflow__get_symbol_body(file,name)\` for a single function.`);
   }
 
   let text = lines.join('\n');
