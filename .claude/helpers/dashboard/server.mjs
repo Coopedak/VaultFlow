@@ -933,6 +933,16 @@ app.get('/api/vault-tools/stale', (req, res) => {
   } catch (err) { apiErr(res, err); }
 });
 
+// Git context for the current cwd (or ?cwd= override). Returns the same shape
+// session-start injects: branch, head, ahead/behind, dirty list, recent commits, open PRs.
+app.get('/api/git-context', (req, res) => {
+  try {
+    const gitCtx = require('../git-context.cjs');
+    const cwd = req.query.cwd || process.cwd();
+    res.json(gitCtx.getContext(cwd) || { not_a_repo: true, cwd });
+  } catch (err) { apiErr(res, err); }
+});
+
 app.get('/api/code-graph/top-files', (req, res) => {
   try {
     const limit = Number(req.query.limit) || 20;

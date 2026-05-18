@@ -72,11 +72,12 @@ function getContext(cwd) {
     behind = Number(b) || 0;
   }
 
-  // Last 5 commits — first-line subjects only
-  const log = git('log -5 --pretty=format:%h\t%s', cwd) || '';
+  // Last 5 commits via --oneline (avoids cmd.exe %h variable expansion on Windows)
+  const log = git('log -5 --oneline --no-decorate', cwd) || '';
   const commits = log.split('\n').filter(Boolean).map(line => {
-    const [h, ...rest] = line.split('\t');
-    return { hash: h, subject: rest.join('\t').slice(0, 100) };
+    const sp = line.indexOf(' ');
+    if (sp === -1) return { hash: line, subject: '' };
+    return { hash: line.slice(0, sp), subject: line.slice(sp + 1).slice(0, 100) };
   });
 
   // Uncommitted: short status, capped at 15 lines

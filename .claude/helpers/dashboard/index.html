@@ -591,6 +591,40 @@
     </div>
 
     <div class="table-card" style="margin-top:16px">
+      <h2>Symbol Search</h2>
+      <p style="color:var(--muted);margin:4px 0 8px">
+        Find any function/class/type by name across all indexed files. Same as the <code>find_symbol</code> MCP tool.
+      </p>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <input id="symsearch-q" placeholder="symbol name (substring match)" style="flex:1;padding:6px;background:#0a0e14;border:1px solid #1f2733;color:#e6e6e6;border-radius:3px" />
+        <button class="btn-action" id="btn-symsearch">Search</button>
+      </div>
+      <table id="symsearch-table">
+        <thead><tr><th>Name</th><th>Kind</th><th>File</th><th>Line</th><th>Lang</th></tr></thead>
+        <tbody id="symsearch-body"><tr><td colspan="5" style="color:var(--muted);padding:20px">Enter a name fragment.</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="table-card" style="margin-top:16px">
+      <h2>Git Context</h2>
+      <p style="color:var(--muted);margin:4px 0 8px">
+        Same data injected at session start. Defaults to vaultflow's cwd — paste another <code>?cwd=</code> path to inspect another repo.
+      </p>
+      <div id="git-context-display" style="font-family:monospace;font-size:13px;padding:8px;background:#0a0e14;border:1px solid #1f2733;border-radius:3px;white-space:pre-wrap;color:#c9d1d9">Loading…</div>
+    </div>
+
+    <div class="table-card" style="margin-top:16px">
+      <h2>Stale Vault Tools</h2>
+      <p style="color:var(--muted);margin:4px 0 8px">
+        Registered vault tools whose linked path has disappeared. Detected nightly.
+      </p>
+      <table id="stale-tools-table">
+        <thead><tr><th>Tool</th><th>Missing Path</th><th>Reason</th></tr></thead>
+        <tbody id="stale-tools-body"><tr><td colspan="3" style="color:var(--muted);padding:20px">Loading…</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="table-card" style="margin-top:16px">
       <h2>Call Graph — Find Callers</h2>
       <p style="color:var(--muted);margin:4px 0 8px">
         Find every function that calls a given function by name. Function-level blast-radius for refactors.

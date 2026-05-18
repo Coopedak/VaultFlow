@@ -875,6 +875,58 @@ async function loadGraph() {
     }
   };
 
+  // Symbol search
+  document.getElementById('btn-symsearch').onclick = async () => {
+    const q = document.getElementById('symsearch-q').value.trim();
+    const body = document.getElementById('symsearch-body');
+    if (!q) return;
+    body.innerHTML = `<tr><td colspan="5" style="color:var(--muted);padding:20px">Searching…</td></tr>`;
+    try {
+      const r = await api(`/api/code-graph/symbols?q=${encodeURIComponent(q)}&limit=50`);
+      body.innerHTML = r.symbols.length
+        ? r.symbols.map(s => `<tr><td>${escapeHtml(s.name)}</td><td>${escapeHtml(s.kind)}</td><td class="mono">${escapeHtml(s.file)}</td><td>${s.line}</td><td>${escapeHtml(s.lang || '')}</td></tr>`).join('')
+        : `<tr><td colspan="5" style="color:var(--muted);padding:20px">No matches.</td></tr>`;
+    } catch (e) {
+      body.innerHTML = `<tr><td colspan="5" style="color:var(--err);padding:20px">${escapeHtml(e.message)}</td></tr>`;
+    }
+  };
+
+  // Git context
+  try {
+    const g = await api('/api/git-context');
+    const el = document.getElementById('git-context-display');
+    if (g.not_a_repo) {
+      el.textContent = '(not in a git repo: ' + g.cwd + ')';
+    } else {
+      const lines = [];
+      lines.push(`Branch:     ${g.branch} @ ${g.head}`);
+      if (g.upstream) lines.push(`Upstream:   ${g.upstream} (${g.ahead}↑/${g.behind}↓)`);
+      lines.push(`Dirty:      ${g.dirty_count} file(s)`);
+      if (g.status && g.status.length) {
+        lines.push('');
+        for (const s of g.status.slice(0, 10)) lines.push('  ' + s);
+      }
+      lines.push('');
+      lines.push('Recent commits:');
+      for (const c of g.commits || []) lines.push(`  ${c.hash}  ${c.subject}`);
+      if (g.open_prs && g.open_prs.length) {
+        lines.push('');
+        lines.push(`Open PRs (${g.open_prs.length}):`);
+        for (const p of g.open_prs) lines.push(`  #${p.number} ${p.draft?'[draft] ':''}${p.title}`);
+      }
+      el.textContent = lines.join('\n');
+    }
+  } catch (e) { document.getElementById('git-context-display').textContent = '(error: ' + e.message + ')'; }
+
+  // Stale vault tools
+  try {
+    const { rows } = await api('/api/vault-tools/stale?limit=100');
+    const body = document.getElementById('stale-tools-body');
+    body.innerHTML = rows.length
+      ? rows.map(r => `<tr><td>${escapeHtml(r.name)}</td><td class="mono">${escapeHtml(r.path || '')}</td><td>${escapeHtml(r.stale_reason || '')}</td></tr>`).join('')
+      : `<tr><td colspan="3" style="color:var(--muted);padding:20px">No stale tools — all paths resolve.</td></tr>`;
+  } catch (_) {}
+
   // Callers (call graph)
   document.getElementById('btn-callers').onclick = async () => {
     const name    = document.getElementById('callers-name').value.trim();
