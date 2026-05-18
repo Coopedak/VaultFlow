@@ -28,6 +28,28 @@ const cwd     = process.argv[2] || process.cwd();
 const project = process.argv[3] || path.basename(cwd);
 
 (async () => {
+  // ── vault_tools auto-promotion + retrieval learning loop ───────────────
+  // SessionEnd misses ~95% of sessions, so the End-only auto-promotion left
+  // tools stuck at use_count >= 5 unpromoted. Run promotion + learning loop
+  // on Start too — both are idempotent.
+  try {
+    const db = require('./db.cjs');
+    db.initialize(null, null);
+    const eligible = db.getUnpromotedVaultTools(5);
+    for (const tool of eligible) {
+      try { db.promoteVaultTool(tool.id); } catch (_) {}
+    }
+    if (eligible.length > 0) safeWrite(`[vaultflow:bg] auto-promoted ${eligible.length} vault tool(s)\n`);
+    try {
+      const r = db.runRetrievalLearningLoop();
+      if (r && (r.promoted || r.scored)) {
+        safeWrite(`[vaultflow:bg] learning loop — scored:${r.scored||0} promoted:${r.promoted||0}\n`);
+      }
+    } catch (_) {}
+  } catch (err) {
+    safeWrite(`[vaultflow:bg] promotion/learning error — ${err.message}\n`);
+  }
+
   // ── close stale sessions + backfill missing summaries ──────────────────
   // SessionEnd hooks miss ~95% of sessions (Ctrl-C, crash, window close), so
   // session_summaries was 5/123 last week. Backfill from edit_events/patterns

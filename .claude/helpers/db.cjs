@@ -1462,8 +1462,32 @@ function replaceMemorySource(source, entries) {
  * @param {string} patternKey  Canonical pattern identifier.
  * @param {string} [agent]     Agent that fired this pattern (e.g. 'developer-backend').
  */
+// Infrastructure noise that should never be tracked as a pattern: vaultflow's
+// own SQLite/DuckDB WAL files, build artifacts, caches. These were drowning
+// real signal (wal::data alone had 26k fires).
+const PATTERN_DENYLIST = new Set([
+  'wal::data', 'shm::data', 'db::data', 'duckdb::data', 'sqlite::data',
+  'noext::data', 'tmp::data', 'lock::data',
+  'dll::net8.0', 'dll::net6.0', 'dll::net7.0', 'dll::net9.0',
+  'dll::win-x64', 'dll::win-x86', 'pdb::win-x64', 'pdb::net8.0',
+  'pyc::__pycache__', 'log::logs', 'noext::cache',
+]);
+
+// Parent-dir tokens that mark generated/cache output regardless of extension.
+const NOISY_PARENTS = new Set([
+  'cache', '.cache', 'node_modules', 'dist', 'build', 'bin', 'obj',
+  '.next', '.parcel-cache', '.turbo', '__pycache__', '.pytest_cache',
+  '.vs', '.vscode', '.idea',
+]);
+
 function upsertPattern(patternKey, agent) {
   if (!_db) throw new Error('db.upsertPattern: call initialize() first');
+  if (PATTERN_DENYLIST.has(patternKey)) return;
+  // Block wal/shm/lock-prefixed patterns regardless of suffix.
+  if (/^(wal|shm|lock|tmp|cache|pyc)::/.test(patternKey)) return;
+  // Block any pattern whose parent-dir half is a known generated/cache folder.
+  const parent = patternKey.split('::')[1];
+  if (parent && NOISY_PARENTS.has(parent)) return;
 
   const id  = `${patternKey}::${agent || 'unknown'}`;
   const now = new Date().toISOString();
