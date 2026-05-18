@@ -766,6 +766,16 @@ document.getElementById('btn-audit').addEventListener('click', async () => {
 // ── Graph (code graph + focus + backlinks) ──────────────────────────────────
 
 async function loadGraph() {
+  // health checks
+  try {
+    const h = await api('/api/health');
+    const colorFor = s => s === 'ok' ? 'var(--ok,#3fb950)' : s === 'warn' ? 'var(--warn,#d29922)' : 'var(--err,#f85149)';
+    document.getElementById('health-title').innerHTML = `System Health — <span style="color:${colorFor(h.overall)}">${h.overall.toUpperCase()}</span>`;
+    document.getElementById('health-body').innerHTML = h.checks.map(c =>
+      `<tr><td>${escapeHtml(c.name)}</td><td class="mono">${escapeHtml(c.value)}</td><td style="color:var(--muted)">${escapeHtml(c.detail)}</td><td style="color:${colorFor(c.status)};font-weight:bold">${c.status.toUpperCase()}</td></tr>`
+    ).join('');
+  } catch (_) {}
+
   // stats row
   try {
     const stats = await api('/api/code-graph/stats');

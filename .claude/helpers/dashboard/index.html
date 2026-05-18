@@ -512,8 +512,19 @@
     </div>
   </section>
 
-  <!-- ── Graph (code graph + focus + backlinks) ── -->
+  <!-- ── Graph (code graph + focus + backlinks + health) ── -->
   <section class="section" id="tab-graph">
+    <div class="table-card">
+      <h2 id="health-title">System Health</h2>
+      <p style="color:var(--muted);margin:4px 0 8px">
+        Anomaly checks, not row counts. Updated by <code>nightly.mjs</code> at 3 AM (scheduled task <code>VaultflowNightly</code>) and on every dashboard load.
+      </p>
+      <table id="health-table">
+        <thead><tr><th>Check</th><th>Value</th><th>Detail</th><th>Status</th></tr></thead>
+        <tbody id="health-body"><tr><td colspan="4" style="color:var(--muted);padding:20px">Loading…</td></tr></tbody>
+      </table>
+    </div>
+
     <div class="stat-row" id="graph-stat-row"></div>
 
     <div class="table-card">

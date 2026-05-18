@@ -698,6 +698,92 @@ app.get('/api/verdicts', (req, res) => {
   } catch (err) { apiErr(res, err); }
 });
 
+// ── health (anomaly checks, not just counts) ─────────────────────────────
+
+app.get('/api/health', (_req, res) => {
+  try {
+    const checks = [];
+    withRawDb(conn => {
+      // 1. session_summary fill rate (last 7d)
+      const sess7  = conn.prepare("SELECT COUNT(*) AS n FROM sessions WHERE started_at > date('now','-7 days') AND ended_at IS NOT NULL").get().n;
+      const sum7   = conn.prepare("SELECT COUNT(*) AS n FROM session_summaries WHERE summary_at > date('now','-7 days')").get().n;
+      const fillPct = sess7 ? Math.round(100 * sum7 / sess7) : 100;
+      checks.push({
+        name: 'session_summary_fill_rate',
+        value: `${fillPct}%`,
+        detail: `${sum7}/${sess7} closed sessions in last 7d have summaries`,
+        status: fillPct >= 80 ? 'ok' : fillPct >= 50 ? 'warn' : 'fail',
+      });
+
+      // 2. pattern noise ratio
+      const topPattern = conn.prepare('SELECT pattern_key, fire_count FROM patterns ORDER BY fire_count DESC LIMIT 1').get();
+      const isNoise = topPattern && /^(wal|shm|lock|tmp|cache|pyc)::|::(cache|\.cache|node_modules|dist|build|bin|obj|\.vscode|\.idea)$/.test(topPattern.pattern_key);
+      checks.push({
+        name: 'pattern_signal_quality',
+        value: topPattern ? topPattern.pattern_key : '—',
+        detail: topPattern ? `top pattern fired ${topPattern.fire_count}x — ${isNoise ? 'infrastructure noise' : 'real signal'}` : 'no patterns yet',
+        status: !topPattern ? 'ok' : isNoise ? 'fail' : 'ok',
+      });
+
+      // 3. vault_tool promotion backlog
+      const eligible = conn.prepare('SELECT COUNT(*) AS n FROM vault_tools WHERE use_count >= 5 AND (promoted = 0 OR promoted IS NULL)').get().n;
+      checks.push({
+        name: 'vault_tool_promotion_backlog',
+        value: String(eligible),
+        detail: `${eligible} tools eligible (use_count >= 5) but not promoted`,
+        status: eligible === 0 ? 'ok' : eligible <= 5 ? 'warn' : 'fail',
+      });
+
+      // 4. retrieval learning activity
+      const fb7 = conn.prepare("SELECT COUNT(*) AS n FROM retrieval_feedback WHERE timestamp > date('now','-7 days')").get().n;
+      checks.push({
+        name: 'retrieval_learning_activity',
+        value: String(fb7),
+        detail: `${fb7} feedback rows in last 7d`,
+        status: fb7 > 0 ? 'ok' : 'warn',
+      });
+
+      // 5. stale sessions (ended_at null > 12h)
+      const stale = conn.prepare("SELECT COUNT(*) AS n FROM sessions WHERE ended_at IS NULL AND started_at < datetime('now','-12 hours')").get().n;
+      checks.push({
+        name: 'stale_sessions',
+        value: String(stale),
+        detail: `${stale} sessions still open beyond 12h`,
+        status: stale === 0 ? 'ok' : stale <= 3 ? 'warn' : 'fail',
+      });
+    });
+
+    // 6. nightly heartbeat freshness
+    try {
+      const hbPath = path.join(METRICS, 'nightly-heartbeat.json');
+      if (fs.existsSync(hbPath)) {
+        const hb = JSON.parse(fs.readFileSync(hbPath, 'utf8'));
+        const ageH = (Date.now() - new Date(hb.last_run_at).getTime()) / 3_600_000;
+        checks.push({
+          name: 'nightly_maintenance',
+          value: hb.last_run_at,
+          detail: `${ageH.toFixed(1)}h since last nightly run`,
+          status: ageH < 30 ? 'ok' : ageH < 72 ? 'warn' : 'fail',
+        });
+      } else {
+        checks.push({
+          name: 'nightly_maintenance',
+          value: 'never',
+          detail: 'nightly.mjs has never run — install the scheduled task',
+          status: 'fail',
+        });
+      }
+    } catch (e) {
+      checks.push({ name: 'nightly_maintenance', value: 'error', detail: e.message, status: 'fail' });
+    }
+
+    const overall = checks.some(c => c.status === 'fail') ? 'fail'
+                  : checks.some(c => c.status === 'warn') ? 'warn'
+                  : 'ok';
+    res.json({ overall, checks, generated_at: new Date().toISOString() });
+  } catch (err) { apiErr(res, err); }
+});
+
 // ── code graph ────────────────────────────────────────────────────────────
 
 app.get('/api/code-graph/stats', (req, res) => {
