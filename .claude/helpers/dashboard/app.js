@@ -766,6 +766,33 @@ document.getElementById('btn-audit').addEventListener('click', async () => {
 // ── Graph (code graph + focus + backlinks) ──────────────────────────────────
 
 async function loadGraph() {
+  // Unified search handlers
+  function renderUnified(d) {
+    const el = document.getElementById('unified-results');
+    const blocks = [];
+    if (d.memory && d.memory.length) blocks.push(`<div><strong>Memory (${d.memory.length})</strong></div>` + d.memory.map(r => `<div style="margin-left:12px">- <b>${escapeHtml(r.title)}</b> — ${escapeHtml(r.source || '')}</div>`).join(''));
+    if (d.symbols && d.symbols.length) blocks.push(`<div style="margin-top:8px"><strong>Symbols (${d.symbols.length})</strong></div>` + d.symbols.map(s => `<div style="margin-left:12px">- <code>${escapeHtml(s.name)}</code> (${escapeHtml(s.kind)}) — ${escapeHtml(s.file)}:${s.line}</div>`).join(''));
+    if (d.commits && d.commits.length) blocks.push(`<div style="margin-top:8px"><strong>Commits (${d.commits.length})</strong></div>` + d.commits.map(c => `<div style="margin-left:12px">- <code>${c.sha.slice(0,7)}</code> [${escapeHtml(c.project)}] ${escapeHtml(c.subject)}</div>`).join(''));
+    if (d.dictionary && d.dictionary.length) blocks.push(`<div style="margin-top:8px"><strong>Dictionary (${d.dictionary.length})</strong></div>` + d.dictionary.map(t => `<div style="margin-left:12px">- <b>${escapeHtml(t.term)}</b> — ${escapeHtml((t.definition||'').slice(0,160))}</div>`).join(''));
+    if (d.vault_tools && d.vault_tools.length) blocks.push(`<div style="margin-top:8px"><strong>Vault tools (${d.vault_tools.length})</strong></div>` + d.vault_tools.map(t => `<div style="margin-left:12px">- <b>${escapeHtml(t.name)}</b> — ${escapeHtml(t.description || '')}</div>`).join(''));
+    if (d.rows && d.rows.length) blocks.push(`<div><strong>Semantic matches (${d.rows.length})</strong></div>` + d.rows.map(r => `<div style="margin-left:12px">- <b>${escapeHtml(r.title)}</b> (${r.score.toFixed(3)}) — ${escapeHtml(r.source || '')}</div>`).join(''));
+    el.innerHTML = blocks.length ? blocks.join('') : '<div style="color:var(--muted)">No results.</div>';
+  }
+  document.getElementById('btn-unified').onclick = async () => {
+    const q = document.getElementById('unified-q').value.trim();
+    if (!q) return;
+    document.getElementById('unified-results').innerHTML = '<div style="color:var(--muted)">Searching…</div>';
+    try { renderUnified(await api(`/api/search?q=${encodeURIComponent(q)}`)); }
+    catch (e) { document.getElementById('unified-results').innerHTML = `<div style="color:var(--err)">${escapeHtml(e.message)}</div>`; }
+  };
+  document.getElementById('btn-semantic').onclick = async () => {
+    const q = document.getElementById('unified-q').value.trim();
+    if (!q) return;
+    document.getElementById('unified-results').innerHTML = '<div style="color:var(--muted)">Embedding query…</div>';
+    try { renderUnified(await api(`/api/semantic-search?q=${encodeURIComponent(q)}`)); }
+    catch (e) { document.getElementById('unified-results').innerHTML = `<div style="color:var(--err)">${escapeHtml(e.message)} (run \`npm run embeddings:backfill\` first)</div>`; }
+  };
+
   // health checks
   try {
     const h = await api('/api/health');
