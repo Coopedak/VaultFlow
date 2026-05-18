@@ -373,6 +373,24 @@ async function dispatch(event) {
               lines.push(`- **${when}** (${dur}) — files: ${files || '—'}${pats ? `; patterns: ${pats}` : ''}`);
             }
           }
+          // Focus block: surfaces vault/projects/{project}/focus.md so the
+          // model sees current intent at the top of every session, not just
+          // in agent-context.json for subagents.
+          if (focusHeadline) {
+            if (lines.length) lines.push('');
+            lines.push(`## Current focus — ${project}`);
+            lines.push('');
+            try {
+              const focusMod = require('./focus.cjs');
+              const f = focusMod.load(project);
+              if (f && f.body) {
+                lines.push(f.body.trim().slice(0, 1200));
+              } else {
+                lines.push(`_${focusHeadline}_`);
+              }
+            } catch (_) { lines.push(`_${focusHeadline}_`); }
+          }
+
           if (memoryHits.length) {
             if (lines.length) lines.push('');
             lines.push(`## Top memory matches for "${project}"`);
@@ -383,6 +401,25 @@ async function dispatch(event) {
               lines.push(`- **${title}** — ${source}`);
             }
           }
+
+          // Code-graph hint: top 5 most-symbol-dense files in this project so
+          // the model has an immediate map of the project's active surface.
+          try {
+            const hotFiles = db.raw().prepare(`
+              SELECT file, COUNT(*) AS syms FROM code_symbols
+               WHERE project = ?
+               GROUP BY file ORDER BY syms DESC LIMIT 5
+            `).all(project);
+            if (hotFiles.length > 0) {
+              if (lines.length) lines.push('');
+              lines.push(`## Code graph — top files in ${project}`);
+              lines.push('');
+              for (const f of hotFiles) {
+                const base = f.file.split(/[\\\/]/).slice(-3).join('/');
+                lines.push(`- ${base} — ${f.syms} symbols`);
+              }
+            }
+          } catch (_) {}
 
           if (lines.length) {
             const additionalContext = lines.join('\n');
