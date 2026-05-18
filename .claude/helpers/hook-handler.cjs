@@ -430,6 +430,20 @@ async function dispatch(event) {
             }
           }
 
+          // MCP cheat-sheet — surface the available code-graph + memory tools
+          // up front so the LLM knows to prefer them over Read/Grep/Glob. The
+          // descriptions in the MCP schema aren't visible until the model
+          // calls tools/list; this injection forces awareness at start.
+          lines.push('');
+          lines.push('## vaultflow MCP — prefer over Read/Grep when possible');
+          lines.push('');
+          lines.push('- `mcp__vaultflow__find_symbol(name)` instead of grep-for-definition');
+          lines.push('- `mcp__vaultflow__file_symbols(file)` instead of Read for file structure');
+          lines.push('- `mcp__vaultflow__get_symbol_body(file,name)` instead of Read for one function (98% fewer tokens)');
+          lines.push('- `mcp__vaultflow__blast_radius(file)` before editing — every importer of a file');
+          lines.push('- `mcp__vaultflow__find_callers(name)` before renaming — every callsite of a function');
+          lines.push('- `mcp__vaultflow__search_memory(query)` for prior decisions / patterns');
+
           // Code-graph hint: top 5 most-symbol-dense files in this project so
           // the model has an immediate map of the project's active surface.
           try {
