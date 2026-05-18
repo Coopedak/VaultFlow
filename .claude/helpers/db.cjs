@@ -2941,6 +2941,8 @@ module.exports = {
   getMemoryLinkGraph,
   detectStaleMemory,
   getStaleMemory,
+  detectStaleVaultTools,
+  getStaleVaultTools,
   // pattern FTS
   searchPatterns,
   // tool call deduplication
@@ -3177,6 +3179,62 @@ function getStaleMemory(limit = 200) {
      ORDER BY flagged_at DESC
      LIMIT ?
   `).all(limit);
+}
+
+/**
+ * Detect vault_tools whose registered path is dead. Mirrors detectStaleMemory.
+ * Adds a `stale` column on first call (idempotent ALTER TABLE).
+ *
+ * @returns {{ flagged: number, examined: number, cleared: number }}
+ */
+function detectStaleVaultTools() {
+  if (!_db) throw new Error('db.detectStaleVaultTools: call initialize() first');
+  const fsLocal = require('fs');
+
+  // One-shot schema upgrade: add `stale` + `stale_reason` if missing.
+  try {
+    const cols = _db.prepare('PRAGMA table_info(vault_tools)').all().map(c => c.name);
+    if (!cols.includes('stale'))        _db.exec('ALTER TABLE vault_tools ADD COLUMN stale INTEGER DEFAULT 0');
+    if (!cols.includes('stale_reason')) _db.exec('ALTER TABLE vault_tools ADD COLUMN stale_reason TEXT');
+  } catch (_) { /* column already exists */ }
+
+  const rows = _db.prepare(`
+    SELECT id, tool_id, name, path FROM vault_tools
+     WHERE path IS NOT NULL AND path != ''
+  `).all();
+
+  const markStale = _db.prepare(`UPDATE vault_tools SET stale = 1, stale_reason = ? WHERE id = ?`);
+  const markFresh = _db.prepare(`UPDATE vault_tools SET stale = 0, stale_reason = NULL WHERE id = ?`);
+
+  let flagged = 0, cleared = 0;
+  _db.exec('BEGIN');
+  try {
+    for (const r of rows) {
+      let exists = true;
+      try { exists = fsLocal.existsSync(r.path); } catch (_) { exists = false; }
+      if (!exists) { markStale.run('path-missing', r.id); flagged++; }
+      else { const res = markFresh.run(r.id); if (res.changes > 0) cleared++; }
+    }
+    _db.exec('COMMIT');
+  } catch (err) {
+    _db.exec('ROLLBACK');
+    throw err;
+  }
+  return { flagged, examined: rows.length, cleared };
+}
+
+function getStaleVaultTools(limit = 100) {
+  if (!_db) throw new Error('db.getStaleVaultTools: call initialize() first');
+  try {
+    return _db.prepare(`
+      SELECT tool_id, name, path, stale_reason FROM vault_tools
+       WHERE stale = 1
+       ORDER BY name
+       LIMIT ?
+    `).all(limit);
+  } catch (_) {
+    return []; // schema upgrade hasn't run yet
+  }
 }
 
 /**

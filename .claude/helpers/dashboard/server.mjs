@@ -926,6 +926,13 @@ app.get('/api/memory/stale', (req, res) => {
   } catch (err) { apiErr(res, err); }
 });
 
+app.get('/api/vault-tools/stale', (req, res) => {
+  try {
+    const limit = Number(req.query.limit) || 100;
+    res.json({ rows: db.getStaleVaultTools(limit) });
+  } catch (err) { apiErr(res, err); }
+});
+
 app.get('/api/code-graph/top-files', (req, res) => {
   try {
     const limit = Number(req.query.limit) || 20;

@@ -386,6 +386,13 @@ async function dispatch(event) {
                 lines.push('**Recent commits:**');
                 for (const c of g.commits) lines.push(`- \`${c.hash}\` ${c.subject}`);
               }
+              if (g.open_prs && g.open_prs.length) {
+                lines.push(`**Open PRs:** ${g.open_prs.length}`);
+                for (const p of g.open_prs) {
+                  const tag = p.draft ? '[draft] ' : '';
+                  lines.push(`- #${p.number} ${tag}${p.title}${p.author ? ' (@' + p.author + ')' : ''}`);
+                }
+              }
               lines.push('');
             }
           } catch (_) {}

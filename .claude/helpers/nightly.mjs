@@ -151,6 +151,9 @@ results.graph = await step('refresh-code-graph', async () => {
 // 8b. detect stale memory entries (source files that vanished)
 results.staleMemory = await step('detect-stale-memory', () => DRY_RUN ? { skipped: true } : db.detectStaleMemory());
 
+// 8c. detect stale vault tools (registered path no longer exists)
+results.staleTools = await step('detect-stale-vault-tools', () => DRY_RUN ? { skipped: true } : db.detectStaleVaultTools());
+
 // 9. flush to Parquet
 results.parquet = await step('flush-parquet', async () => {
   if (DRY_RUN || SKIP_PARQUET) return { skipped: true };

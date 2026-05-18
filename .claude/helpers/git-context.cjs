@@ -28,6 +28,34 @@ function git(args, cwd, limitBytes = 8192) {
   }
 }
 
+function ghCli(args, cwd) {
+  try {
+    return require('child_process').execSync(`gh ${args}`, {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      maxBuffer: 16384,
+      timeout: 3000,
+      windowsHide: true,
+    }).trim();
+  } catch (_) { return null; }
+}
+
+function getOpenPrs(cwd) {
+  // Quietly returns [] if gh isn't installed/authed or repo has no remote.
+  const out = ghCli('pr list --state open --limit 5 --json number,title,author,headRefName,isDraft', cwd);
+  if (!out) return [];
+  try {
+    return JSON.parse(out).map(p => ({
+      number: p.number,
+      title:  (p.title || '').slice(0, 100),
+      author: p.author && p.author.login,
+      branch: p.headRefName,
+      draft:  !!p.isDraft,
+    }));
+  } catch (_) { return []; }
+}
+
 function getContext(cwd) {
   if (!cwd) return null;
   const inside = git('rev-parse --is-inside-work-tree', cwd);
@@ -56,6 +84,8 @@ function getContext(cwd) {
   const statusLines = statusRaw.split('\n').filter(Boolean);
   const status = statusLines.slice(0, 15);
 
+  const prs = getOpenPrs(cwd);
+
   return {
     branch,
     head,
@@ -65,7 +95,8 @@ function getContext(cwd) {
     commits,
     dirty_count: statusLines.length,
     status,
+    open_prs: prs,
   };
 }
 
-module.exports = { getContext };
+module.exports = { getContext, getOpenPrs };
