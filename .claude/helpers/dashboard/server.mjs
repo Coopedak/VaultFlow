@@ -745,6 +745,25 @@ app.get('/api/health', (_req, res) => {
         status: docs7 > 0 ? 'ok' : 'warn',
       });
 
+      // 4b. code-graph MCP adoption (last 14d). If the LLM never calls the
+      // MCP code-graph tools, the integration is wasted — surface that.
+      const adoption = conn.prepare(`
+        SELECT SUM(CASE WHEN tool_name LIKE 'mcp__%blast_radius%' OR
+                             tool_name LIKE 'mcp__%find_symbol%'  OR
+                             tool_name LIKE 'mcp__%file_symbols%'
+                        THEN 1 ELSE 0 END) AS graph,
+               SUM(CASE WHEN tool_name IN ('Read','Glob','Grep') THEN 1 ELSE 0 END) AS explore
+          FROM tool_calls WHERE timestamp > date('now','-14 days')
+      `).get();
+      const total = (adoption.graph || 0) + (adoption.explore || 0);
+      const pct = total > 0 ? Math.round(100 * (adoption.graph || 0) / total) : 0;
+      checks.push({
+        name: 'code_graph_adoption',
+        value: `${pct}%`,
+        detail: `${adoption.graph || 0} MCP graph calls vs ${adoption.explore || 0} Read/Glob/Grep in last 14d`,
+        status: (adoption.graph || 0) === 0 ? 'warn' : pct >= 5 ? 'ok' : 'warn',
+      });
+
       // 5. stale sessions (ended_at null > 12h)
       const stale = conn.prepare("SELECT COUNT(*) AS n FROM sessions WHERE ended_at IS NULL AND started_at < datetime('now','-12 hours')").get().n;
       checks.push({
@@ -815,6 +834,79 @@ app.get('/api/code-graph/blast-radius', (req, res) => {
     const codeGraph = require('../code-graph.cjs');
     const dependents = codeGraph.getBlastRadius(db, req.query.file, req.query.project || null);
     res.json({ file: req.query.file, dependents });
+  } catch (err) { apiErr(res, err); }
+});
+
+// Most-imported files = "hubs" with highest blast-radius. Editing these
+// without checking dependents is the most likely way to break things.
+// Excludes framework BCL imports (System.*, React, etc.) which are noise.
+app.get('/api/code-graph/hubs', (req, res) => {
+  try {
+    const limit = Number(req.query.limit) || 25;
+    const project = req.query.project || null;
+    const whereParts = [
+      "ci.target NOT LIKE 'System%'",
+      "ci.target NOT LIKE 'Microsoft.%'",
+      "ci.target NOT LIKE 'java.%'",
+      "ci.target NOT LIKE 'javax.%'",
+      "ci.target NOT IN ('react','react-dom','vue','express','lodash','axios','os','fs','path','crypto','util','events','stream','http','https','child_process','url','node:fs','node:path','node:os','node:crypto','node:url','node:child_process','node:module','node:sqlite','node:events','node:stream','node:http','node:https')",
+    ];
+    if (project) whereParts.push('ci.project = ?');
+    const where = 'WHERE ' + whereParts.join(' AND ');
+    const args  = project ? [project, limit] : [limit];
+    const rows = withRawDb(conn => conn.prepare(`
+      SELECT ci.target AS target,
+             COUNT(*)  AS dependents,
+             COUNT(DISTINCT ci.file) AS distinct_files
+        FROM code_imports ci
+        ${where}
+       GROUP BY ci.target
+       ORDER BY dependents DESC
+       LIMIT ?
+    `).all(...args));
+    res.json({ rows });
+  } catch (err) { apiErr(res, err); }
+});
+
+// Measure code-graph adoption: per session, count Explore tool calls
+// (Read/Glob/Grep) vs MCP code-graph tool calls. Lower exploration with
+// higher MCP adoption = the integration is working.
+app.get('/api/code-graph/savings', (req, res) => {
+  try {
+    const days = Number(req.query.days) || 14;
+    const rows = withRawDb(conn => conn.prepare(`
+      SELECT tc.session_id,
+             s.project,
+             s.started_at,
+             SUM(CASE WHEN tc.tool_name IN ('Read','Glob','Grep') THEN 1 ELSE 0 END) AS explore_calls,
+             SUM(CASE WHEN tc.tool_name LIKE 'mcp__vaultflow__blast_radius' OR
+                           tc.tool_name LIKE 'mcp__vaultflow__find_symbol'  OR
+                           tc.tool_name LIKE 'mcp__vaultflow__file_symbols' OR
+                           tc.tool_name LIKE 'mcp__%blast_radius%'          OR
+                           tc.tool_name LIKE 'mcp__%find_symbol%'           OR
+                           tc.tool_name LIKE 'mcp__%file_symbols%'
+                       THEN 1 ELSE 0 END) AS mcp_graph_calls,
+             COUNT(*) AS total_calls
+        FROM tool_calls tc
+        LEFT JOIN sessions s ON s.id = tc.session_id
+       WHERE tc.timestamp > date('now','-' || ? || ' days')
+       GROUP BY tc.session_id
+       HAVING explore_calls + mcp_graph_calls > 0
+       ORDER BY s.started_at DESC
+       LIMIT 100
+    `).all(days));
+
+    const totals = rows.reduce((a, r) => ({
+      explore: a.explore + r.explore_calls,
+      graph:   a.graph   + r.mcp_graph_calls,
+      sessions: a.sessions + 1,
+    }), { explore: 0, graph: 0, sessions: 0 });
+
+    const adoptionPct = (totals.explore + totals.graph) > 0
+      ? Math.round(100 * totals.graph / (totals.explore + totals.graph))
+      : 0;
+
+    res.json({ days, totals, adoption_pct: adoptionPct, sessions: rows });
   } catch (err) { apiErr(res, err); }
 });
 

@@ -791,6 +791,35 @@ async function loadGraph() {
     ).join('');
   } catch (_) {}
 
+  // MCP adoption / savings
+  try {
+    const s = await api('/api/code-graph/savings?days=14');
+    document.getElementById('savings-stats').innerHTML = [
+      { l: 'Adoption',         v: `${s.adoption_pct}%` },
+      { l: 'MCP Graph Calls',  v: fmtNum(s.totals.graph) },
+      { l: 'Explore Calls',    v: fmtNum(s.totals.explore) },
+      { l: 'Sessions Sampled', v: fmtNum(s.totals.sessions) },
+    ].map(c => `<div class="stat-card"><div class="stat-value">${c.v}</div><div class="stat-label">${c.l}</div></div>`).join('');
+    const body = document.getElementById('savings-body');
+    body.innerHTML = s.sessions.length
+      ? s.sessions.slice(0, 25).map(r => {
+          const tot = r.explore_calls + r.mcp_graph_calls;
+          const pct = tot > 0 ? Math.round(100 * r.mcp_graph_calls / tot) : 0;
+          const when = (r.started_at || '').slice(0,10);
+          return `<tr><td class="mono">${escapeHtml((r.session_id||'').slice(0,8))}</td><td>${escapeHtml(r.project || '—')}</td><td>${when}</td><td>${r.explore_calls}</td><td>${r.mcp_graph_calls}</td><td>${pct}%</td></tr>`;
+        }).join('')
+      : `<tr><td colspan="6" style="color:var(--muted);padding:20px">No exploration calls yet in this window.</td></tr>`;
+  } catch (_) {}
+
+  // hubs
+  try {
+    const { rows } = await api('/api/code-graph/hubs?limit=25');
+    const body = document.getElementById('hubs-body');
+    body.innerHTML = rows.length
+      ? rows.map(r => `<tr><td class="mono">${escapeHtml(r.target)}</td><td>${r.distinct_files}</td><td>${r.dependents}</td></tr>`).join('')
+      : `<tr><td colspan="3" style="color:var(--muted);padding:20px">No imports indexed yet.</td></tr>`;
+  } catch (_) {}
+
   // top files
   try {
     const { rows } = await api('/api/code-graph/top-files?limit=25');

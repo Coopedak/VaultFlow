@@ -542,6 +542,29 @@
     </div>
 
     <div class="table-card" style="margin-top:16px">
+      <h2>Code Graph — MCP Adoption (last 14d)</h2>
+      <p style="color:var(--muted);margin:4px 0 8px">
+        How often the LLM uses the MCP code-graph tools (<code>blast_radius</code>, <code>find_symbol</code>, <code>file_symbols</code>) instead of <code>Read</code>/<code>Glob</code>/<code>Grep</code> for exploration. Higher = the integration is paying off.
+      </p>
+      <div id="savings-stats" style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px"></div>
+      <table id="savings-table">
+        <thead><tr><th>Session</th><th>Project</th><th>Started</th><th>Explore (R/G/G)</th><th>MCP Graph</th><th>Adoption</th></tr></thead>
+        <tbody id="savings-body"><tr><td colspan="6" style="color:var(--muted);padding:20px">Loading…</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="table-card" style="margin-top:16px">
+      <h2>Code Graph — Hubs (most-imported files)</h2>
+      <p style="color:var(--muted);margin:4px 0 8px">
+        Files imported by the most others. These have the highest blast-radius — edit them last and check dependents first.
+      </p>
+      <table id="hubs-table">
+        <thead><tr><th>Import Target</th><th>Distinct Importers</th><th>Total Imports</th></tr></thead>
+        <tbody id="hubs-body"><tr><td colspan="3" style="color:var(--muted);padding:20px">Loading…</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="table-card" style="margin-top:16px">
       <h2>Code Graph — Top Files by Symbol Count</h2>
       <p style="color:var(--muted);margin:4px 0 8px">
         Exported symbols + imports indexed from .ts/.cs/.py source files as they're edited.

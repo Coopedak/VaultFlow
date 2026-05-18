@@ -243,36 +243,87 @@ function indexFile(db, filePath, project) {
 
 function getSymbols(db, filePath) {
   db.initialize(null, null);
+  const wsep = filePath.replace(/\//g, '\\');
+  const fsep = filePath.replace(/\\/g, '/');
   return db.raw().prepare(
-    'SELECT kind, name, line FROM code_symbols WHERE file = ? ORDER BY line'
-  ).all(filePath);
+    'SELECT kind, name, line FROM code_symbols WHERE file = ? OR file = ? ORDER BY line'
+  ).all(wsep, fsep);
 }
 
 /**
- * Files that import this file. Matches when the import target ends with the
- * basename (without ext) of the target file. Cheap and accurate enough for
- * blast-radius queries; doesn't resolve full module paths.
+ * Files that import this file. Matches require a path component (starts with
+ * './' or '../' or '/' or contains '/') or an exact dotted-name match. Bare
+ * basename matches are intentionally NOT supported — they produced false
+ * positives like `require('scanner.db')` (sqlite file) matching `db.cjs`.
+ *
+ * Examples for target file `helpers/db.cjs`:
+ *   ✓ require('./db')      → target './db'      matches like2
+ *   ✓ require('./db.cjs')  → target './db.cjs'  matches like1
+ *   ✓ require('../helpers/db') → matches like3
+ *   ✗ require('scanner.db') → no longer matches
+ *   ✗ Python 'from .db import' → no longer matches (relative not to our path)
  */
 function getBlastRadius(db, filePath, project) {
   db.initialize(null, null);
-  const base = path.basename(filePath).replace(/\.[^.]+$/, '');
-  if (!base) return [];
-  const like1 = `%/${base}`;
-  const like2 = `%/${base}.%`;
-  const like3 = `%.${base}`;
-  const like4 = base; // python "import foo"
+  // Normalize to whatever separator the DB uses (we store backslash-windows
+  // paths). Try the platform default; fall back to swapped if no match.
+  const wsep = filePath.replace(/\//g, '\\');
+  const fsep = filePath.replace(/\\/g, '/');
+  const ext  = path.extname(filePath);
+  const base = path.basename(filePath, ext);
+  if (!base || base.length < 2) return [];
+
+  // Auto-scope to the project of the target file when caller didn't specify.
+  // Cross-project blast-radius is rarely what you want — two unrelated repos
+  // both having a './db' module would otherwise pollute the result.
+  if (!project) {
+    try {
+      const row = db.raw().prepare(
+        'SELECT project FROM code_symbols WHERE file = ? OR file = ? LIMIT 1'
+      ).get(wsep, fsep);
+      if (row && row.project) project = row.project;
+    } catch (_) {}
+  }
+
+  // For .py we still allow dotted-module form: foo.bar.db → ends with .db
+  const isPy = ext === '.py';
+
+  // Require a slash-separated path OR a literal `./<base>` / `../<base>` etc.
+  // No bare `<base>` matches unless it's a Python dotted module ending in `.<base>`.
+  const params = [
+    `%/${base}${ext}`,     // ./helpers/db.cjs
+    `%/${base}`,           // ./helpers/db (no extension)
+    `./${base}`,           // ./db
+    `./${base}${ext}`,     // ./db.cjs
+    `../${base}`,          // ../db
+    `../${base}${ext}`,    // ../db.cjs
+  ];
+  const placeholders = params.map(() => 'target = ? OR target LIKE ?').join(' OR ');
+  // For LIKE clauses we pass the same value (param dup). Build the SQL.
+  // Simpler: just use both '=' and 'LIKE' on each pattern via separate ORs.
+  // Reorganize:
+  const exactParams = [`./${base}`, `./${base}${ext}`, `../${base}`, `../${base}${ext}`];
+  const likeParams  = [`%/${base}`, `%/${base}${ext}`];
+  if (isPy) likeParams.push(`%.${base}`); // foo.bar.db for Python only
+
+  const placeholderExact = exactParams.map(() => '?').join(',');
+  const placeholderLike  = likeParams.map(() => 'target LIKE ?').join(' OR ');
+
   const sql = `
     SELECT file, lang, target, line
       FROM code_imports
-     WHERE (target LIKE ? OR target LIKE ? OR target LIKE ? OR target = ?)
+     WHERE (target IN (${placeholderExact}) OR ${placeholderLike})
        ${project ? 'AND project = ?' : ''}
        AND file != ?
      ORDER BY file, line
   `;
-  const params = project
-    ? [like1, like2, like3, like4, project, filePath]
-    : [like1, like2, like3, like4, filePath];
-  return db.raw().prepare(sql).all(...params);
+  const allParams = [...exactParams, ...likeParams];
+  if (project) allParams.push(project);
+  allParams.push(wsep);
+  // Exclude both separator variants of the target file from results.
+  const sqlFinal = sql.replace('AND file != ?', 'AND file != ? AND file != ?');
+  allParams.push(fsep);
+  return db.raw().prepare(sqlFinal).all(...allParams);
 }
 
 function getGraphStats(db, project) {
