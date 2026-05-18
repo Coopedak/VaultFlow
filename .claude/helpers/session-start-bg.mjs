@@ -28,6 +28,15 @@ const cwd     = process.argv[2] || process.cwd();
 const project = process.argv[3] || path.basename(cwd);
 
 (async () => {
+  // ── project focus surfacing ─────────────────────────────────────────────
+  try {
+    const { load } = require('./focus.cjs');
+    const focus = load(project);
+    if (focus && focus.headline) {
+      safeWrite(`[vaultflow:bg] focus — ${focus.headline}\n`);
+    }
+  } catch (_) {}
+
   // ── memory + dictionary import ──────────────────────────────────────────
   try {
     const { doImport } = await import('./auto-memory-hook.mjs');

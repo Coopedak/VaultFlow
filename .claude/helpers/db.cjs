@@ -485,7 +485,45 @@ const SCHEMA_SQL = `
     PRIMARY KEY (agent, model, task_type)
   );
 
+  -- Code graph: symbols exported by each file + cross-file imports.
+  -- Populated by code-graph.cjs from post-edit and watcher.
+  CREATE TABLE IF NOT EXISTS code_symbols (
+    file       TEXT NOT NULL,
+    project    TEXT,
+    lang       TEXT,
+    kind       TEXT NOT NULL,
+    name       TEXT NOT NULL,
+    line       INTEGER NOT NULL DEFAULT 0,
+    indexed_at TEXT NOT NULL,
+    PRIMARY KEY (file, kind, name, line)
+  );
+
+  CREATE TABLE IF NOT EXISTS code_imports (
+    file       TEXT NOT NULL,
+    project    TEXT,
+    lang       TEXT,
+    target     TEXT NOT NULL,
+    raw        TEXT,
+    line       INTEGER NOT NULL DEFAULT 0,
+    indexed_at TEXT NOT NULL,
+    PRIMARY KEY (file, target, line)
+  );
+
+  -- Memory backlinks: [[name]] references between memory files.
+  -- Populated by db.upsertMemoryEntry; mirrors Obsidian graph.
+  CREATE TABLE IF NOT EXISTS memory_links (
+    source     TEXT NOT NULL,
+    target     TEXT NOT NULL,
+    title      TEXT,
+    PRIMARY KEY (source, target)
+  );
+
   -- Performance indexes — queried on every hook fire
+  CREATE INDEX IF NOT EXISTS idx_code_symbols_name    ON code_symbols(name);
+  CREATE INDEX IF NOT EXISTS idx_code_symbols_project ON code_symbols(project);
+  CREATE INDEX IF NOT EXISTS idx_code_imports_target  ON code_imports(target);
+  CREATE INDEX IF NOT EXISTS idx_code_imports_project ON code_imports(project);
+  CREATE INDEX IF NOT EXISTS idx_memory_links_target  ON memory_links(target);
   CREATE INDEX IF NOT EXISTS idx_edit_events_session   ON edit_events(session_id);
   CREATE INDEX IF NOT EXISTS idx_edit_events_timestamp ON edit_events(timestamp);
   CREATE INDEX IF NOT EXISTS idx_tool_calls_session    ON tool_calls(session_id);
@@ -1328,6 +1366,55 @@ function upsertMemoryEntry(source, title, body, tags) {
       body = excluded.body,
       tags = excluded.tags
   `).run({ source, title, body: body || '', tags: tags || '' });
+
+  _refreshMemoryLinks(source, title, body || '');
+}
+
+// Extract [[wikilinks]] from memory body and refresh memory_links.
+// `source` is the memory entry's source file path; entries from the same
+// source share that key. We dedupe per (source,target) so multiple titles
+// inside one file don't fight.
+function _refreshMemoryLinks(source, title, body) {
+  if (!_db) return;
+  const matches = String(body).match(/\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]/g) || [];
+  const targets = new Set();
+  for (const m of matches) {
+    const t = m.slice(2, -2).split(/[|#]/)[0].trim().toLowerCase();
+    if (t) targets.add(t);
+  }
+  if (targets.size === 0) {
+    _db.prepare('DELETE FROM memory_links WHERE source = ? AND title = ?').run(source, title || '');
+    return;
+  }
+  _db.exec('BEGIN');
+  try {
+    _db.prepare('DELETE FROM memory_links WHERE source = ? AND title = ?').run(source, title || '');
+    const ins = _db.prepare(
+      'INSERT OR IGNORE INTO memory_links (source, target, title) VALUES (?, ?, ?)'
+    );
+    for (const tgt of targets) ins.run(source, tgt, title || '');
+    _db.exec('COMMIT');
+  } catch (err) {
+    _db.exec('ROLLBACK');
+    // swallow — backlinks are auxiliary
+  }
+}
+
+function searchMemoryBacklinks(target, limit = 50) {
+  if (!_db) throw new Error('db.searchMemoryBacklinks: call initialize() first');
+  if (!target) return [];
+  const key = String(target).trim().toLowerCase();
+  return _db.prepare(
+    `SELECT source, title, target FROM memory_links
+      WHERE target = ? ORDER BY source LIMIT ?`
+  ).all(key, limit);
+}
+
+function getMemoryLinkGraph(limit = 500) {
+  if (!_db) throw new Error('db.getMemoryLinkGraph: call initialize() first');
+  return _db.prepare(
+    `SELECT source, title, target FROM memory_links ORDER BY source LIMIT ?`
+  ).all(limit);
 }
 
 /**
@@ -1345,6 +1432,7 @@ function replaceMemorySource(source, entries) {
   _db.exec('BEGIN');
   try {
     _db.prepare('DELETE FROM memory_entries WHERE source = ?').run(source);
+    _db.prepare('DELETE FROM memory_links   WHERE source = ?').run(source);
     const insert = _db.prepare(`
       INSERT INTO memory_entries (source, title, body, tags)
       VALUES (@source, @title, @body, @tags)
@@ -1357,6 +1445,9 @@ function replaceMemorySource(source, entries) {
     _db.exec('ROLLBACK');
     throw err;
   }
+
+  // Re-extract backlinks for each entry after the row data is committed.
+  for (const e of entries) _refreshMemoryLinks(source, e.title, e.body || '');
 }
 
 /**
@@ -2788,6 +2879,8 @@ module.exports = {
   upsertMemoryEntry,
   replaceMemorySource,
   searchMemory,
+  searchMemoryBacklinks,
+  getMemoryLinkGraph,
   // pattern FTS
   searchPatterns,
   // tool call deduplication

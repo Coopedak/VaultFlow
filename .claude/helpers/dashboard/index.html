@@ -347,6 +347,7 @@
   <button data-tab="dictionary">Dictionary</button>
   <button data-tab="agents">Agents</button>
   <button data-tab="discoveries">Discoveries</button>
+  <button data-tab="graph">Graph</button>
   <button data-tab="control">⚙ Control</button>
 </nav>
 
@@ -507,6 +508,66 @@
       <table id="memory-table">
         <thead><tr><th>Title</th><th>Source</th><th>Body preview</th><th>Tags</th><th>Rank</th></tr></thead>
         <tbody id="memory-body"><tr><td colspan="5" style="color:var(--muted);padding:20px">Enter a query to search memory.</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── Graph (code graph + focus + backlinks) ── -->
+  <section class="section" id="tab-graph">
+    <div class="stat-row" id="graph-stat-row"></div>
+
+    <div class="table-card">
+      <h2>Project Focus</h2>
+      <p style="color:var(--muted);margin:4px 0 8px">
+        Loaded from <code>{vault_root}/projects/&lt;project&gt;/focus.md</code>. Injected into agent-context.json for every subagent.
+      </p>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <input id="focus-project" placeholder="project name (e.g. vaultflow)" style="flex:1;padding:6px;background:#0a0e14;border:1px solid #1f2733;color:#e6e6e6;border-radius:3px" />
+        <button class="btn-action" id="btn-focus-load">Load</button>
+        <button class="btn-action" id="btn-focus-save">Save</button>
+      </div>
+      <textarea id="focus-body" rows="10" style="width:100%;padding:8px;background:#0a0e14;border:1px solid #1f2733;color:#e6e6e6;border-radius:3px;font-family:monospace;font-size:13px" placeholder="# What I am trying to do this week&#10;..."></textarea>
+      <div class="ctrl-status" id="focus-status"></div>
+    </div>
+
+    <div class="table-card" style="margin-top:16px">
+      <h2>Code Graph — Top Files by Symbol Count</h2>
+      <p style="color:var(--muted);margin:4px 0 8px">
+        Exported symbols + imports indexed from .ts/.cs/.py source files as they're edited.
+      </p>
+      <table id="graph-top-table">
+        <thead><tr><th>File</th><th>Project</th><th>Lang</th><th>Symbols</th></tr></thead>
+        <tbody id="graph-top-body"><tr><td colspan="4" style="color:var(--muted);padding:20px">Loading…</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="table-card" style="margin-top:16px">
+      <h2>Blast Radius Lookup</h2>
+      <p style="color:var(--muted);margin:4px 0 8px">
+        Which files import a target file. Paste an absolute path.
+      </p>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <input id="blast-file" placeholder="C:\GIT\some\file.ts" style="flex:1;padding:6px;background:#0a0e14;border:1px solid #1f2733;color:#e6e6e6;border-radius:3px" />
+        <button class="btn-action" id="btn-blast">Find Dependents</button>
+      </div>
+      <table id="blast-table">
+        <thead><tr><th>Dependent File</th><th>Lang</th><th>Import Target</th><th>Line</th></tr></thead>
+        <tbody id="blast-body"><tr><td colspan="4" style="color:var(--muted);padding:20px">Enter a file path.</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="table-card" style="margin-top:16px">
+      <h2>Memory Backlinks</h2>
+      <p style="color:var(--muted);margin:4px 0 8px">
+        <code>[[name]]</code> references inside memory files — the Obsidian-style backlink graph.
+      </p>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <input id="backlink-target" placeholder="target slug (e.g. tech-stack-enforcement)" style="flex:1;padding:6px;background:#0a0e14;border:1px solid #1f2733;color:#e6e6e6;border-radius:3px" />
+        <button class="btn-action" id="btn-backlinks">Find References</button>
+      </div>
+      <table id="backlinks-table">
+        <thead><tr><th>Source File</th><th>Entry Title</th><th>→ Target</th></tr></thead>
+        <tbody id="backlinks-body"><tr><td colspan="3" style="color:var(--muted);padding:20px">Enter a target or load all.</td></tr></tbody>
       </table>
     </div>
   </section>

@@ -763,6 +763,102 @@ document.getElementById('btn-audit').addEventListener('click', async () => {
   }
 });
 
+// ── Graph (code graph + focus + backlinks) ──────────────────────────────────
+
+async function loadGraph() {
+  // stats row
+  try {
+    const stats = await api('/api/code-graph/stats');
+    const row = document.getElementById('graph-stat-row');
+    const cards = [
+      { label: 'Indexed Files', value: fmtNum(stats.files) },
+      { label: 'Symbols',       value: fmtNum(stats.symbols) },
+      { label: 'Imports',       value: fmtNum(stats.imports) },
+      { label: 'Languages',     value: (stats.by_lang || []).map(l => `${l.lang}:${l.n}`).join('  ') || '—' },
+    ];
+    row.innerHTML = cards.map(c =>
+      `<div class="stat-card"><div class="stat-value">${c.value}</div><div class="stat-label">${c.label}</div></div>`
+    ).join('');
+  } catch (_) {}
+
+  // top files
+  try {
+    const { rows } = await api('/api/code-graph/top-files?limit=25');
+    const body = document.getElementById('graph-top-body');
+    body.innerHTML = rows.length
+      ? rows.map(r => `<tr><td class="mono">${escapeHtml(r.file)}</td><td>${escapeHtml(r.project || '—')}</td><td>${escapeHtml(r.lang || '')}</td><td>${r.symbols}</td></tr>`).join('')
+      : `<tr><td colspan="4" style="color:var(--muted);padding:20px">No symbols indexed yet — edit a .ts/.cs/.py file.</td></tr>`;
+  } catch (_) {}
+
+  // Focus handlers
+  document.getElementById('btn-focus-load').onclick = async () => {
+    const proj = document.getElementById('focus-project').value.trim();
+    if (!proj) return;
+    try {
+      const d = await api(`/api/focus?project=${encodeURIComponent(proj)}`);
+      document.getElementById('focus-body').value = d.body || '';
+      document.getElementById('focus-status').textContent = d.path
+        ? `Loaded ${d.path}${d.updated_at ? ' · updated ' + d.updated_at : ''}`
+        : `No focus file yet for ${proj}.`;
+    } catch (e) {
+      document.getElementById('focus-status').textContent = `Error: ${e.message}`;
+    }
+  };
+  document.getElementById('btn-focus-save').onclick = async () => {
+    const project = document.getElementById('focus-project').value.trim();
+    const body    = document.getElementById('focus-body').value;
+    if (!project) return;
+    try {
+      const r = await fetch('/api/focus', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project, body }),
+      }).then(x => x.json());
+      document.getElementById('focus-status').textContent = r.ok ? `Saved to ${r.path}` : `Error: ${r.error}`;
+    } catch (e) {
+      document.getElementById('focus-status').textContent = `Error: ${e.message}`;
+    }
+  };
+
+  // Blast radius
+  document.getElementById('btn-blast').onclick = async () => {
+    const file = document.getElementById('blast-file').value.trim();
+    if (!file) return;
+    const body = document.getElementById('blast-body');
+    body.innerHTML = `<tr><td colspan="4" style="color:var(--muted);padding:20px">Searching…</td></tr>`;
+    try {
+      const r = await api(`/api/code-graph/blast-radius?file=${encodeURIComponent(file)}`);
+      body.innerHTML = r.dependents.length
+        ? r.dependents.map(d => `<tr><td class="mono">${escapeHtml(d.file)}</td><td>${escapeHtml(d.lang || '')}</td><td class="mono">${escapeHtml(d.target)}</td><td>${d.line}</td></tr>`).join('')
+        : `<tr><td colspan="4" style="color:var(--muted);padding:20px">No dependents found.</td></tr>`;
+    } catch (e) {
+      body.innerHTML = `<tr><td colspan="4" style="color:var(--err);padding:20px">${escapeHtml(e.message)}</td></tr>`;
+    }
+  };
+
+  // Backlinks
+  document.getElementById('btn-backlinks').onclick = async () => {
+    const to = document.getElementById('backlink-target').value.trim();
+    const url = to ? `/api/backlinks?to=${encodeURIComponent(to)}` : '/api/backlinks?limit=200';
+    const body = document.getElementById('backlinks-body');
+    body.innerHTML = `<tr><td colspan="3" style="color:var(--muted);padding:20px">Loading…</td></tr>`;
+    try {
+      const r = await api(url);
+      body.innerHTML = r.rows.length
+        ? r.rows.map(x => `<tr><td class="mono">${escapeHtml(x.source)}</td><td>${escapeHtml(x.title || '')}</td><td class="mono">${escapeHtml(x.target)}</td></tr>`).join('')
+        : `<tr><td colspan="3" style="color:var(--muted);padding:20px">No backlinks yet — they populate as memory files get [[wikilinks]].</td></tr>`;
+    } catch (e) {
+      body.innerHTML = `<tr><td colspan="3" style="color:var(--err);padding:20px">${escapeHtml(e.message)}</td></tr>`;
+    }
+  };
+}
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 // ── loader map ────────────────────────────────────────────────────────────────
 
 const LOADERS = {
@@ -777,6 +873,7 @@ const LOADERS = {
   agents:      loadAgents,
   discoveries: loadDiscoveries,
   memory:      loadMemory,
+  graph:       loadGraph,
   control:     loadControl,
 };
 

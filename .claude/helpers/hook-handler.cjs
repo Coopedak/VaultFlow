@@ -737,12 +737,19 @@ async function dispatch(event) {
         let topMemory = [];
         try { topMemory = _db.searchMemory('agent task context project', 5); } catch (_) {}
 
+        let _focus = null;
+        try {
+          const _focusMod = require('./focus.cjs');
+          if (_sess && _sess.project) _focus = _focusMod.load(_sess.project);
+        } catch (_) {}
+
         const agentCtx = {
           db_path:     _path.join(_metrics, _dbFile),
           session_id:  _sess ? _sess.id      : null,
           project:     _sess ? _sess.project : null,
           helpers_dir: __dirname,
           top_memory:  topMemory.map(m => ({ title: m.title, source: m.source })),
+          focus:       _focus ? { headline: _focus.headline, body: _focus.body, path: _focus.path, updated_at: _focus.updated_at } : null,
           updated_at:  new Date().toISOString(),
         };
 

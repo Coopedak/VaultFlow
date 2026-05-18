@@ -698,6 +698,87 @@ app.get('/api/verdicts', (req, res) => {
   } catch (err) { apiErr(res, err); }
 });
 
+// ── code graph ────────────────────────────────────────────────────────────
+
+app.get('/api/code-graph/stats', (req, res) => {
+  try {
+    const project = req.query.project || null;
+    const codeGraph = require('../code-graph.cjs');
+    res.json(codeGraph.getGraphStats(db, project));
+  } catch (err) { apiErr(res, err); }
+});
+
+app.get('/api/code-graph/symbols', (req, res) => {
+  try {
+    const codeGraph = require('../code-graph.cjs');
+    if (req.query.file) {
+      return res.json({ symbols: codeGraph.getSymbols(db, req.query.file) });
+    }
+    if (req.query.q) {
+      return res.json({ symbols: codeGraph.searchSymbols(db, req.query.q, Number(req.query.limit) || 50) });
+    }
+    res.json({ symbols: [] });
+  } catch (err) { apiErr(res, err); }
+});
+
+app.get('/api/code-graph/blast-radius', (req, res) => {
+  try {
+    if (!req.query.file) return res.status(400).json({ error: 'file required' });
+    const codeGraph = require('../code-graph.cjs');
+    const dependents = codeGraph.getBlastRadius(db, req.query.file, req.query.project || null);
+    res.json({ file: req.query.file, dependents });
+  } catch (err) { apiErr(res, err); }
+});
+
+app.get('/api/code-graph/top-files', (req, res) => {
+  try {
+    const limit = Number(req.query.limit) || 20;
+    const rows = withRawDb(conn => conn.prepare(`
+      SELECT file, project, lang, COUNT(*) AS symbols
+        FROM code_symbols
+       GROUP BY file
+       ORDER BY symbols DESC
+       LIMIT ?
+    `).all(limit));
+    res.json({ rows });
+  } catch (err) { apiErr(res, err); }
+});
+
+// ── project focus ─────────────────────────────────────────────────────────
+
+app.get('/api/focus', (req, res) => {
+  try {
+    const project = req.query.project;
+    if (!project) return res.status(400).json({ error: 'project required' });
+    const focus = require('../focus.cjs');
+    const data = focus.load(project);
+    res.json(data || { project, body: null });
+  } catch (err) { apiErr(res, err); }
+});
+
+app.post('/api/focus', (req, res) => {
+  try {
+    const { project, body } = req.body || {};
+    if (!project || typeof body !== 'string') {
+      return res.status(400).json({ error: 'project + body required' });
+    }
+    const focus = require('../focus.cjs');
+    const fp = focus.save(project, body);
+    res.json({ ok: true, path: fp });
+  } catch (err) { apiErr(res, err); }
+});
+
+// ── memory backlinks ──────────────────────────────────────────────────────
+
+app.get('/api/backlinks', (req, res) => {
+  try {
+    if (req.query.to) {
+      return res.json({ rows: db.searchMemoryBacklinks(req.query.to, Number(req.query.limit) || 50) });
+    }
+    res.json({ rows: db.getMemoryLinkGraph(Number(req.query.limit) || 500) });
+  } catch (err) { apiErr(res, err); }
+});
+
 // ── root → dashboard ──────────────────────────────────────────────────────
 
 app.get('/', (_req, res) => {

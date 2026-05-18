@@ -301,6 +301,20 @@ function run(input) {
       if (isMemoryFile(filePath)) {
         reindexMemoryFile(db, filePath);
       }
+
+      // Code graph: regex-extract symbols + imports for source files. Cheap,
+      // never blocks the hook on errors.
+      try {
+        const codeGraph = require('./code-graph.cjs');
+        if (codeGraph.shouldIndex(filePath)) {
+          const r = codeGraph.indexFile(db, filePath, project);
+          if (r && (r.symbols || r.imports)) {
+            process.stderr.write(`post-edit: code-graph "${path.basename(filePath)}" — ${r.symbols||0} syms / ${r.imports||0} imports\n`);
+          }
+        }
+      } catch (err) {
+        process.stderr.write(`post-edit: code-graph error: ${err.message}\n`);
+      }
     }
 
     // Record one tool call entry for the overall operation

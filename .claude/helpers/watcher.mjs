@@ -852,6 +852,10 @@ async function startWatcher(watchDir) {
       db.recordEdit(sessionId, filePath, project, changeType);
       if (project) dirtyProjects.add(project);
       log(`${changeType}: ${filePath} [${project}]`);
+      try {
+        const codeGraph = require('./code-graph.cjs');
+        if (codeGraph.shouldIndex(filePath)) codeGraph.indexFile(db, filePath, project);
+      } catch (err) { log(`code-graph error: ${err.message}`); }
     } catch (err) {
       log(`recordEdit error: ${err.message}`);
     }
