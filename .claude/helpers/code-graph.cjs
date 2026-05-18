@@ -61,7 +61,13 @@ function extractTs(content) {
     [/^\s*export\s+enum\s+([A-Za-z_$][\w$]*)/, 'enum'],
     [/^\s*export\s+(?:const|let|var)\s+([A-Za-z_$][\w$]*)/, 'const'],
     [/^\s*export\s+default\s+(?:function|class)?\s*([A-Za-z_$][\w$]*)/, 'default'],
-    // module.exports = { foo, bar } or exports.foo =
+    // Top-level CJS: function foo() / async function foo() — captures any
+    // top-level function declaration even without `export`, since CJS modules
+    // export via module.exports = { ... } at the bottom. Without this rule
+    // the vaultflow .cjs files had zero indexed symbols.
+    [/^(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/, 'function'],
+    [/^class\s+([A-Za-z_$][\w$]*)/, 'class'],
+    // module.exports = { foo, bar } / exports.foo =
     [/^\s*module\.exports\s*=\s*([A-Za-z_$][\w$]*)/, 'cjs-default'],
     [/^\s*exports\.([A-Za-z_$][\w$]*)\s*=/, 'cjs-named'],
   ];
@@ -83,6 +89,27 @@ function extractTs(content) {
     if (im2) imports.push({ target: im2[1], raw: line.trim().slice(0, 200), line: i + 1 });
     const im3 = line.match(/^\s*(?:const|let|var)\s+[^=]+=\s*await\s+import\(\s*['"]([^'"]+)['"]/);
     if (im3) imports.push({ target: im3[1], raw: line.trim().slice(0, 200), line: i + 1 });
+  }
+
+  // CJS object-literal exports: `module.exports = { foo, bar, baz };`
+  // Walk lines after `module.exports = {` until the matching `}` and capture
+  // each `name,` or `name: alias,` entry as a cjs-export symbol.
+  for (let i = 0; i < lines.length; i++) {
+    if (!/^\s*module\.exports\s*=\s*\{/.test(lines[i])) continue;
+    let depth = 0, started = false;
+    for (let j = i; j < Math.min(i + 200, lines.length); j++) {
+      const ln = lines[j];
+      for (const ch of ln) { if (ch === '{') { depth++; started = true; } else if (ch === '}') depth--; }
+      if (started && j > i) {
+        // collect bare identifiers / shorthand entries
+        const matches = ln.match(/^\s*([A-Za-z_$][\w$]*)\s*(?:,|$|:)/);
+        if (matches && !['return','if','else','for','while'].includes(matches[1])) {
+          symbols.push({ kind: 'cjs-export', name: matches[1], line: j + 1 });
+        }
+      }
+      if (started && depth === 0) break;
+    }
+    break; // only process the first module.exports block
   }
   return { symbols, imports };
 }

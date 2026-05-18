@@ -131,6 +131,51 @@ const TOOLS = [
       required: ['query'],
     },
   },
+  {
+    name: 'blast_radius',
+    description:
+      'Find every file that imports a target file. Use this BEFORE editing any ' +
+      'source file to understand what depends on it — prevents breaking changes. ' +
+      'Returns dependent file paths with import line numbers. ' +
+      'Faster and more accurate than grepping for callers.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        file:    { type: 'string', description: 'Absolute path to the target file' },
+        project: { type: 'string', description: 'Optional project filter' },
+      },
+      required: ['file'],
+    },
+  },
+  {
+    name: 'find_symbol',
+    description:
+      'Locate where a function, class, type, or other symbol is exported. ' +
+      'Returns file path + line number + kind (function/class/interface/etc). ' +
+      'Faster than grep when looking for the definition of a known name.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name:  { type: 'string', description: 'Symbol name (exact or substring)' },
+        limit: { type: 'integer', description: 'Max results (default 20)' },
+      },
+      required: ['name'],
+    },
+  },
+  {
+    name: 'file_symbols',
+    description:
+      'List every exported symbol in a file: functions, classes, interfaces, ' +
+      'types, enums, constants. Use to understand a file\'s surface area ' +
+      'without reading the whole thing.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        file: { type: 'string', description: 'Absolute path to the file' },
+      },
+      required: ['file'],
+    },
+  },
 ];
 
 // ── tool handlers ─────────────────────────────────────────────────────────
@@ -283,6 +328,44 @@ async function callTool(name, args) {
             : `No tools matching "${args.query}".\nFull index: ${toolsIndex}`,
         }],
       };
+    }
+
+    case 'blast_radius': {
+      const codeGraph = require('./code-graph.cjs');
+      const file = String(args.file || '');
+      if (!file) return { content: [{ type: 'text', text: 'Missing required arg: file' }] };
+      const dependents = codeGraph.getBlastRadius(db, file, args.project || null);
+      if (dependents.length === 0) {
+        return { content: [{ type: 'text', text: `No dependents found for ${file}. Either it's not imported elsewhere or it hasn't been indexed (.cs/.ts/.tsx/.js/.jsx/.mjs/.cjs/.py only).` }] };
+      }
+      const lines = dependents.slice(0, 50).map(d => `- ${d.file}:${d.line} → "${d.target}"`);
+      const more = dependents.length > 50 ? `\n…and ${dependents.length - 50} more` : '';
+      return { content: [{ type: 'text', text: `**Blast radius for ${file}** (${dependents.length} dependents):\n\n${lines.join('\n')}${more}` }] };
+    }
+
+    case 'find_symbol': {
+      const codeGraph = require('./code-graph.cjs');
+      const query = String(args.name || '');
+      if (!query) return { content: [{ type: 'text', text: 'Missing required arg: name' }] };
+      const limit = Math.min(Math.max(1, Math.floor(args.limit || 20)), 100);
+      const rows = codeGraph.searchSymbols(db, query, limit);
+      if (rows.length === 0) {
+        return { content: [{ type: 'text', text: `No symbol matches for "${query}".` }] };
+      }
+      const lines = rows.map(r => `- **${r.name}** (${r.kind}) — ${r.file}:${r.line} [${r.lang}]`);
+      return { content: [{ type: 'text', text: `**Symbols matching "${query}"** (${rows.length}):\n\n${lines.join('\n')}` }] };
+    }
+
+    case 'file_symbols': {
+      const codeGraph = require('./code-graph.cjs');
+      const file = String(args.file || '');
+      if (!file) return { content: [{ type: 'text', text: 'Missing required arg: file' }] };
+      const rows = codeGraph.getSymbols(db, file);
+      if (rows.length === 0) {
+        return { content: [{ type: 'text', text: `No symbols indexed for ${file}. Edit it once or run npm run nightly to index.` }] };
+      }
+      const lines = rows.map(r => `- L${String(r.line).padStart(5)}  ${r.kind.padEnd(10)} ${r.name}`);
+      return { content: [{ type: 'text', text: `**Symbols in ${file}** (${rows.length}):\n\n${lines.join('\n')}` }] };
     }
 
     default:
