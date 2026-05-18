@@ -154,6 +154,26 @@ results.staleMemory = await step('detect-stale-memory', () => DRY_RUN ? { skippe
 // 8c. detect stale vault tools (registered path no longer exists)
 results.staleTools = await step('detect-stale-vault-tools', () => DRY_RUN ? { skipped: true } : db.detectStaleVaultTools());
 
+// 8d. index git commits across all known projects
+results.commits = await step('index-git-commits', () => {
+  if (DRY_RUN) return { skipped: true };
+  const ci = require('./commit-indexer.cjs');
+  const ROOT = process.env.VAULTFLOW_GIT_ROOT || 'C:/GIT';
+  return ci.indexAllProjects(db, ROOT);
+});
+
+// 8e. embeddings backfill — incremental, only embeds new memory entries.
+// Skipped if transformers package isn't installed (npm install @xenova/transformers).
+results.embeddings = await step('embeddings-backfill', async () => {
+  if (DRY_RUN) return { skipped: true };
+  try {
+    const m = await import('./embeddings.mjs');
+    return await m.backfillEmbeddings();
+  } catch (err) {
+    return { skipped: err.message.includes('@xenova') ? 'transformers-not-installed' : err.message };
+  }
+});
+
 // 9. flush to Parquet
 results.parquet = await step('flush-parquet', async () => {
   if (DRY_RUN || SKIP_PARQUET) return { skipped: true };

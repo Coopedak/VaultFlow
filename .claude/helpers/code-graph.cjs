@@ -372,6 +372,16 @@ function getSymbolBody(db, filePath, symbolName, maxLines = 200) {
 
 function getCallers(db, calleeName, project) {
   db.initialize(null, null);
+  // Auto-scope to the project where the callee is defined when caller didn't
+  // specify. Avoids "recordEdit" in other repos polluting vaultflow's results.
+  if (!project) {
+    try {
+      const row = db.raw().prepare(
+        'SELECT project FROM code_symbols WHERE name = ? AND project IS NOT NULL LIMIT 1'
+      ).get(calleeName);
+      if (row && row.project) project = row.project;
+    } catch (_) {}
+  }
   const sql = `
     SELECT caller_file, caller_name, line, lang
       FROM code_calls
@@ -492,13 +502,75 @@ function getGraphStats(db, project) {
   return { files, symbols: syms, imports: imps, by_lang: langs };
 }
 
+// Levenshtein distance — used to rank fuzzy matches when exact/substring fails
+function _editDist(a, b) {
+  if (a === b) return 0;
+  const al = a.length, bl = b.length;
+  if (al === 0) return bl;
+  if (bl === 0) return al;
+  let prev = new Array(bl + 1);
+  for (let j = 0; j <= bl; j++) prev[j] = j;
+  for (let i = 1; i <= al; i++) {
+    const curr = new Array(bl + 1);
+    curr[0] = i;
+    for (let j = 1; j <= bl; j++) {
+      const cost = a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1;
+      curr[j] = Math.min(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost);
+    }
+    prev = curr;
+  }
+  return prev[bl];
+}
+
 function searchSymbols(db, query, limit = 50) {
   db.initialize(null, null);
-  const like = `%${String(query).slice(0, 100)}%`;
-  return db.raw().prepare(
+  const q = String(query).slice(0, 100);
+  const qLow = q.toLowerCase();
+  const conn = db.raw();
+
+  // Pass 1: exact + substring (LIKE) — fast, indexed
+  const like = `%${q}%`;
+  let rows = conn.prepare(
     `SELECT file, lang, kind, name, line FROM code_symbols
-      WHERE name LIKE ? ORDER BY name LIMIT ?`
-  ).all(like, limit);
+      WHERE name LIKE ? COLLATE NOCASE
+      LIMIT ?`
+  ).all(like, Math.max(limit * 3, 100));
+
+  // Score: exact match = 0, prefix = 1, contains = 2, else fuzzy distance + 10
+  const scored = rows.map(r => {
+    const n = r.name.toLowerCase();
+    let score;
+    if (n === qLow) score = 0;
+    else if (n.startsWith(qLow)) score = 1;
+    else if (n.includes(qLow)) score = 2;
+    else score = 10 + _editDist(n, qLow);
+    return { ...r, score };
+  });
+
+  // Pass 2: if substring didn't find enough, do fuzzy across all names
+  if (scored.length < limit && q.length >= 3) {
+    const allNames = conn.prepare(
+      `SELECT DISTINCT name FROM code_symbols WHERE LENGTH(name) BETWEEN ? AND ?`
+    ).all(Math.max(2, q.length - 3), q.length + 3);
+
+    const fuzzyMatches = allNames
+      .map(r => ({ name: r.name, dist: _editDist(r.name.toLowerCase(), qLow) }))
+      .filter(r => r.dist <= Math.ceil(q.length * 0.3) && r.dist <= 3)
+      .sort((a, b) => a.dist - b.dist)
+      .slice(0, limit);
+
+    for (const fm of fuzzyMatches) {
+      const seen = scored.find(s => s.name === fm.name);
+      if (seen) continue;
+      const detail = conn.prepare(
+        `SELECT file, lang, kind, name, line FROM code_symbols WHERE name = ? LIMIT 1`
+      ).get(fm.name);
+      if (detail) scored.push({ ...detail, score: 10 + fm.dist });
+    }
+  }
+
+  scored.sort((a, b) => a.score - b.score || a.name.length - b.name.length);
+  return scored.slice(0, limit).map(({ score, ...rest }) => rest);
 }
 
 module.exports = {

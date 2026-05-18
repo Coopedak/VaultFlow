@@ -530,6 +530,51 @@ const SCHEMA_SQL = `
     flagged_at  TEXT NOT NULL
   );
 
+  -- Git commits indexed across all known projects. Lets the LLM search
+  -- "why did we do X" via FTS5 over commit messages, not by digging through
+  -- git log per project.
+  CREATE TABLE IF NOT EXISTS git_commits (
+    sha       TEXT NOT NULL,
+    project   TEXT NOT NULL,
+    author    TEXT,
+    committed_at TEXT,
+    subject   TEXT,
+    body      TEXT,
+    indexed_at TEXT NOT NULL,
+    PRIMARY KEY (project, sha)
+  );
+
+  CREATE VIRTUAL TABLE IF NOT EXISTS git_commits_fts USING fts5(
+    project, subject, body,
+    content='git_commits',
+    content_rowid='rowid'
+  );
+
+  CREATE TRIGGER IF NOT EXISTS git_commits_ai AFTER INSERT ON git_commits BEGIN
+    INSERT INTO git_commits_fts(rowid, project, subject, body)
+    VALUES (new.rowid, COALESCE(new.project,''), COALESCE(new.subject,''), COALESCE(new.body,''));
+  END;
+  CREATE TRIGGER IF NOT EXISTS git_commits_au AFTER UPDATE ON git_commits BEGIN
+    INSERT INTO git_commits_fts(git_commits_fts, rowid, project, subject, body)
+      VALUES('delete', old.rowid, COALESCE(old.project,''), COALESCE(old.subject,''), COALESCE(old.body,''));
+    INSERT INTO git_commits_fts(rowid, project, subject, body)
+      VALUES (new.rowid, COALESCE(new.project,''), COALESCE(new.subject,''), COALESCE(new.body,''));
+  END;
+  CREATE TRIGGER IF NOT EXISTS git_commits_ad AFTER DELETE ON git_commits BEGIN
+    INSERT INTO git_commits_fts(git_commits_fts, rowid, project, subject, body)
+      VALUES('delete', old.rowid, COALESCE(old.project,''), COALESCE(old.subject,''), COALESCE(old.body,''));
+  END;
+
+  -- Memory embeddings for semantic search (filled by embeddings.mjs).
+  -- vector stored as JSON array of floats; 384 dims for all-MiniLM-L6-v2.
+  CREATE TABLE IF NOT EXISTS memory_embeddings (
+    memory_id  INTEGER PRIMARY KEY,
+    vector     TEXT NOT NULL,
+    dim        INTEGER NOT NULL,
+    model      TEXT NOT NULL,
+    indexed_at TEXT NOT NULL
+  );
+
   -- Code call graph: who calls whom at the symbol level. Regex-based first
   -- pass (matches name( occurrences after a function definition's opening).
   CREATE TABLE IF NOT EXISTS code_calls (

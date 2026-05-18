@@ -935,6 +935,53 @@ app.get('/api/vault-tools/stale', (req, res) => {
 
 // Git context for the current cwd (or ?cwd= override). Returns the same shape
 // session-start injects: branch, head, ahead/behind, dirty list, recent commits, open PRs.
+app.get('/api/commits', (req, res) => {
+  try {
+    if (!req.query.q) return res.status(400).json({ error: 'q required' });
+    const ci = require('../commit-indexer.cjs');
+    const rows = ci.searchCommits(db, req.query.q, Number(req.query.limit) || 20);
+    res.json({ query: req.query.q, rows });
+  } catch (err) { apiErr(res, err); }
+});
+
+app.get('/api/search', (req, res) => {
+  try {
+    const q = String(req.query.q || '').trim();
+    const limit = Math.min(Math.max(1, Number(req.query.limit) || 5), 20);
+    if (!q) return res.status(400).json({ error: 'q required' });
+    const out = { query: q };
+    try { out.memory = db.searchMemory(q, limit); } catch (_) { out.memory = []; }
+    try { const cg = require('../code-graph.cjs'); out.symbols = cg.searchSymbols(db, q, limit); } catch (_) { out.symbols = []; }
+    try { const ci = require('../commit-indexer.cjs'); out.commits = ci.searchCommits(db, q, limit); } catch (_) { out.commits = []; }
+    try { out.dictionary = (db.searchDictionary ? db.searchDictionary(q, limit) : []).filter(d => d.category !== 'pattern'); } catch (_) { out.dictionary = []; }
+    try { out.vault_tools = db.searchVaultTools ? db.searchVaultTools(q, limit) : []; } catch (_) { out.vault_tools = []; }
+    res.json(out);
+  } catch (err) { apiErr(res, err); }
+});
+
+app.get('/api/embeddings/stats', async (_req, res) => {
+  try {
+    const m = await import('../embeddings.mjs');
+    res.json(await m.stats());
+  } catch (err) { apiErr(res, err); }
+});
+
+app.post('/api/embeddings/backfill', async (_req, res) => {
+  try {
+    const m = await import('../embeddings.mjs');
+    res.json(await m.backfillEmbeddings());
+  } catch (err) { apiErr(res, err); }
+});
+
+app.get('/api/semantic-search', async (req, res) => {
+  try {
+    if (!req.query.q) return res.status(400).json({ error: 'q required' });
+    const m = await import('../embeddings.mjs');
+    const rows = await m.semanticSearch(req.query.q, Number(req.query.limit) || 5);
+    res.json({ query: req.query.q, rows });
+  } catch (err) { apiErr(res, err); }
+});
+
 app.get('/api/git-context', (req, res) => {
   try {
     const gitCtx = require('../git-context.cjs');

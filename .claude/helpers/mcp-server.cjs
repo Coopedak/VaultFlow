@@ -178,6 +178,37 @@ const TOOLS = [
     },
   },
   {
+    name: 'unified_search',
+    description:
+      'One search across memory, code symbols, git commits, prompts, and the ' +
+      'dictionary — returned as a single ranked list. Use this FIRST when you ' +
+      'are not sure where the answer lives. Saves multiple round-trips.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Search query' },
+        limit: { type: 'number', description: 'Max results per source (default 5)' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'search_commits',
+    description:
+      'Full-text search over indexed git commit messages across all projects. ' +
+      'Use when you want to know "why did we do X?" — commit messages are the ' +
+      'densest record of intent.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query:   { type: 'string', description: 'FTS5 query' },
+        limit:   { type: 'number', description: 'Max results (default 10)' },
+        project: { type: 'string', description: 'Optional project filter' },
+      },
+      required: ['query'],
+    },
+  },
+  {
     name: 'get_symbol_body',
     description:
       'Return just the lines that define a single function/class instead of ' +
@@ -407,6 +438,61 @@ async function callTool(name, args) {
       }
       const lines = rows.map(r => `- L${String(r.line).padStart(5)}  ${r.kind.padEnd(10)} ${r.name}`);
       return { content: [{ type: 'text', text: `**Symbols in ${file}** (${rows.length}):\n\n${lines.join('\n')}` }] };
+    }
+
+    case 'unified_search': {
+      const q = String(args.query || '').trim();
+      const limit = Math.min(Math.max(1, Math.floor(args.limit || 5)), 20);
+      if (!q) return { content: [{ type: 'text', text: 'Empty query' }] };
+
+      const sections = [];
+      // Memory
+      try {
+        const mem = db.searchMemory(q, limit);
+        if (mem.length) sections.push(['### Memory', mem.map(r => `- **${r.title}** — ${r.source}\n  ${String(r.body || '').slice(0, 200)}`).join('\n')].join('\n'));
+      } catch (_) {}
+      // Symbols
+      try {
+        const cg = require('./code-graph.cjs');
+        const syms = cg.searchSymbols(db, q, limit);
+        if (syms.length) sections.push(['### Code symbols', syms.map(s => `- \`${s.name}\` (${s.kind}) — ${s.file}:${s.line}`).join('\n')].join('\n'));
+      } catch (_) {}
+      // Commits
+      try {
+        const ci = require('./commit-indexer.cjs');
+        const cm = ci.searchCommits(db, q, limit);
+        if (cm.length) sections.push(['### Git commits', cm.map(c => `- \`${c.sha.slice(0,7)}\` [${c.project}] ${c.subject}`).join('\n')].join('\n'));
+      } catch (_) {}
+      // Dictionary
+      try {
+        const dict = db.searchDictionary ? db.searchDictionary(q, limit) : [];
+        const filtered = (dict || []).filter(d => d.category !== 'pattern');
+        if (filtered.length) sections.push(['### Dictionary', filtered.map(d => `- **${d.term}** (${d.category}) — ${String(d.definition || '').slice(0, 160)}`).join('\n')].join('\n'));
+      } catch (_) {}
+      // Vault tools
+      try {
+        const tools = db.searchVaultTools ? db.searchVaultTools(q, limit) : [];
+        if (tools.length) sections.push(['### Vault tools', tools.map(t => `- **${t.name}** — ${t.description || ''}`).join('\n')].join('\n'));
+      } catch (_) {}
+
+      const text = sections.length
+        ? `# Unified search: "${q}"\n\n${sections.join('\n\n')}`
+        : `No results across memory, symbols, commits, dictionary, or vault tools for "${q}".`;
+      return { content: [{ type: 'text', text }] };
+    }
+
+    case 'search_commits': {
+      const ci = require('./commit-indexer.cjs');
+      const q = String(args.query || '');
+      if (!q) return { content: [{ type: 'text', text: 'Missing required arg: query' }] };
+      const limit = Math.min(Math.max(1, Math.floor(args.limit || 10)), 50);
+      const rows = ci.searchCommits(db, q, limit);
+      const filtered = args.project ? rows.filter(r => r.project === args.project) : rows;
+      if (filtered.length === 0) {
+        return { content: [{ type: 'text', text: `No commit matches for "${q}".` }] };
+      }
+      const lines = filtered.map(c => `- \`${c.sha.slice(0,7)}\` [${c.project}] ${c.committed_at ? c.committed_at.slice(0,10) + ' ' : ''}${c.subject}${c.body_preview ? '\n    ' + c.body_preview.split('\n')[0].slice(0,140) : ''}`);
+      return { content: [{ type: 'text', text: `**Commits matching "${q}"** (${filtered.length}):\n\n${lines.join('\n')}` }] };
     }
 
     case 'get_symbol_body': {
