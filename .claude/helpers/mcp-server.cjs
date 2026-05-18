@@ -176,6 +176,21 @@ const TOOLS = [
       required: ['file'],
     },
   },
+  {
+    name: 'find_callers',
+    description:
+      'Find every function that calls a given function by name. Function-level ' +
+      'blast-radius. Use BEFORE renaming or changing the signature of a function ' +
+      'to find all callsites.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name:    { type: 'string', description: 'Function/method name (exact)' },
+        project: { type: 'string', description: 'Optional project filter' },
+      },
+      required: ['name'],
+    },
+  },
 ];
 
 // ── tool handlers ─────────────────────────────────────────────────────────
@@ -366,6 +381,19 @@ async function callTool(name, args) {
       }
       const lines = rows.map(r => `- L${String(r.line).padStart(5)}  ${r.kind.padEnd(10)} ${r.name}`);
       return { content: [{ type: 'text', text: `**Symbols in ${file}** (${rows.length}):\n\n${lines.join('\n')}` }] };
+    }
+
+    case 'find_callers': {
+      const codeGraph = require('./code-graph.cjs');
+      const name = String(args.name || '');
+      if (!name) return { content: [{ type: 'text', text: 'Missing required arg: name' }] };
+      const rows = codeGraph.getCallers(db, name, args.project || null);
+      if (rows.length === 0) {
+        return { content: [{ type: 'text', text: `No callers found for "${name}". Either it's unused or callsites haven't been indexed.` }] };
+      }
+      const lines = rows.slice(0, 50).map(r => `- ${r.caller_file}:${r.line} — in \`${r.caller_name}\` [${r.lang}]`);
+      const more = rows.length > 50 ? `\n…and ${rows.length - 50} more` : '';
+      return { content: [{ type: 'text', text: `**Callers of "${name}"** (${rows.length}):\n\n${lines.join('\n')}${more}` }] };
     }
 
     default:

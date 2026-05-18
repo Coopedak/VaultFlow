@@ -148,6 +148,9 @@ results.graph = await step('refresh-code-graph', async () => {
   return { projects: projects.length, files: indexed };
 });
 
+// 8b. detect stale memory entries (source files that vanished)
+results.staleMemory = await step('detect-stale-memory', () => DRY_RUN ? { skipped: true } : db.detectStaleMemory());
+
 // 9. flush to Parquet
 results.parquet = await step('flush-parquet', async () => {
   if (DRY_RUN || SKIP_PARQUET) return { skipped: true };

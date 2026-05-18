@@ -177,7 +177,82 @@ function extractFor(lang, content) {
 function clearFile(rawDb, filePath) {
   rawDb.prepare('DELETE FROM code_symbols WHERE file = ?').run(filePath);
   rawDb.prepare('DELETE FROM code_imports WHERE file = ?').run(filePath);
+  rawDb.prepare('DELETE FROM code_calls   WHERE caller_file = ?').run(filePath);
 }
+
+// Reserved words that look like function calls in regex but aren't —
+// excluded from callee extraction to keep code_calls signal-dense.
+const CALL_KEYWORDS = new Set([
+  // generic
+  'if','for','while','switch','return','typeof','new','await','yield','throw','catch','do','else','case','break','continue','default','this','super','void','delete','in','of','as',
+  'function','arguments','constructor','set','get','static','final','public','private','protected','internal','virtual','override','abstract','sealed',
+  // C# / Java / Python control flow
+  'foreach','using','lock','fixed','unsafe','checked','unchecked','sizeof','nameof','default','async','await','readonly','volatile','out','ref','params','from','where','select','let','orderby','group','into','join','on','equals','by','ascending','descending',
+  'def','class','elif','except','finally','lambda','pass','raise','with','yield','assert','del','global','nonlocal','None','True','False','and','or','not','is',
+  // very common methods that aren't usually the call you care about
+  'print','println','log','toString','valueOf','equals','hashCode','console',
+]);
+
+/**
+ * Extract callees per top-level function in `symbols`. Walks lines bottom-up
+ * from each function's declaration looking for `identifier(` patterns inside
+ * the body (heuristic: until the next top-level def or end of file).
+ *
+ * Regex-based — doesn't do scope analysis. Filters keywords and stdlib noise.
+ */
+function extractCalls(lang, content, symbols) {
+  const calls = [];
+  const lines = content.split('\n');
+
+  const fnSymbols = symbols.filter(s =>
+    ['function','method','class','default'].includes(s.kind)
+  ).sort((a,b) => a.line - b.line);
+
+  for (let i = 0; i < fnSymbols.length; i++) {
+    const sym  = fnSymbols[i];
+    const next = fnSymbols[i + 1];
+    const start = sym.line;
+    const end   = next ? next.line - 1 : Math.min(lines.length, start + 300);
+    if (end - start < 1) continue;
+
+    const seen = new Set();
+    for (let li = start; li < end && li < lines.length; li++) {
+      const line = lines[li];
+      if (!line || line.length > 1000) continue;
+      // Match both bare-name calls (`fn(`) AND method calls (`x.fn(` /
+      // `x.y.fn(`). The dotted form is the most common pattern (imported
+      // modules: db.recordEdit, fs.readFileSync). For dotted, we record the
+      // tail name as the callee — that's what matches the symbol table.
+      const re = /(?<![\w$])([A-Za-z_$][\w$]*)\s*\(/g;
+      let m;
+      while ((m = re.exec(line))) {
+        const name = m[1];
+        if (CALL_KEYWORDS.has(name)) continue;
+        if (name === sym.name) continue; // direct recursion not interesting
+        // Skip very-common stdlib methods that flood the index without signal
+        if (STDLIB_NOISE.has(name)) continue;
+        const key = name + ':' + (li + 1);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        calls.push({ caller: sym.name, callee: name, line: li + 1 });
+      }
+    }
+  }
+  return calls;
+}
+
+// Method names so common they drown the signal. Includes prototype builtins
+// and the most frequent C# / Java methods.
+const STDLIB_NOISE = new Set([
+  // JS / TS
+  'toString','valueOf','hasOwnProperty','toLowerCase','toUpperCase','trim','split','join','slice','splice','push','pop','shift','unshift','indexOf','includes','startsWith','endsWith','replace','replaceAll','match','test','exec','concat','reverse','sort','map','filter','reduce','forEach','find','findIndex','some','every','flat','flatMap','keys','values','entries','assign','freeze','seal','isArray','from','of','parse','stringify','then','catch','finally','resolve','reject','all','race','allSettled','any',
+  // common globals/utility
+  'parseInt','parseFloat','isNaN','isFinite','encodeURIComponent','decodeURIComponent',
+  // C# common
+  'ToString','GetType','GetHashCode','Equals','Compare','CompareTo','GetEnumerator','MoveNext','Dispose','Add','Remove','Contains','TryGetValue','TryParse','Parse','Format','Substring','IndexOf','Trim','Split','Join','ToList','ToArray','ToDictionary','Where','Select','SelectMany','OrderBy','OrderByDescending','GroupBy','First','FirstOrDefault','Single','SingleOrDefault','Any','All','Count','Sum','Min','Max','Average','Distinct','Skip','Take','Concat','Union','Intersect','Except','Reverse','Empty','Range','Repeat','Cast','OfType','Aggregate','Zip',
+  // python builtins
+  'len','range','str','int','float','list','dict','set','tuple','enumerate','zip','map','filter','sorted','reversed','sum','min','max','abs','round','print','isinstance','hasattr','getattr','setattr',
+]);
 
 function indexFile(db, filePath, project) {
   if (!shouldIndex(filePath)) return { skipped: true };
@@ -230,13 +305,47 @@ function indexFile(db, filePath, project) {
     for (const im of imports) {
       insertImp.run(filePath, project || null, lang, im.target, im.raw || '', im.line, now);
     }
+
+    // Call graph
+    const calls = extractCalls(lang, content, symbols);
+    const insertCall = conn.prepare(
+      `INSERT OR REPLACE INTO code_calls
+         (caller_file, caller_name, callee_name, project, lang, line, indexed_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    );
+    for (const c of calls) {
+      insertCall.run(filePath, c.caller, c.callee, project || null, lang, c.line, now);
+    }
+
     co.run();
+    return { lang, symbols: symbols.length, imports: imports.length, calls: calls.length };
   } catch (err) {
     try { rb.run(); } catch (_) {}
     return { error: err.message };
   }
+}
 
-  return { lang, symbols: symbols.length, imports: imports.length };
+function getCallers(db, calleeName, project) {
+  db.initialize(null, null);
+  const sql = `
+    SELECT caller_file, caller_name, line, lang
+      FROM code_calls
+     WHERE callee_name = ?
+       ${project ? 'AND project = ?' : ''}
+     ORDER BY caller_file, line
+  `;
+  const params = project ? [calleeName, project] : [calleeName];
+  return db.raw().prepare(sql).all(...params);
+}
+
+function getCallees(db, callerFile, callerName) {
+  db.initialize(null, null);
+  return db.raw().prepare(`
+    SELECT callee_name, line
+      FROM code_calls
+     WHERE caller_file = ? AND caller_name = ?
+     ORDER BY line
+  `).all(callerFile, callerName);
 }
 
 // ── query helpers ─────────────────────────────────────────────────────────
@@ -355,4 +464,6 @@ module.exports = {
   getBlastRadius,
   getGraphStats,
   searchSymbols,
+  getCallers,
+  getCallees,
 };

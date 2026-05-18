@@ -362,6 +362,34 @@ async function dispatch(event) {
           })();
 
           const lines = [];
+
+          // Git context block — surfaced first because it's the freshest
+          // signal about the user's current intent. Branch + last 5 commits
+          // + uncommitted file count + dirty file list (capped).
+          try {
+            const gitCtx = require('./git-context.cjs');
+            const g = gitCtx.getContext(sess && sess.cwd);
+            if (g) {
+              const tracking = g.upstream
+                ? ` (${g.ahead}↑/${g.behind}↓ vs ${g.upstream})`
+                : ' (no upstream)';
+              lines.push(`## Git — ${project}`);
+              lines.push('');
+              lines.push(`**Branch:** \`${g.branch}\` @ ${g.head}${tracking}`);
+              if (g.dirty_count > 0) {
+                lines.push(`**Uncommitted:** ${g.dirty_count} file(s)`);
+                for (const s of g.status.slice(0, 10)) lines.push(`  \`${s}\``);
+              } else {
+                lines.push(`**Working tree:** clean`);
+              }
+              if (g.commits.length) {
+                lines.push('**Recent commits:**');
+                for (const c of g.commits) lines.push(`- \`${c.hash}\` ${c.subject}`);
+              }
+              lines.push('');
+            }
+          } catch (_) {}
+
           if (summaries.length) {
             lines.push(`## vaultflow — recent activity in ${project}`);
             lines.push('');

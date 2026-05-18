@@ -591,6 +591,33 @@
     </div>
 
     <div class="table-card" style="margin-top:16px">
+      <h2>Call Graph — Find Callers</h2>
+      <p style="color:var(--muted);margin:4px 0 8px">
+        Find every function that calls a given function by name. Function-level blast-radius for refactors.
+      </p>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <input id="callers-name" placeholder="function name (e.g. recordEdit)" style="flex:1;padding:6px;background:#0a0e14;border:1px solid #1f2733;color:#e6e6e6;border-radius:3px" />
+        <input id="callers-project" placeholder="project (optional)" style="width:180px;padding:6px;background:#0a0e14;border:1px solid #1f2733;color:#e6e6e6;border-radius:3px" />
+        <button class="btn-action" id="btn-callers">Find Callers</button>
+      </div>
+      <table id="callers-table">
+        <thead><tr><th>Caller File</th><th>Caller Function</th><th>Line</th><th>Lang</th></tr></thead>
+        <tbody id="callers-body"><tr><td colspan="4" style="color:var(--muted);padding:20px">Enter a function name.</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="table-card" style="margin-top:16px">
+      <h2>Stale Memory</h2>
+      <p style="color:var(--muted);margin:4px 0 8px">
+        Memory entries whose source file has disappeared. Detected by nightly maintenance — review and re-source or delete.
+      </p>
+      <table id="stale-table">
+        <thead><tr><th>Title</th><th>Missing Source</th><th>Reason</th><th>Flagged</th></tr></thead>
+        <tbody id="stale-body"><tr><td colspan="4" style="color:var(--muted);padding:20px">Loading…</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="table-card" style="margin-top:16px">
       <h2>Memory Backlinks</h2>
       <p style="color:var(--muted);margin:4px 0 8px">
         <code>[[name]]</code> references inside memory files — the Obsidian-style backlink graph.

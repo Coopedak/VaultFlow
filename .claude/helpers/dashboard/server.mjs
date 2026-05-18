@@ -910,6 +910,22 @@ app.get('/api/code-graph/savings', (req, res) => {
   } catch (err) { apiErr(res, err); }
 });
 
+app.get('/api/code-graph/callers', (req, res) => {
+  try {
+    if (!req.query.name) return res.status(400).json({ error: 'name required' });
+    const codeGraph = require('../code-graph.cjs');
+    const rows = codeGraph.getCallers(db, req.query.name, req.query.project || null);
+    res.json({ name: req.query.name, callers: rows });
+  } catch (err) { apiErr(res, err); }
+});
+
+app.get('/api/memory/stale', (req, res) => {
+  try {
+    const limit = Number(req.query.limit) || 100;
+    res.json({ rows: db.getStaleMemory(limit) });
+  } catch (err) { apiErr(res, err); }
+});
+
 app.get('/api/code-graph/top-files', (req, res) => {
   try {
     const limit = Number(req.query.limit) || 20;

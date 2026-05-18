@@ -518,6 +518,36 @@ const SCHEMA_SQL = `
     PRIMARY KEY (source, target)
   );
 
+  -- Stale memory tracking: memory entries whose source file has disappeared
+  -- or whose referenced symbols/files no longer exist. Populated nightly.
+  -- Separate table (not a column on memory_entries) so the FTS5 content-table
+  -- triggers stay simple.
+  CREATE TABLE IF NOT EXISTS memory_stale (
+    memory_id   INTEGER PRIMARY KEY,
+    source      TEXT,
+    title       TEXT,
+    reason      TEXT,
+    flagged_at  TEXT NOT NULL
+  );
+
+  -- Code call graph: who calls whom at the symbol level. Regex-based first
+  -- pass (matches name( occurrences after a function definition's opening).
+  CREATE TABLE IF NOT EXISTS code_calls (
+    caller_file  TEXT NOT NULL,
+    caller_name  TEXT NOT NULL,
+    callee_name  TEXT NOT NULL,
+    project      TEXT,
+    lang         TEXT,
+    line         INTEGER NOT NULL DEFAULT 0,
+    indexed_at   TEXT NOT NULL,
+    PRIMARY KEY (caller_file, caller_name, callee_name, line)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_code_calls_callee  ON code_calls(callee_name);
+  CREATE INDEX IF NOT EXISTS idx_code_calls_caller  ON code_calls(caller_file, caller_name);
+  CREATE INDEX IF NOT EXISTS idx_code_calls_project ON code_calls(project);
+  CREATE INDEX IF NOT EXISTS idx_memory_stale_flagged ON memory_stale(flagged_at);
+
   -- Performance indexes — queried on every hook fire
   CREATE INDEX IF NOT EXISTS idx_code_symbols_name    ON code_symbols(name);
   CREATE INDEX IF NOT EXISTS idx_code_symbols_project ON code_symbols(project);
@@ -2909,6 +2939,8 @@ module.exports = {
   searchMemory,
   searchMemoryBacklinks,
   getMemoryLinkGraph,
+  detectStaleMemory,
+  getStaleMemory,
   // pattern FTS
   searchPatterns,
   // tool call deduplication
@@ -3088,6 +3120,63 @@ function recomputeAllSessionAggregates() {
   const rows = _db.prepare('SELECT id FROM sessions').all();
   for (const r of rows) recomputeSessionAggregates(r.id);
   return { updated: rows.length };
+}
+
+/**
+ * Detect memory entries whose source file no longer exists on disk.
+ * Records into memory_stale. Idempotent — re-running just refreshes flags.
+ *
+ * Skips sources that aren't filesystem paths (e.g. 'session-auto:...').
+ *
+ * @returns {{ flagged: number, examined: number, cleared: number }}
+ */
+function detectStaleMemory() {
+  if (!_db) throw new Error('db.detectStaleMemory: call initialize() first');
+  const fsLocal = require('fs');
+  const now = new Date().toISOString();
+
+  const rows = _db.prepare(`
+    SELECT id, source, title FROM memory_entries
+     WHERE source LIKE 'C:%' OR source LIKE '/%' OR source LIKE './%'
+  `).all();
+
+  const insertStale = _db.prepare(`
+    INSERT OR REPLACE INTO memory_stale (memory_id, source, title, reason, flagged_at)
+    VALUES (?, ?, ?, ?, ?)
+  `);
+  const clearStale = _db.prepare(`DELETE FROM memory_stale WHERE memory_id = ?`);
+
+  let flagged = 0, cleared = 0;
+  _db.exec('BEGIN');
+  try {
+    for (const r of rows) {
+      let exists = true;
+      try { exists = fsLocal.existsSync(r.source); } catch (_) { exists = false; }
+      if (!exists) {
+        insertStale.run(r.id, r.source, r.title, 'source-file-missing', now);
+        flagged++;
+      } else {
+        // If it now exists again, clear any prior stale flag (file restored).
+        const res = clearStale.run(r.id);
+        if (res.changes > 0) cleared++;
+      }
+    }
+    _db.exec('COMMIT');
+  } catch (err) {
+    _db.exec('ROLLBACK');
+    throw err;
+  }
+  return { flagged, examined: rows.length, cleared };
+}
+
+function getStaleMemory(limit = 200) {
+  if (!_db) throw new Error('db.getStaleMemory: call initialize() first');
+  return _db.prepare(`
+    SELECT memory_id, source, title, reason, flagged_at
+      FROM memory_stale
+     ORDER BY flagged_at DESC
+     LIMIT ?
+  `).all(limit);
 }
 
 /**

@@ -875,6 +875,33 @@ async function loadGraph() {
     }
   };
 
+  // Callers (call graph)
+  document.getElementById('btn-callers').onclick = async () => {
+    const name    = document.getElementById('callers-name').value.trim();
+    const project = document.getElementById('callers-project').value.trim();
+    if (!name) return;
+    const body = document.getElementById('callers-body');
+    body.innerHTML = `<tr><td colspan="4" style="color:var(--muted);padding:20px">Searching…</td></tr>`;
+    try {
+      const url = `/api/code-graph/callers?name=${encodeURIComponent(name)}${project ? '&project=' + encodeURIComponent(project) : ''}`;
+      const r = await api(url);
+      body.innerHTML = r.callers.length
+        ? r.callers.map(c => `<tr><td class="mono">${escapeHtml(c.caller_file)}</td><td>${escapeHtml(c.caller_name)}</td><td>${c.line}</td><td>${escapeHtml(c.lang || '')}</td></tr>`).join('')
+        : `<tr><td colspan="4" style="color:var(--muted);padding:20px">No callers found.</td></tr>`;
+    } catch (e) {
+      body.innerHTML = `<tr><td colspan="4" style="color:var(--err);padding:20px">${escapeHtml(e.message)}</td></tr>`;
+    }
+  };
+
+  // Stale memory
+  try {
+    const { rows } = await api('/api/memory/stale?limit=100');
+    const body = document.getElementById('stale-body');
+    body.innerHTML = rows.length
+      ? rows.map(r => `<tr><td>${escapeHtml(r.title || '')}</td><td class="mono">${escapeHtml(r.source || '')}</td><td>${escapeHtml(r.reason || '')}</td><td>${(r.flagged_at||'').slice(0,10)}</td></tr>`).join('')
+      : `<tr><td colspan="4" style="color:var(--muted);padding:20px">No stale memory detected. Nightly run will populate.</td></tr>`;
+  } catch (_) {}
+
   // Backlinks
   document.getElementById('btn-backlinks').onclick = async () => {
     const to = document.getElementById('backlink-target').value.trim();
