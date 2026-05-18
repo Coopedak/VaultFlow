@@ -326,7 +326,10 @@ app.get('/api/dictionary', (req, res) => {
       }
       return res.json({ results: rows });
     }
-    // Category counts + sample entries
+    // Category counts + sample entries. Default view excludes the auto-detected
+    // 'pattern' category — those are token-frequency junk (e.g. "summary",
+    // "theoretical") scraped from prompts. Pass ?include=pattern to see them.
+    const includePattern = String(req.query.include || '').includes('pattern');
     const result = withRawDb(conn => {
       const counts = conn.prepare(`
         SELECT category, COUNT(*) AS cnt
@@ -334,12 +337,10 @@ app.get('/api/dictionary', (req, res) => {
         GROUP  BY category
         ORDER  BY cnt DESC
       `).all();
-      const recent = conn.prepare(`
-        SELECT term, category, substr(definition, 1, 100) AS definition
-        FROM   dictionary
-        ORDER  BY id DESC
-        LIMIT  20
-      `).all();
+      const recentSql = includePattern
+        ? `SELECT term, category, substr(definition, 1, 100) AS definition FROM dictionary ORDER BY id DESC LIMIT 20`
+        : `SELECT term, category, substr(definition, 1, 100) AS definition FROM dictionary WHERE category != 'pattern' ORDER BY id DESC LIMIT 20`;
+      const recent = conn.prepare(recentSql).all();
       return { counts, recent };
     });
     res.json(result);
@@ -734,13 +735,14 @@ app.get('/api/health', (_req, res) => {
         status: eligible === 0 ? 'ok' : eligible <= 5 ? 'warn' : 'fail',
       });
 
-      // 4. retrieval learning activity
-      const fb7 = conn.prepare("SELECT COUNT(*) AS n FROM retrieval_feedback WHERE timestamp > date('now','-7 days')").get().n;
+      // 4. retrieval activity (use retrieval_docs growth — populates organically;
+      // retrieval_feedback requires explicit thumbs-up/down which rarely happens)
+      const docs7 = conn.prepare("SELECT COUNT(*) AS n FROM retrieval_docs WHERE timestamp > date('now','-7 days')").get().n;
       checks.push({
-        name: 'retrieval_learning_activity',
-        value: String(fb7),
-        detail: `${fb7} feedback rows in last 7d`,
-        status: fb7 > 0 ? 'ok' : 'warn',
+        name: 'retrieval_activity',
+        value: String(docs7),
+        detail: `${docs7} retrieval docs indexed in last 7d`,
+        status: docs7 > 0 ? 'ok' : 'warn',
       });
 
       // 5. stale sessions (ended_at null > 12h)

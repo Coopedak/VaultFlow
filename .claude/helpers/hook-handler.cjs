@@ -664,6 +664,15 @@ async function dispatch(event) {
       );
       if (!agentType) break;
 
+      // Credit use_count on every Task dispatch — not just router-picked ones.
+      // Before this, only router.cjs incremented, so 99/120 agents showed zero
+      // use even when actively invoked via the Skill/Task tool.
+      try {
+        const _db = require('./db.cjs');
+        _db.initialize(null, null);
+        _db.incrementAgentUse(agentType);
+      } catch (_) {}
+
       try {
         const _yaml    = require('js-yaml');
         const _cfgPath = require('../../config/resolve.cjs');

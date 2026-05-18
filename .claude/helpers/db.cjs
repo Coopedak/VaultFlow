@@ -2274,15 +2274,19 @@ function upsertVaultAgent(agentId, name, source, description, triggerPattern) {
  *
  * @param {string} agentId
  */
-function incrementAgentUse(agentId) {
+function incrementAgentUse(agentIdOrName) {
   if (!_db) throw new Error('db.incrementAgentUse: call initialize() first');
+  if (!agentIdOrName) return;
 
+  // Match agent_id (exact) OR name (so bare subagent_type like 'developer-backend'
+  // from the Task tool credits the right row regardless of project prefix).
+  const now = new Date().toISOString();
   _db.prepare(`
     UPDATE vault_agents
     SET    use_count = use_count + 1,
            last_used = ?
-    WHERE  agent_id = ?
-  `).run(new Date().toISOString(), agentId);
+    WHERE  agent_id = ? OR name = ?
+  `).run(now, agentIdOrName, agentIdOrName);
 }
 
 // ── agent verdicts ────────────────────────────────────────────────────────
