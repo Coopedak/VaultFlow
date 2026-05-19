@@ -935,6 +935,34 @@ app.get('/api/vault-tools/stale', (req, res) => {
 
 // Git context for the current cwd (or ?cwd= override). Returns the same shape
 // session-start injects: branch, head, ahead/behind, dirty list, recent commits, open PRs.
+// Walk a session's events as a single chronological timeline. Merges
+// edit_events + tool_calls + prompts so you can reconstruct "what happened".
+app.get('/api/sessions/:id/timeline', (req, res) => {
+  try {
+    const sid = req.params.id;
+    const rows = withRawDb(conn => {
+      const edits = conn.prepare(`
+        SELECT timestamp AS ts, 'edit' AS kind, file_path AS detail, change_type AS sub
+          FROM edit_events WHERE session_id = ?
+      `).all(sid);
+      const tools = conn.prepare(`
+        SELECT timestamp AS ts, 'tool' AS kind, tool_name AS detail, substr(input, 1, 200) AS sub
+          FROM tool_calls WHERE session_id = ?
+      `).all(sid);
+      const prompts = conn.prepare(`
+        SELECT timestamp AS ts, 'prompt' AS kind, substr(prompt_text, 1, 200) AS detail, source AS sub
+          FROM prompts WHERE session_id = ?
+      `).all(sid);
+      return [...edits, ...tools, ...prompts].sort((a, b) => (a.ts || '').localeCompare(b.ts || ''));
+    });
+
+    const session = withRawDb(conn =>
+      conn.prepare('SELECT id, project, started_at, ended_at, duration_ms FROM sessions WHERE id = ?').get(sid)
+    );
+    res.json({ session, count: rows.length, events: rows });
+  } catch (err) { apiErr(res, err); }
+});
+
 app.get('/api/commits', (req, res) => {
   try {
     if (!req.query.q) return res.status(400).json({ error: 'q required' });

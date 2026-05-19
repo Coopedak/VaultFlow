@@ -122,6 +122,92 @@ export async function semanticSearch(query, limit = 5) {
   return scored.slice(0, limit);
 }
 
+/**
+ * Process the embed_queue: drains rows for memory + prompt kinds and embeds
+ * each, writing to memory_embeddings / prompt_embeddings. Idempotent — safe
+ * to run from session-start-bg and from the watcher in parallel.
+ */
+export async function processEmbedQueue({ batchSize = 200 } = {}) {
+  const db = require('./db.cjs');
+  db.initialize(null, null);
+  const conn = db.raw();
+
+  const rows = db.popEmbedQueue(batchSize);
+  if (!rows.length) return { processed: 0 };
+
+  const upsertMem = conn.prepare(`
+    INSERT INTO memory_embeddings (memory_id, vector, dim, model, indexed_at)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(memory_id) DO UPDATE SET
+      vector = excluded.vector, dim = excluded.dim,
+      model  = excluded.model,  indexed_at = excluded.indexed_at
+  `);
+  const upsertPrompt = conn.prepare(`
+    INSERT INTO prompt_embeddings (prompt_id, vector, dim, model, indexed_at)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(prompt_id) DO UPDATE SET
+      vector = excluded.vector, dim = excluded.dim,
+      model  = excluded.model,  indexed_at = excluded.indexed_at
+  `);
+
+  const now = new Date().toISOString();
+  let processed = 0;
+  for (const r of rows) {
+    try {
+      let text = '';
+      if (r.kind === 'memory') {
+        const m = conn.prepare('SELECT title, body FROM memory_entries WHERE id = ?').get(r.target_id);
+        if (!m) continue;
+        text = (m.title || '') + '\n\n' + (m.body || '');
+      } else if (r.kind === 'prompt') {
+        const p = conn.prepare('SELECT prompt_text FROM prompts WHERE id = ?').get(r.target_id);
+        if (!p) continue;
+        text = p.prompt_text || '';
+      } else { continue; }
+      if (!text.trim()) continue;
+
+      const vec = await embed(text);
+      if (r.kind === 'memory')      upsertMem.run(r.target_id, JSON.stringify(vec), MODEL_DIM, MODEL_ID, now);
+      else if (r.kind === 'prompt') upsertPrompt.run(r.target_id, JSON.stringify(vec), MODEL_DIM, MODEL_ID, now);
+      processed++;
+    } catch (err) {
+      process.stderr.write(`[embeddings] queue ${r.kind}/${r.target_id} err: ${err.message}\n`);
+    }
+  }
+  return { processed, batch: rows.length };
+}
+
+/**
+ * Find past prompts semantically similar to the input. Returns matches above
+ * `threshold` (default 0.85 — quite strict). Used by the UserPromptSubmit
+ * hook to surface "you asked this before."
+ */
+export async function findSimilarPrompts(text, { limit = 3, threshold = 0.85, days = 60 } = {}) {
+  const db = require('./db.cjs');
+  db.initialize(null, null);
+  const conn = db.raw();
+
+  const qVec = await embed(text);
+  const cutoff = new Date(Date.now() - days * 86400_000).toISOString();
+
+  const rows = conn.prepare(`
+    SELECT pe.prompt_id, pe.vector, p.prompt_text, p.timestamp, p.session_id, p.skill_routed
+      FROM prompt_embeddings pe
+      JOIN prompts p ON p.id = pe.prompt_id
+     WHERE p.timestamp > ?
+       AND length(p.prompt_text) > 8
+  `).all(cutoff);
+
+  const scored = [];
+  for (const r of rows) {
+    let v; try { v = JSON.parse(r.vector); } catch (_) { continue; }
+    const s = cosine(qVec, v);
+    if (s >= threshold) scored.push({ ...r, score: s, vector: undefined });
+  }
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, limit);
+}
+
 export async function stats() {
   const db = require('./db.cjs');
   db.initialize(null, null);

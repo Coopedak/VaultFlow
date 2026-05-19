@@ -882,6 +882,17 @@ async function startWatcher(watchDir) {
     pollCodexEvents(db);
   }, 3000);
 
+  // Drain embed_queue every 60s so semantic search stays current as memory
+  // entries and prompts get written between sessions. No-op when transformers
+  // aren't installed (lazy import errors are swallowed).
+  setInterval(async () => {
+    try {
+      const m = await import('./embeddings.mjs');
+      const r = await m.processEmbedQueue();
+      if (r.processed > 0) log(`embed-queue drained ${r.processed} item(s)`);
+    } catch (_) { /* skip silently */ }
+  }, 60_000);
+
   // ── periodic gen-context refresh ──────────────────────────────────────
   // Refreshes AGENTS.md, .github/copilot-instructions.md, and .cursor rules
   // for any project that's been edited since the last tick. This is the

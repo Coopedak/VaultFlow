@@ -270,6 +270,28 @@ async function dispatch(event) {
         `entries=${entries.length}\n`
       );
 
+      // ── similar-prompt dedup: "you've asked this before" ───────────────
+      // If the user's current prompt is ≥0.85 cosine-similar to a past prompt,
+      // surface the past prompts so they can avoid re-running the same work.
+      try {
+        if (prompt && prompt.trim().length >= 12) {
+          const m = await import('./embeddings.mjs');
+          const sim = await m.findSimilarPrompts(prompt, { limit: 3, threshold: 0.85 });
+          if (sim && sim.length) {
+            const lines = ['## You have asked something similar before:', ''];
+            for (const s of sim) {
+              const when = (s.timestamp || '').slice(0, 10);
+              const text = String(s.prompt_text || '').replace(/\s+/g, ' ').slice(0, 120);
+              const sid  = (s.session_id || '').slice(0, 8);
+              lines.push(`- **${when}** (sim ${s.score.toFixed(2)}, session ${sid}): "${text}"`);
+            }
+            lines.push('');
+            lines.push('Consider checking what happened then via `mcp__vaultflow__search_memory` or `get_session_summary`.');
+            additionalContext = (additionalContext || '') + (additionalContext ? '\n\n' : '') + lines.join('\n');
+          }
+        }
+      } catch (_) { /* embeddings not available */ }
+
       // ── review gate injection ───────────────────────────────────────────
       // If a sub-agent completed without voice-of-reason review, prepend a
       // blocking notice to every prompt until the PM clears the flag.

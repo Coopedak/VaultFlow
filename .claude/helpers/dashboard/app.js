@@ -902,6 +902,32 @@ async function loadGraph() {
     }
   };
 
+  // Session replay
+  document.getElementById('btn-replay').onclick = async () => {
+    const sid = document.getElementById('replay-sid').value.trim();
+    if (!sid) return;
+    const body = document.getElementById('replay-body');
+    const meta = document.getElementById('replay-meta');
+    body.innerHTML = `<tr><td colspan="4" style="color:var(--muted);padding:20px">Loading…</td></tr>`;
+    meta.textContent = '';
+    try {
+      // If user pasted a short prefix, expand it
+      let realSid = sid;
+      if (sid.length <= 12) {
+        const list = await api(`/api/sessions`);
+        const match = (list.rows || list).find(s => (s.id || '').startsWith(sid));
+        if (match) realSid = match.id;
+      }
+      const r = await api(`/api/sessions/${encodeURIComponent(realSid)}/timeline`);
+      if (r.session) meta.textContent = `${realSid} · ${r.session.project || '—'} · ${r.session.started_at} → ${r.session.ended_at || '(open)'} · ${r.count} events`;
+      body.innerHTML = r.events.length
+        ? r.events.map(e => `<tr><td class="mono">${escapeHtml((e.ts||'').slice(11,19))}</td><td>${escapeHtml(e.kind)}</td><td class="mono">${escapeHtml(String(e.detail||'').slice(0,80))}</td><td>${escapeHtml(String(e.sub||'').slice(0,40))}</td></tr>`).join('')
+        : `<tr><td colspan="4" style="color:var(--muted);padding:20px">No events for that session.</td></tr>`;
+    } catch (e) {
+      body.innerHTML = `<tr><td colspan="4" style="color:var(--err);padding:20px">${escapeHtml(e.message)}</td></tr>`;
+    }
+  };
+
   // Symbol search
   document.getElementById('btn-symsearch').onclick = async () => {
     const q = document.getElementById('symsearch-q').value.trim();

@@ -28,6 +28,13 @@ const cwd     = process.argv[2] || process.cwd();
 const project = process.argv[3] || path.basename(cwd);
 
 (async () => {
+  // ── drain embed_queue (real-time semantic indexing for memory + prompts) ──
+  try {
+    const m = await import('./embeddings.mjs');
+    const r = await m.processEmbedQueue();
+    if (r.processed > 0) safeWrite(`[vaultflow:bg] embed-queue drained ${r.processed} item(s)\n`);
+  } catch (_) { /* transformers not installed — skip */ }
+
   // ── vault_tools auto-promotion + retrieval learning loop ───────────────
   // SessionEnd misses ~95% of sessions, so the End-only auto-promotion left
   // tools stuck at use_count >= 5 unpromoted. Run promotion + learning loop

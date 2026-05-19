@@ -575,6 +575,26 @@ const SCHEMA_SQL = `
     indexed_at TEXT NOT NULL
   );
 
+  -- Embedding work queue. CJS callers enqueue here; an ESM worker
+  -- (session-start-bg, watcher) processes the queue periodically so
+  -- semantic search stays current without forcing CJS/ESM bridging.
+  CREATE TABLE IF NOT EXISTS embed_queue (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind      TEXT NOT NULL,
+    target_id INTEGER NOT NULL,
+    queued_at TEXT NOT NULL,
+    UNIQUE (kind, target_id)
+  );
+
+  -- Prompt embeddings for similarity dedup.
+  CREATE TABLE IF NOT EXISTS prompt_embeddings (
+    prompt_id  INTEGER PRIMARY KEY,
+    vector     TEXT NOT NULL,
+    dim        INTEGER NOT NULL,
+    model      TEXT NOT NULL,
+    indexed_at TEXT NOT NULL
+  );
+
   -- Code call graph: who calls whom at the symbol level. Regex-based first
   -- pass (matches name( occurrences after a function definition's opening).
   CREATE TABLE IF NOT EXISTS code_calls (
@@ -1443,6 +1463,25 @@ function upsertMemoryEntry(source, title, body, tags) {
   `).run({ source, title, body: body || '', tags: tags || '' });
 
   _refreshMemoryLinks(source, title, body || '');
+  _enqueueEmbed('memory', source, title);
+}
+
+function _enqueueEmbed(kind, source, title) {
+  if (!_db) return;
+  try {
+    let id;
+    if (kind === 'memory') {
+      const row = _db.prepare('SELECT id FROM memory_entries WHERE source = ? AND title = ?').get(source, title);
+      if (!row) return;
+      id = row.id;
+    } else if (kind === 'prompt') {
+      id = source; // for prompt kind we pass prompt_id directly as `source`
+    }
+    if (!id) return;
+    _db.prepare(
+      `INSERT OR IGNORE INTO embed_queue (kind, target_id, queued_at) VALUES (?, ?, ?)`
+    ).run(kind, id, new Date().toISOString());
+  } catch (_) { /* enqueue is best-effort */ }
 }
 
 // Extract [[wikilinks]] from memory body and refresh memory_links.
@@ -1523,6 +1562,8 @@ function replaceMemorySource(source, entries) {
 
   // Re-extract backlinks for each entry after the row data is committed.
   for (const e of entries) _refreshMemoryLinks(source, e.title, e.body || '');
+  // Enqueue each entry for semantic embedding.
+  for (const e of entries) _enqueueEmbed('memory', source, e.title);
 }
 
 /**
@@ -2069,6 +2110,7 @@ function recordPrompt(sessionId, promptText, opts) {
   `).run(now, sessionId, promptText, skillRouted, source);
 
   const promptId = Number(info.lastInsertRowid);
+  _enqueueEmbed('prompt', promptId, null);
   upsertRetrievalDoc({
     source_type:   'prompt',
     source_id:     promptId,
@@ -2988,6 +3030,7 @@ module.exports = {
   getStaleMemory,
   detectStaleVaultTools,
   getStaleVaultTools,
+  popEmbedQueue,
   // pattern FTS
   searchPatterns,
   // tool call deduplication
@@ -3266,6 +3309,15 @@ function detectStaleVaultTools() {
     throw err;
   }
   return { flagged, examined: rows.length, cleared };
+}
+
+function popEmbedQueue(limit = 200) {
+  if (!_db) throw new Error('db.popEmbedQueue: call initialize() first');
+  const rows = _db.prepare(`SELECT id, kind, target_id FROM embed_queue ORDER BY id LIMIT ?`).all(limit);
+  if (!rows.length) return [];
+  const del = _db.prepare(`DELETE FROM embed_queue WHERE id = ?`);
+  for (const r of rows) del.run(r.id);
+  return rows;
 }
 
 function getStaleVaultTools(limit = 100) {

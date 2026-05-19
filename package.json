@@ -19,6 +19,7 @@
     "project-audit": "node .claude/helpers/project-audit.mjs",
     "flush": "node .claude/helpers/flush-parquet.mjs",
     "nightly": "node .claude/helpers/nightly.mjs",
+    "doctor": "node .claude/helpers/doctor.mjs",
     "nightly:dry-run": "node .claude/helpers/nightly.mjs --dry-run",
     "nightly:install": "powershell -ExecutionPolicy Bypass -File .claude/helpers/install-nightly-task.ps1 -RunNow",
     "embeddings:backfill": "node --input-type=module -e \"import('./.claude/helpers/embeddings.mjs').then(m => m.backfillEmbeddings().then(r => console.log(JSON.stringify(r))))\"",

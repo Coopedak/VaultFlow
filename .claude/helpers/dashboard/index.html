@@ -604,6 +604,22 @@
     </div>
 
     <div class="table-card" style="margin-top:16px">
+      <h2>Session Replay</h2>
+      <p style="color:var(--muted);margin:4px 0 8px">
+        Walk every edit, tool call, and prompt for a session as one timeline. Useful for "what happened in that session?"
+      </p>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <input id="replay-sid" placeholder="session id (or 8-char prefix from session list)" style="flex:1;padding:6px;background:#0a0e14;border:1px solid #1f2733;color:#e6e6e6;border-radius:3px" />
+        <button class="btn-action" id="btn-replay">Replay</button>
+      </div>
+      <div id="replay-meta" style="color:var(--muted);font-family:monospace;font-size:12px;margin-bottom:8px"></div>
+      <table id="replay-table">
+        <thead><tr><th>Timestamp</th><th>Kind</th><th>Detail</th><th>Sub</th></tr></thead>
+        <tbody id="replay-body"><tr><td colspan="4" style="color:var(--muted);padding:20px">Enter a session id.</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class="table-card" style="margin-top:16px">
       <h2>Symbol Search</h2>
       <p style="color:var(--muted);margin:4px 0 8px">
         Find any function/class/type by name across all indexed files. Same as the <code>find_symbol</code> MCP tool.
