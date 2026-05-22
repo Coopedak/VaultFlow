@@ -174,6 +174,319 @@ results.embeddings = await step('embeddings-backfill', async () => {
   }
 });
 
+// 8e2. symbol embeddings — drains embed_queue rows enqueued by code-graph
+// for symbols whose content_hash changed. Bounded per-night to avoid the
+// nightly run ballooning; remaining queue carries to the next night.
+results.symbolEmbeds = await step('symbol-embeddings-drain', async () => {
+  if (DRY_RUN) return { skipped: true };
+  try {
+    const m = await import('./embeddings.mjs');
+    const out = await m.processSymbolEmbedQueue({ batchSize: 500 });
+    const stats = db.getSymbolEmbeddingStats ? db.getSymbolEmbeddingStats() : null;
+    return { ...out, stats };
+  } catch (err) {
+    return { skipped: err.message.includes('@xenova') ? 'transformers-not-installed' : err.message };
+  }
+});
+
+// 8f. vault-librarian sync — reconcile dictionary, vault_tools, vault_agents
+results.librarian = await step('vault-librarian-sync', async () => {
+  if (DRY_RUN) return { skipped: true };
+  const conn = db.raw();
+  const out = { dict_imported: 0, tools_registered: 0, agents_registered: 0, dict_noise_purged: 0 };
+
+  // dictionary import from vault/domain/
+  try {
+    const dict = require('./dict.mjs');
+    if (dict && typeof dict.importFromVaultDomain === 'function') {
+      out.dict_imported = await dict.importFromVaultDomain();
+    } else {
+      // CLI fallback — module shape may export differently
+      const { execSync } = require('child_process');
+      const o = execSync(`node "${path.join(__dirname, 'dict.mjs')}" --import`, { encoding: 'utf8' });
+      const m = o.match(/Imported (\d+) terms/);
+      out.dict_imported = m ? Number(m[1]) : 0;
+    }
+  } catch (err) { out.dict_error = err.message; }
+
+  // vault_tools + vault_agents backfill via backfill.mjs
+  try {
+    const { execSync } = require('child_process');
+    const bf = path.join(__dirname, 'backfill.mjs');
+    const t = execSync(`node "${bf}" --tools-only`, { encoding: 'utf8' });
+    const a = execSync(`node "${bf}" --skills-only`, { encoding: 'utf8' });
+    out.tools_registered = Number((t.match(/Tools registered: (\d+)/) || [])[1] || 0);
+    out.agents_registered = Number((a.match(/Agents total registered: (\d+)/) || [])[1] || 0);
+  } catch (err) { out.backfill_error = err.message; }
+
+  // purge auto-detected pattern entries from dictionary (these belong in patterns table, not FTS dictionary)
+  try {
+    const r = conn.prepare(
+      `DELETE FROM dictionary WHERE category = 'pattern' AND definition LIKE 'Auto-detected:%'`
+    ).run();
+    out.dict_noise_purged = r.changes || 0;
+  } catch (err) { out.purge_error = err.message; }
+
+  return out;
+});
+
+// 8g. pattern-analyst audit — surface anomalies for monitoring
+results.patterns = await step('pattern-analyst-audit', () => {
+  if (DRY_RUN) return { skipped: true };
+  const conn = db.raw();
+  const total = conn.prepare(`SELECT COUNT(*) AS n FROM patterns`).get().n;
+  const promoteNow = conn.prepare(
+    `SELECT COUNT(*) AS n FROM patterns WHERE fire_count >= 20 AND confidence >= 0.7 AND promoted = 0`
+  ).get().n;
+  const nullAgent = conn.prepare(`SELECT COUNT(*) AS n FROM patterns WHERE agent IS NULL`).get().n;
+  const promoted = conn.prepare(`SELECT COUNT(*) AS n FROM patterns WHERE promoted = 1`).get().n;
+  // auto-promote any ready candidates
+  const candidates = conn.prepare(
+    `SELECT rowid FROM patterns WHERE fire_count >= 20 AND confidence >= 0.7 AND promoted = 0`
+  ).all();
+  let promotedThisRun = 0;
+  for (const c of candidates) {
+    try {
+      conn.prepare(`UPDATE patterns SET promoted = 1 WHERE rowid = ?`).run(c.rowid);
+      promotedThisRun++;
+    } catch (_) {}
+  }
+  return { total, promoteNow, nullAgent, promoted, promotedThisRun };
+});
+
+// 8h. agent-usage snapshot — daily JSON of which agents fired, which never have
+results.agentUsage = await step('agent-usage-snapshot', () => {
+  if (DRY_RUN) return { skipped: true };
+  const conn = db.raw();
+  const today = new Date().toISOString().slice(0, 10);
+
+  const topUsed = conn.prepare(`
+    SELECT name, source, use_count, last_used
+    FROM vault_agents
+    WHERE use_count > 0
+    ORDER BY use_count DESC LIMIT 25
+  `).all();
+
+  const recent24h = conn.prepare(`
+    SELECT name, source, use_count, last_used
+    FROM vault_agents
+    WHERE last_used > datetime('now', '-24 hours')
+    ORDER BY last_used DESC
+  `).all();
+
+  const neverUsed = conn.prepare(`
+    SELECT name, source FROM vault_agents
+    WHERE use_count = 0 OR use_count IS NULL
+    ORDER BY name
+  `).all();
+
+  const totals = conn.prepare(`
+    SELECT
+      COUNT(*) AS registered,
+      SUM(CASE WHEN use_count > 0 THEN 1 ELSE 0 END) AS ever_used,
+      SUM(CASE WHEN last_used > datetime('now','-24 hours') THEN 1 ELSE 0 END) AS active_24h,
+      SUM(use_count) AS total_invocations
+    FROM vault_agents
+  `).get();
+
+  try {
+    const yaml = require('js-yaml');
+    const cfgPath = require('../../config/resolve.cjs');
+    const cfg = yaml.load(fs.readFileSync(cfgPath, 'utf8')) || {};
+    const metrics = cfg.paths && cfg.paths.metrics_root;
+    if (metrics) {
+      const outDir = path.join(metrics, 'agent-usage');
+      fs.mkdirSync(outDir, { recursive: true });
+      const outPath = path.join(outDir, `agent-usage-${today}.json`);
+      fs.writeFileSync(outPath, JSON.stringify({
+        date: today,
+        totals,
+        topUsed,
+        active_last_24h: recent24h,
+        never_used_sample: neverUsed.slice(0, 30),
+        never_used_count: neverUsed.length,
+      }, null, 2), 'utf8');
+    }
+  } catch (_) {}
+
+  return { ...totals, top: topUsed.length, active_24h: recent24h.length, never: neverUsed.length };
+});
+
+// 8i. routing-coverage audit — for prompts in last 24h, what agents *should* have matched?
+//     surfaces routing misses so descriptions can be tuned with better trigger phrases.
+results.routingAudit = await step('routing-coverage-audit', () => {
+  if (DRY_RUN) return { skipped: true };
+  const conn = db.raw();
+  const today = new Date().toISOString().slice(0, 10);
+
+  // recent prompts (excluding tiny/empty ones)
+  let prompts;
+  try {
+    prompts = conn.prepare(`
+      SELECT id, prompt_text, timestamp
+      FROM prompts
+      WHERE timestamp > datetime('now', '-24 hours')
+        AND prompt_text IS NOT NULL
+        AND LENGTH(prompt_text) >= 20
+      ORDER BY timestamp DESC
+      LIMIT 200
+    `).all();
+  } catch (err) {
+    return { skipped: 'prompts-table-missing', error: err.message };
+  }
+
+  // BM25 search against vault_agents_fts (added 2026-05-21). Falls back to
+  // word-overlap if the FTS table is missing (older DB schemas).
+  const STRONG_BM25 = -5;  // bm25 returns negative; <= -5 = clearly relevant
+  const misses = [];
+  let strongMatches = 0;
+  let usedFts = false;
+  try {
+    // sanity: confirm FTS table exists
+    conn.prepare(`SELECT 1 FROM vault_agents_fts LIMIT 1`).get();
+    usedFts = true;
+  } catch (_) { usedFts = false; }
+
+  if (usedFts) {
+    for (const p of prompts) {
+      let cands;
+      try { cands = db.searchVaultAgents(p.prompt_text, 5); }
+      catch (_) { continue; }
+      if (!cands || !cands.length) continue;
+      const top = cands[0];
+      if (top.rank > STRONG_BM25) continue; // weak match
+      strongMatches++;
+      const promptTs = Date.parse(p.timestamp);
+      const fired = cands.slice(0, 3).some(c => {
+        if (!c.last_used) return false;
+        return Math.abs(Date.parse(c.last_used) - promptTs) < 5 * 60 * 1000;
+      });
+      if (!fired) {
+        misses.push({
+          prompt_id: p.id,
+          ts: p.timestamp,
+          snippet: String(p.prompt_text).slice(0, 140).replace(/\s+/g, ' '),
+          candidates: cands.slice(0, 3).map(c => ({
+            name: c.name, rank: Number(c.rank.toFixed(2)), use_count: c.use_count,
+          })),
+        });
+      }
+    }
+  } else {
+    // Legacy word-overlap fallback
+    const STOP = new Set(['the','and','for','with','that','this','have','from','are','was','will','can','you','our','its','but','not','they','what','when','how','why','should','would','could','about','any','all','one','also','just','like','need','want','your','their','there','here','now','then','some','more','than','only','make','add','use','using','run','set','get','put','let','do','does','did','been','being','were','has','had','out','off','on','to','in','of','it','is','as','at','be','by','or','if','an','a']);
+    function tokens(s) {
+      return new Set(String(s || '').toLowerCase().replace(/[^\w\s-]/g, ' ').split(/\s+/)
+        .filter(w => w.length >= 4 && w.length <= 30 && !STOP.has(w)));
+    }
+    const agents = conn.prepare(`
+      SELECT id, name, description, use_count, last_used FROM vault_agents
+      WHERE description IS NOT NULL AND LENGTH(description) > 30
+    `).all();
+    const agentTokens = agents.map(a => ({ ...a, toks: tokens(a.description + ' ' + a.name) }));
+    for (const p of prompts) {
+      const pToks = tokens(p.prompt_text);
+      if (pToks.size < 3) continue;
+      const scored = [];
+      for (const a of agentTokens) {
+        let overlap = 0;
+        for (const t of pToks) if (a.toks.has(t)) overlap++;
+        if (overlap >= 3) scored.push({ name: a.name, score: overlap, use_count: a.use_count, last_used: a.last_used });
+      }
+      if (!scored.length) continue;
+      scored.sort((x, y) => y.score - x.score);
+      if (scored[0].score < 4) continue;
+      strongMatches++;
+      const promptTs = Date.parse(p.timestamp);
+      const fired = scored.slice(0, 3).some(c => c.last_used && Math.abs(Date.parse(c.last_used) - promptTs) < 5*60*1000);
+      if (!fired) {
+        misses.push({
+          prompt_id: p.id, ts: p.timestamp,
+          snippet: String(p.prompt_text).slice(0, 140).replace(/\s+/g, ' '),
+          candidates: scored.slice(0, 3).map(c => ({ name: c.name, overlap: c.score, use_count: c.use_count })),
+        });
+      }
+    }
+  }
+
+  try {
+    const yaml = require('js-yaml');
+    const cfgPath = require('../../config/resolve.cjs');
+    const cfg = yaml.load(fs.readFileSync(cfgPath, 'utf8')) || {};
+    const metrics = cfg.paths && cfg.paths.metrics_root;
+    if (metrics) {
+      const outDir = path.join(metrics, 'routing-audit');
+      fs.mkdirSync(outDir, { recursive: true });
+      const outPath = path.join(outDir, `routing-misses-${today}.json`);
+      fs.writeFileSync(outPath, JSON.stringify({
+        date: today,
+        prompts_scanned: prompts.length,
+        strong_matches: strongMatches,
+        misses_count: misses.length,
+        miss_rate: strongMatches ? Number((misses.length / strongMatches).toFixed(3)) : 0,
+        misses: misses.slice(0, 50),
+      }, null, 2), 'utf8');
+    }
+  } catch (_) {}
+
+  return {
+    prompts_scanned: prompts.length,
+    strong_matches: strongMatches,
+    misses: misses.length,
+    miss_rate: strongMatches ? Number((misses.length / strongMatches).toFixed(3)) : 0,
+    method: usedFts ? 'bm25' : 'word-overlap',
+  };
+});
+
+// 8j. FTS maintenance — optimize weekly (Sun), integrity-check monthly (1st).
+//     Triggers keep indexes in sync day-to-day; this catches drift + reclaims space.
+results.ftsMaint = await step('fts-maintenance', () => {
+  if (DRY_RUN) return { skipped: true };
+  const conn = db.raw();
+  const now = new Date();
+  const isSunday  = now.getDay() === 0;
+  const isFirstOfMonth = now.getDate() === 1;
+  if (!isSunday && !isFirstOfMonth) return { skipped: 'not-scheduled-today' };
+
+  // Discover all FTS5 virtual tables (skip the *_data / *_idx / *_config helpers)
+  const ftsTables = conn.prepare(`
+    SELECT name FROM sqlite_master
+    WHERE type = 'table'
+      AND sql LIKE '%VIRTUAL TABLE%fts5%'
+      AND name NOT LIKE '%\\_data' ESCAPE '\\'
+      AND name NOT LIKE '%\\_idx' ESCAPE '\\'
+      AND name NOT LIKE '%\\_config' ESCAPE '\\'
+      AND name NOT LIKE '%\\_docsize' ESCAPE '\\'
+      AND name NOT LIKE '%\\_content' ESCAPE '\\'
+  `).all().map(r => r.name);
+
+  const out = { tables: ftsTables.length, optimized: [], integrity: [], errors: [] };
+
+  if (isSunday) {
+    for (const t of ftsTables) {
+      try {
+        conn.exec(`INSERT INTO ${t}(${t}) VALUES('optimize')`);
+        out.optimized.push(t);
+      } catch (err) { out.errors.push({ table: t, op: 'optimize', error: err.message }); }
+    }
+  }
+
+  if (isFirstOfMonth) {
+    for (const t of ftsTables) {
+      try {
+        conn.exec(`INSERT INTO ${t}(${t}) VALUES('integrity-check')`);
+        out.integrity.push({ table: t, ok: true });
+      } catch (err) {
+        // integrity-check throws on mismatch — capture as actionable warning
+        out.integrity.push({ table: t, ok: false, error: err.message });
+        out.errors.push({ table: t, op: 'integrity-check', error: err.message });
+      }
+    }
+  }
+
+  return out;
+});
+
 // 9. flush to Parquet
 results.parquet = await step('flush-parquet', async () => {
   if (DRY_RUN || SKIP_PARQUET) return { skipped: true };

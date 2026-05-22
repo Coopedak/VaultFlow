@@ -48,6 +48,43 @@ function getDb() {
   return _db;
 }
 
+// ── search helpers ────────────────────────────────────────────────────────
+
+/**
+ * Reciprocal Rank Fusion across heterogeneous ranked source lists.
+ * Each source provides its own top-N (already sorted, best first). RRF only
+ * uses rank position — score scales across sources are incomparable in raw form.
+ *
+ *   rrf(doc) = Σ over sources where doc appears of 1 / (k + rank_in_source)
+ *
+ * k=60 is the standard from Cormack & Buettcher (2009) — prevents the top
+ * result of any single source from dominating, while still rewarding cross-
+ * source agreement strongly. Higher rrf score = more relevant.
+ *
+ * @param {Array<Array<{_docId:string}>>} sourceLists  per-source results, sorted best-first
+ * @param {number} k  RRF constant (default 60)
+ * @returns merged list of {…originalFields, _rrfScore} sorted by _rrfScore desc
+ */
+function mergeRRF(sourceLists, k = 60) {
+  const scores = new Map(); // docId -> { score, item }
+  for (const list of sourceLists) {
+    if (!Array.isArray(list)) continue;
+    list.forEach((item, idx) => {
+      if (!item || !item._docId) return;
+      const contribution = 1 / (k + idx + 1);
+      const existing = scores.get(item._docId);
+      if (existing) {
+        existing.score += contribution;
+      } else {
+        scores.set(item._docId, { score: contribution, item });
+      }
+    });
+  }
+  return [...scores.values()]
+    .sort((a, b) => b.score - a.score)
+    .map(({ score, item }) => ({ ...item, _rrfScore: score }));
+}
+
 // ── tool definitions ──────────────────────────────────────────────────────
 
 const TOOLS = [
@@ -445,39 +482,89 @@ async function callTool(name, args) {
       const limit = Math.min(Math.max(1, Math.floor(args.limit || 5)), 20);
       if (!q) return { content: [{ type: 'text', text: 'Empty query' }] };
 
-      const sections = [];
-      // Memory
+      // Fetch each source's top-N independently. RRF only needs rank position.
+      const sourceLists = [];
+      const fetchedAt = Date.now();
       try {
-        const mem = db.searchMemory(q, limit);
-        if (mem.length) sections.push(['### Memory', mem.map(r => `- **${r.title}** — ${r.source}\n  ${String(r.body || '').slice(0, 200)}`).join('\n')].join('\n'));
+        const mem = db.searchMemory(q, limit) || [];
+        sourceLists.push(mem.map(r => ({
+          _source: 'memory',
+          _docId: `memory:${r.id || r.title}`,
+          _render: `- **${r.title}** — ${r.source}\n  ${String(r.body || '').slice(0, 200)}`,
+        })));
       } catch (_) {}
-      // Symbols
       try {
         const cg = require('./code-graph.cjs');
-        const syms = cg.searchSymbols(db, q, limit);
-        if (syms.length) sections.push(['### Code symbols', syms.map(s => `- \`${s.name}\` (${s.kind}) — ${s.file}:${s.line}`).join('\n')].join('\n'));
+        const syms = cg.searchSymbols(db, q, limit) || [];
+        sourceLists.push(syms.map(s => ({
+          _source: 'symbol',
+          _docId: `symbol:${s.file}:${s.name}`,
+          _render: `- \`${s.name}\` (${s.kind}) — ${s.file}:${s.line}`,
+        })));
       } catch (_) {}
-      // Commits
       try {
         const ci = require('./commit-indexer.cjs');
-        const cm = ci.searchCommits(db, q, limit);
-        if (cm.length) sections.push(['### Git commits', cm.map(c => `- \`${c.sha.slice(0,7)}\` [${c.project}] ${c.subject}`).join('\n')].join('\n'));
+        const cm = ci.searchCommits(db, q, limit) || [];
+        sourceLists.push(cm.map(c => ({
+          _source: 'commit',
+          _docId: `commit:${c.sha}`,
+          _render: `- \`${c.sha.slice(0, 7)}\` [${c.project}] ${c.subject}`,
+        })));
       } catch (_) {}
-      // Dictionary
       try {
-        const dict = db.searchDictionary ? db.searchDictionary(q, limit) : [];
-        const filtered = (dict || []).filter(d => d.category !== 'pattern');
-        if (filtered.length) sections.push(['### Dictionary', filtered.map(d => `- **${d.term}** (${d.category}) — ${String(d.definition || '').slice(0, 160)}`).join('\n')].join('\n'));
+        const dict = db.searchDictionary ? (db.searchDictionary(q, limit) || []).filter(d => d.category !== 'pattern') : [];
+        sourceLists.push(dict.map(d => ({
+          _source: 'dictionary',
+          _docId: `dict:${d.id || d.term}`,
+          _render: `- **${d.term}** (${d.category}) — ${String(d.definition || '').slice(0, 160)}`,
+        })));
       } catch (_) {}
-      // Vault tools
       try {
-        const tools = db.searchVaultTools ? db.searchVaultTools(q, limit) : [];
-        if (tools.length) sections.push(['### Vault tools', tools.map(t => `- **${t.name}** — ${t.description || ''}`).join('\n')].join('\n'));
+        const tools = db.searchVaultTools ? (db.searchVaultTools(q, limit) || []) : [];
+        sourceLists.push(tools.map(t => ({
+          _source: 'tool',
+          _docId: `tool:${t.id || t.name}`,
+          _render: `- **${t.name}** — ${t.description || ''}`,
+        })));
       } catch (_) {}
 
-      const text = sections.length
-        ? `# Unified search: "${q}"\n\n${sections.join('\n\n')}`
-        : `No results across memory, symbols, commits, dictionary, or vault tools for "${q}".`;
+      // 6th source: semantic symbol search. Cosine over symbol_embeddings —
+      // finds code whose intent matches the query even without keyword overlap.
+      // Heavier than the other sources (one embed call + N cosines), so the
+      // _await_ here adds latency but it's parallelizable in a future refactor.
+      try {
+        const emb = await import('./embeddings.mjs');
+        const syms = await emb.semanticSymbolSearch(q, { limit, threshold: 0.25 });
+        sourceLists.push(syms.map(s => ({
+          _source: 'symbol-semantic',
+          _docId: `symbol-sem:${s.file}:${s.name}`,
+          _render: `- 🧠 \`${s.name}\` (${s.kind}) — ${s.file} (cos=${s.score.toFixed(2)})`,
+        })));
+      } catch (_) { /* silent — emb may be unavailable */ }
+
+      // RRF merge: rrf(d) = Σ over sources where d appears of 1 / (k + rank_in_source)
+      // k=60 is the standard, prevents top-1 items from dominating.
+      const merged = mergeRRF(sourceLists, 60);
+
+      // Diagnostics — log to stderr; also attach as trailing metadata
+      const top5 = merged.slice(0, 5);
+      const sourcesInTop5 = new Set(top5.map(r => r._source)).size;
+      const mergeMs = Date.now() - fetchedAt;
+      process.stderr.write(
+        `[vaultflow-mcp] unified_search rrf q="${q.slice(0,60)}" ` +
+        `sources=${sourceLists.length} merged=${merged.length} ` +
+        `sources_in_top5=${sourcesInTop5} ms=${mergeMs}\n`
+      );
+
+      if (!merged.length) {
+        return { content: [{ type: 'text', text: `No results across memory, symbols, commits, dictionary, or vault tools for "${q}".` }] };
+      }
+
+      const body = merged.slice(0, limit).map((r, i) => {
+        const tag = `[${r._source}]`;
+        return r._render.replace(/^- /, `- ${tag} `);
+      }).join('\n');
+      const text = `# Unified search: "${q}" (RRF, ${sourcesInTop5} sources in top 5)\n\n${body}`;
       return { content: [{ type: 'text', text }] };
     }
 

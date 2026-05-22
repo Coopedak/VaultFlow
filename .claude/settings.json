@@ -18,6 +18,24 @@
             "command": "node C:/GIT/vaultflow/.claude/helpers/pre-read.cjs"
           }
         ]
+      },
+      {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node C:/GIT/vaultflow/.claude/helpers/hook-handler.cjs pre-skill"
+          }
+        ]
+      },
+      {
+        "matcher": "Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node C:/GIT/vaultflow/.claude/helpers/hook-handler.cjs pre-subagent"
+          }
+        ]
       }
     ],
     "PostToolUse": [

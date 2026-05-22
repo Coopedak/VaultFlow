@@ -419,6 +419,54 @@ const SCHEMA_SQL = `
     last_used       TEXT
   );
 
+  -- FTS5 content table backed by vault_agents. Lets the routing audit and the
+  -- skill-injection hook score prompts against agent descriptions via BM25.
+  CREATE VIRTUAL TABLE IF NOT EXISTS vault_agents_fts USING fts5(
+    name, description, trigger_pattern,
+    content='vault_agents',
+    content_rowid='id'
+  );
+
+  CREATE TRIGGER IF NOT EXISTS vault_agents_ai
+    AFTER INSERT ON vault_agents BEGIN
+      INSERT INTO vault_agents_fts(rowid, name, description, trigger_pattern)
+      VALUES (new.id, new.name, new.description, COALESCE(new.trigger_pattern, ''));
+    END;
+
+  CREATE TRIGGER IF NOT EXISTS vault_agents_au
+    AFTER UPDATE ON vault_agents BEGIN
+      INSERT INTO vault_agents_fts(vault_agents_fts, rowid, name, description, trigger_pattern)
+        VALUES ('delete', old.id, old.name, old.description, COALESCE(old.trigger_pattern, ''));
+      INSERT INTO vault_agents_fts(rowid, name, description, trigger_pattern)
+        VALUES (new.id, new.name, new.description, COALESCE(new.trigger_pattern, ''));
+    END;
+
+  CREATE TRIGGER IF NOT EXISTS vault_agents_ad
+    AFTER DELETE ON vault_agents BEGIN
+      INSERT INTO vault_agents_fts(vault_agents_fts, rowid, name, description, trigger_pattern)
+        VALUES ('delete', old.id, old.name, old.description, COALESCE(old.trigger_pattern, ''));
+    END;
+
+  -- Skill-injection decisions. Diagnostic log for every UserPromptSubmit route:
+  -- what skill the router picked, confidence, whether it was actually injected,
+  -- and the reason (e.g. threshold-met, recently-injected, no-match). Lets the
+  -- nightly routing-coverage audit cross-check "should have fired" prompts
+  -- against the live hook's actual decisions instead of only inferring misses.
+  CREATE TABLE IF NOT EXISTS skill_injection_decisions (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp       TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    session_id      INTEGER,
+    prompt_id       INTEGER,
+    chosen_skill    TEXT,
+    confidence      REAL,
+    injected        INTEGER NOT NULL DEFAULT 0,
+    tier            TEXT,
+    reason          TEXT,
+    candidates_json TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_inj_session ON skill_injection_decisions(session_id);
+  CREATE INDEX IF NOT EXISTS idx_inj_timestamp ON skill_injection_decisions(timestamp);
+
   -- Agent verdict log. Records pass/fail/warn decisions from routing and
   -- quality-gate agents so callers can query aggregate outcomes over time.
   CREATE TABLE IF NOT EXISTS agent_verdicts (
@@ -488,13 +536,14 @@ const SCHEMA_SQL = `
   -- Code graph: symbols exported by each file + cross-file imports.
   -- Populated by code-graph.cjs from post-edit and watcher.
   CREATE TABLE IF NOT EXISTS code_symbols (
-    file       TEXT NOT NULL,
-    project    TEXT,
-    lang       TEXT,
-    kind       TEXT NOT NULL,
-    name       TEXT NOT NULL,
-    line       INTEGER NOT NULL DEFAULT 0,
-    indexed_at TEXT NOT NULL,
+    file         TEXT NOT NULL,
+    project      TEXT,
+    lang         TEXT,
+    kind         TEXT NOT NULL,
+    name         TEXT NOT NULL,
+    line         INTEGER NOT NULL DEFAULT 0,
+    indexed_at   TEXT NOT NULL,
+    content_hash TEXT,
     PRIMARY KEY (file, kind, name, line)
   );
 
@@ -594,6 +643,24 @@ const SCHEMA_SQL = `
     model      TEXT NOT NULL,
     indexed_at TEXT NOT NULL
   );
+
+  -- Symbol embeddings — semantic search over code symbols at function/class
+  -- granularity. Hash-gated: re-embed only when symbol body content changes.
+  -- PK is (file, name, kind) because symbol names can repeat across files
+  -- and across kinds (e.g. a function "init" vs a class "init").
+  CREATE TABLE IF NOT EXISTS symbol_embeddings (
+    file         TEXT NOT NULL,
+    symbol_name  TEXT NOT NULL,
+    symbol_kind  TEXT NOT NULL,
+    vector       TEXT NOT NULL,
+    dim          INTEGER NOT NULL DEFAULT 384,
+    model        TEXT NOT NULL,
+    content_hash TEXT NOT NULL,
+    indexed_at   TEXT NOT NULL,
+    PRIMARY KEY (file, symbol_name, symbol_kind)
+  );
+  CREATE INDEX IF NOT EXISTS idx_symbol_embeddings_file ON symbol_embeddings(file);
+  CREATE INDEX IF NOT EXISTS idx_symbol_embeddings_hash ON symbol_embeddings(content_hash);
 
   -- Code call graph: who calls whom at the symbol level. Regex-based first
   -- pass (matches name( occurrences after a function definition's opening).
@@ -1208,6 +1275,11 @@ function initialize(metricsRoot, dbFile) {
     // 'tracked:*','tui:*'), corrupting routing analytics. source is now the
     // single source of truth for "which CLI generated this prompt".
     'ALTER TABLE prompts ADD COLUMN source TEXT',
+    // v4: content_hash on code_symbols — gates incremental embedding.
+    // When a symbol body's SHA-256 matches the stored hash, indexFile() skips
+    // re-enqueuing it for embedding. Existing rows get NULL (treated as miss
+    // on first re-index, so they backfill naturally).
+    'ALTER TABLE code_symbols ADD COLUMN content_hash TEXT',
   ]) {
     try { _db.exec(migration); } catch (err) {
       if (!err.message.includes('duplicate column')) {
@@ -2355,6 +2427,105 @@ function searchVaultTools(query, limit) {
   `).all(buildExpandedFtsQuery(query), limit || 10);
 }
 
+// ── symbol embeddings (hash-gated incremental) ────────────────────────────
+
+/**
+ * Return a Map of {file_symbol_kind -> content_hash} for every symbol in a
+ * file. Used by code-graph.indexFile() to skip re-embedding symbols whose
+ * body hasn't changed since last index.
+ */
+function getSymbolHashes(filePath) {
+  if (!_db) throw new Error('db.getSymbolHashes: call initialize() first');
+  const rows = _db.prepare(
+    `SELECT name, kind, content_hash FROM code_symbols WHERE file = ? AND content_hash IS NOT NULL`
+  ).all(filePath);
+  const m = new Map();
+  for (const r of rows) m.set(`${r.name} ${r.kind}`, r.content_hash);
+  return m;
+}
+
+/**
+ * Persist a symbol embedding. Called by the embed worker after sentence-
+ * transformers produces the vector. Hash is stored alongside so we can
+ * detect drift on the next re-index pass.
+ */
+function upsertSymbolEmbedding({ file, name, kind, vector, model, contentHash }) {
+  if (!_db) throw new Error('db.upsertSymbolEmbedding: call initialize() first');
+  const vec = Array.isArray(vector) ? JSON.stringify(vector) : String(vector);
+  _db.prepare(`
+    INSERT INTO symbol_embeddings (file, symbol_name, symbol_kind, vector, dim, model, content_hash, indexed_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(file, symbol_name, symbol_kind) DO UPDATE SET
+      vector = excluded.vector, dim = excluded.dim, model = excluded.model,
+      content_hash = excluded.content_hash, indexed_at = excluded.indexed_at
+  `).run(file, name, kind, vec, Array.isArray(vector) ? vector.length : 384, model, contentHash, new Date().toISOString());
+}
+
+/**
+ * Delete a file's symbol_embeddings rows. Called by clearFile() in code-graph
+ * to prevent orphans when a symbol is renamed or removed.
+ */
+function clearSymbolEmbeddings(filePath) {
+  if (!_db) throw new Error('db.clearSymbolEmbeddings: call initialize() first');
+  _db.prepare(`DELETE FROM symbol_embeddings WHERE file = ?`).run(filePath);
+}
+
+function getSymbolEmbeddingStats() {
+  if (!_db) throw new Error('db.getSymbolEmbeddingStats: call initialize() first');
+  const total = _db.prepare(`SELECT COUNT(*) AS n FROM symbol_embeddings`).get().n;
+  const symbols = _db.prepare(`SELECT COUNT(*) AS n FROM code_symbols`).get().n;
+  const distinct = _db.prepare(`SELECT COUNT(DISTINCT file || '|' || name || '|' || kind) AS n FROM code_symbols`).get().n;
+  return { embedded: total, code_symbols: symbols, distinct_symbols: distinct, coverage_pct: distinct ? +(total / distinct * 100).toFixed(2) : 0 };
+}
+
+/**
+ * Search vault_agents by BM25 across name, description, and trigger_pattern.
+ * Used by the routing-coverage audit and the skill-injection hook.
+ *
+ * @param {string} query   Plain-text query, expanded via buildExpandedFtsQuery
+ * @param {number} limit   Max results (default 5)
+ * @returns {Array} Rows ordered by relevance (most relevant first)
+ */
+function searchVaultAgents(query, limit) {
+  if (!_db) throw new Error('db.searchVaultAgents: call initialize() first');
+
+  // Routing intent is "any keyword from the prompt matches an agent description",
+  // so we use OR-by-default instead of buildExpandedFtsQuery's AND join.
+  // Take up to 10 meaningful tokens, drop stopwords, quote each, join with OR.
+  const tokens = tokenizeSearchQuery(query).slice(0, 10);
+  if (!tokens.length) return [];
+  const ftsExpr = tokens.map(quoteFtsToken).join(' OR ');
+
+  return _db.prepare(`
+    SELECT a.id,
+           a.agent_id,
+           a.name,
+           a.source,
+           a.description,
+           a.trigger_pattern,
+           a.use_count,
+           a.last_used,
+           bm25(vault_agents_fts) AS rank
+    FROM   vault_agents_fts f
+    JOIN   vault_agents a ON a.id = f.rowid
+    WHERE  vault_agents_fts MATCH ?
+    ORDER  BY rank
+    LIMIT  ?
+  `).all(ftsExpr, limit || 5);
+}
+
+/**
+ * Rebuild the vault_agents_fts index from scratch. Used after schema upgrades
+ * (when the FTS table did not exist when rows were originally inserted) and
+ * when description/trigger_pattern changes need to be reflected immediately.
+ */
+function rebuildVaultAgentsFts() {
+  if (!_db) throw new Error('db.rebuildVaultAgentsFts: call initialize() first');
+  // 'rebuild' is the FTS5 built-in command for full reindex from content table.
+  _db.exec(`INSERT INTO vault_agents_fts(vault_agents_fts) VALUES('rebuild')`);
+  return _db.prepare(`SELECT COUNT(*) AS n FROM vault_agents_fts`).get().n;
+}
+
 // ── agent registry ────────────────────────────────────────────────────────
 
 /**
@@ -2404,6 +2575,40 @@ function incrementAgentUse(agentIdOrName) {
            last_used = ?
     WHERE  agent_id = ? OR name = ?
   `).run(now, agentIdOrName, agentIdOrName);
+}
+
+/**
+ * Record a skill-injection decision. Called by the route hook on every
+ * UserPromptSubmit so the nightly routing-coverage audit can correlate
+ * BM25-derived "should have routed" candidates with what the live hook
+ * actually decided.
+ *
+ * @param {object} args
+ * @param {number|null} args.sessionId
+ * @param {number|null} args.promptId
+ * @param {string|null} args.chosenSkill
+ * @param {number}      args.confidence    0-1
+ * @param {boolean}     args.injected      Whether full instructions were injected
+ * @param {string|null} args.tier          'full' | 'description' | null
+ * @param {string}      args.reason        Short tag: 'threshold-met', 'below-threshold', 'recently-injected', 'no-match'
+ * @param {Array}       args.candidates    Optional list of {name, confidence} scored
+ */
+function recordSkillInjectionDecision(args) {
+  if (!_db) throw new Error('db.recordSkillInjectionDecision: call initialize() first');
+  const {
+    sessionId = null, promptId = null, chosenSkill = null,
+    confidence = 0, injected = false, tier = null, reason = 'unknown',
+    candidates = null,
+  } = args || {};
+  _db.prepare(`
+    INSERT INTO skill_injection_decisions
+      (session_id, prompt_id, chosen_skill, confidence, injected, tier, reason, candidates_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    sessionId, promptId, chosenSkill, confidence,
+    injected ? 1 : 0, tier, reason,
+    candidates ? JSON.stringify(candidates).slice(0, 4000) : null
+  );
 }
 
 // ── agent verdicts ────────────────────────────────────────────────────────
@@ -3057,6 +3262,14 @@ module.exports = {
   // agent registry
   upsertVaultAgent,
   incrementAgentUse,
+  searchVaultAgents,
+  rebuildVaultAgentsFts,
+  recordSkillInjectionDecision,
+  // symbol embeddings (hash-gated)
+  getSymbolHashes,
+  upsertSymbolEmbedding,
+  clearSymbolEmbeddings,
+  getSymbolEmbeddingStats,
   // agent verdicts
   recordVerdict,
   getVerdictSummary,

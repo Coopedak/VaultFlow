@@ -264,6 +264,8 @@ function indexFile(db, filePath, project) {
     try {
       db.initialize(null, null);
       clearFile(db.raw(), filePath);
+      // Also remove symbol_embeddings for the deleted file (orphan guard).
+      db.clearSymbolEmbeddings && db.clearSymbolEmbeddings(filePath);
     } catch (_) {}
     return { deleted: true };
   }
@@ -280,6 +282,37 @@ function indexFile(db, filePath, project) {
   const conn = db.raw();
   const now = new Date().toISOString();
 
+  // Hash gate: read existing hashes, then compute per-symbol body hash from the
+  // already-loaded content. Symbols whose hash matches are flagged as unchanged
+  // so the embed worker can skip them (no re-embedding compute). Symbols with a
+  // new hash get enqueued for embedding via embed_queue.
+  const lines = content.split(/\r?\n/);
+  const priorHashes = (db.getSymbolHashes && db.getSymbolHashes(filePath)) || new Map();
+  const crypto = require('crypto');
+
+  // Sort symbols by line to compute body slices cheaply.
+  const sortedByLine = [...symbols].sort((a, b) => a.line - b.line);
+  const lineMap = new Map(sortedByLine.map((s, i) => [s, i]));
+  function bodySlice(s) {
+    const i = lineMap.get(s);
+    const startIdx = Math.max(0, s.line - 1);
+    const nextSym = sortedByLine[i + 1];
+    const endIdx = nextSym ? Math.max(startIdx, nextSym.line - 1) : Math.min(lines.length, startIdx + 200);
+    return lines.slice(startIdx, endIdx).join('\n');
+  }
+  const symbolHashes = new Map();
+  let changedSymbols = 0;
+  let unchangedSymbols = 0;
+  for (const s of symbols) {
+    const body = bodySlice(s);
+    if (body.length < 10) { symbolHashes.set(s, null); continue; }
+    const h = crypto.createHash('sha256').update(body).digest('hex');
+    symbolHashes.set(s, h);
+    const key = `${s.name} ${s.kind}`;
+    if (priorHashes.get(key) === h) unchangedSymbols++;
+    else changedSymbols++;
+  }
+
   const tx = conn.prepare('BEGIN');
   const co = conn.prepare('COMMIT');
   const rb = conn.prepare('ROLLBACK');
@@ -290,12 +323,28 @@ function indexFile(db, filePath, project) {
 
     const insertSym = conn.prepare(
       `INSERT OR REPLACE INTO code_symbols
-         (file, project, lang, kind, name, line, indexed_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
+         (file, project, lang, kind, name, line, indexed_at, content_hash)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     );
+    const enqueueEmbed = conn.prepare(
+      `INSERT OR IGNORE INTO embed_queue (kind, target_id, queued_at) VALUES ('symbol', ?, ?)`
+    );
+    // target_id semantic: for symbols we use rowid of code_symbols. Since we
+    // re-insert symbols every indexFile, capture the inserted rowid and enqueue.
+    let nextSymbolId = 0;
     for (const s of symbols) {
-      insertSym.run(filePath, project || null, lang, s.kind, s.name, s.line, now);
+      const info = insertSym.run(filePath, project || null, lang, s.kind, s.name, s.line, now, symbolHashes.get(s));
+      const symbolId = info.lastInsertRowid;
+      nextSymbolId = symbolId;
+      const key = `${s.name} ${s.kind}`;
+      const h = symbolHashes.get(s);
+      if (h && priorHashes.get(key) !== h) {
+        try { enqueueEmbed.run(symbolId, now); } catch (_) {}
+      }
     }
+    process.stderr.write(
+      `[code-graph] indexFile "${path.basename(filePath)}" — ${changedSymbols} changed / ${unchangedSymbols} unchanged symbols\n`
+    );
 
     const insertImp = conn.prepare(
       `INSERT OR REPLACE INTO code_imports
