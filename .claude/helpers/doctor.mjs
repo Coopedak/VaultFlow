@@ -136,7 +136,29 @@ try {
   else warn('watcher_daemon', 'not running', 'run `npm run watcher`');
 } catch (e) { warn('watcher_daemon', 'err', e.message); }
 
-// 12. Scheduled task
+// 13. Doc drift — latest doc-drift report (written by nightly.mjs).
+//      Sits next to nightly_heartbeat because it shares the same metrics_root.
+try {
+  const yaml = require('js-yaml');
+  const cfgPath = require('../../config/resolve.cjs');
+  const cfg = fs.existsSync(cfgPath) ? yaml.load(fs.readFileSync(cfgPath, 'utf8')) || {} : {};
+  const metrics = cfg.paths && cfg.paths.metrics_root;
+  if (!metrics) warn('doc_drift', 'no-metrics-root');
+  else {
+    const latest = path.join(metrics, 'doc-drift', 'latest.json');
+    if (!fs.existsSync(latest)) warn('doc_drift', 'never', 'nightly hasn\'t produced a report yet');
+    else {
+      const r = JSON.parse(fs.readFileSync(latest, 'utf8'));
+      const n = (r.drifts || []).length;
+      const sections = [...new Set((r.drifts || []).map(d => d.section))].join(', ') || '—';
+      if (n === 0) ok('doc_drift', '0', 'CLAUDE.md matches the repo');
+      else if (n <= 2) warn('doc_drift', String(n), sections);
+      else fail('doc_drift', String(n), sections);
+    }
+  }
+} catch (e) { warn('doc_drift', 'err', e.message); }
+
+// 14. Scheduled task
 try {
   const r = spawnSync('powershell', ['-Command', "(Get-ScheduledTask -TaskName 'VaultflowNightly' -ErrorAction SilentlyContinue).State"], { encoding: 'utf8', shell: false });
   const state = (r.stdout || '').trim();

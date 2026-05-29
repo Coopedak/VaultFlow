@@ -8,10 +8,23 @@
  * (Claude Code, GitHub Copilot CLI, Codex CLI).
  */
 
+import fs   from 'node:fs';
+import os   from 'node:os';
+import path from 'node:path';
 import { createApp } from './app.mjs';
 import { ptyManager } from './pty-manager.mjs';
 import { sessionManager } from './session-manager.mjs';
 import { recordSessionAction, recordSessionEnd } from './telemetry.mjs';
+
+const CRASH_LOG = path.join(os.homedir(), '.claude', 'vaultflow-tui-crash.log');
+
+function writeCrash(label, err) {
+  try {
+    const stamp = new Date().toISOString();
+    const stack = err && err.stack ? err.stack : String(err);
+    fs.appendFileSync(CRASH_LOG, `\n[${stamp}] ${label}\n${stack}\n`);
+  } catch {}
+}
 
 // Suppress Node 22 experimental warnings that would bleed into the TUI
 const { emitWarning } = process;
@@ -28,6 +41,7 @@ process.emitWarning = (msg, ...rest) => {
 let _screen = null;
 
 process.on('uncaughtException', (err) => {
+  writeCrash('uncaughtException', err);
   try {
     for (const session of sessionManager.getAll()) {
       recordSessionAction(session, 'TuiCrash', { source: 'uncaught-exception', message: err.message });
@@ -42,10 +56,12 @@ process.on('uncaughtException', (err) => {
   }
   process.stderr.write('\n[vaultflow] Uncaught exception: ' + err.message + '\n');
   process.stderr.write(err.stack + '\n');
+  process.stderr.write(`(also written to ${CRASH_LOG})\n`);
   process.exit(1);
 });
 
 process.on('unhandledRejection', (reason) => {
+  writeCrash('unhandledRejection', reason instanceof Error ? reason : new Error(String(reason)));
   try {
     for (const session of sessionManager.getAll()) {
       recordSessionAction(session, 'TuiCrash', { source: 'unhandled-rejection', message: String(reason) });
@@ -59,6 +75,7 @@ process.on('unhandledRejection', (reason) => {
     // ignore
   }
   process.stderr.write('\n[vaultflow] Unhandled promise rejection: ' + String(reason) + '\n');
+  process.stderr.write(`(also written to ${CRASH_LOG})\n`);
   process.exit(1);
 });
 

@@ -50,7 +50,9 @@
     "model-status": "node .claude/helpers/model-router.cjs --status",
     "mcp-server": "node .claude/helpers/mcp-server.cjs",
     "tui": "node tui/index.mjs",
-    "tui:dev": "node --enable-source-maps tui/index.mjs"
+    "tui:dev": "node --enable-source-maps tui/index.mjs",
+    "tui:browse": "node .claude/helpers/sync-csm-names.mjs && csm",
+    "tui:sync": "node .claude/helpers/sync-csm-names.mjs"
   },
   "dependencies": {
     "@duckdb/node-api": "^1.5.2-r.1",

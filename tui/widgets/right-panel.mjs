@@ -15,7 +15,13 @@ import { sessionManager } from '../session-manager.mjs';
 import { ansiToBlessed }  from '../ansi.mjs';
 import { buildDisplayCommand, getToolLabel } from '../tool-commands.mjs';
 
-const LEFT_WIDTH = 37;  // left panel (36) + divider (1)
+// Three-column layout offsets (kept here so the existing panel stays the
+// "middle" column without a deeper refactor). Values mirror the widths in
+// history-panel.mjs and live-panel.mjs.
+const HISTORY_WIDTH = 38; // left column
+const LIVE_WIDTH    = 30; // right column
+const LEFT_WIDTH    = HISTORY_WIDTH; // where the middle column starts
+const RIGHT_RESERVED = LIVE_WIDTH;   // pixels to leave for the live column
 
 const TOOL_COLORS = {
   'claude':  '{yellow-fg}',
@@ -76,9 +82,9 @@ function buildHeaderContent(session) {
 
 export function createRightPanel(screen) {
   const left   = LEFT_WIDTH;
-  const width  = `100%-${left}`;
+  const width  = `100%-${LEFT_WIDTH + RIGHT_RESERVED}`;
 
-  // Vertical divider between left and right panels
+  // Vertical divider between history (left) and middle column.
   const divider = blessed.box({
     top:    1,
     left:   LEFT_WIDTH - 1,
@@ -121,7 +127,7 @@ export function createRightPanel(screen) {
     tags:         true,
     scrollable:   true,
     alwaysScroll: true,
-    mouse:        true,
+    mouse:        false,
     keys:         false,
     wrap:         true,
     style: {
@@ -137,7 +143,7 @@ export function createRightPanel(screen) {
 
   function updateSepContent() {
     try {
-      const w = screen.width - LEFT_WIDTH;
+      const w = screen.width - LEFT_WIDTH - RIGHT_RESERVED;
       headerSep.setContent('─'.repeat(Math.max(0, w)));
     } catch {}
   }

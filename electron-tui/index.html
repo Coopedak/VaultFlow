@@ -1,0 +1,54 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>vaultflow</title>
+  <link rel="stylesheet" href="node_modules/xterm/css/xterm.css" />
+  <style>
+    :root { color-scheme: dark; }
+    html, body { margin: 0; padding: 0; height: 100%; background: #0a0a0a; color: #ddd;
+      font-family: Consolas, "Cascadia Mono", "Courier New", monospace; font-size: 13px; overflow: hidden; }
+    #app { display: grid; grid-template-columns: 320px 1fr 280px; grid-template-rows: 100vh; }
+    .pane { border-right: 1px solid #222; overflow: hidden; display: flex; flex-direction: column; }
+    .pane:last-child { border-right: none; }
+    .pane-header { padding: 8px 12px; background: #141414; border-bottom: 1px solid #222; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: .08em; font-size: 11px; }
+    .list { overflow-y: auto; flex: 1; }
+    .group { padding: 6px 12px; color: #6cf; font-weight: 600; background: #111; border-top: 1px solid #1a1a1a; cursor: pointer; }
+    .row { padding: 4px 12px 4px 24px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-left: 2px solid transparent; }
+    .row:hover { background: #1a1a1a; }
+    .row.active { background: #1f2a44; border-left-color: #6cf; }
+    .row .ts { float: right; color: #666; font-size: 11px; padding-left: 8px; }
+    #middle { display: flex; flex-direction: column; background: #000; }
+    #term-wrap { flex: 1; position: relative; }
+    .term { position: absolute; inset: 0; }
+    .term.hidden { display: none; }
+    #empty { display: flex; align-items: center; justify-content: center; color: #555; flex: 1; }
+    .live-row { padding: 8px 12px; border-bottom: 1px solid #1a1a1a; cursor: pointer; }
+    .live-row:hover { background: #1a1a1a; }
+    .live-row.active { background: #1f2a44; border-left: 2px solid #6cf; }
+    .live-row .sid { color: #6cf; font-size: 11px; }
+    .live-row .proj { color: #aaa; font-size: 12px; margin-top: 2px; }
+    .live-row .status { color: #4d4; font-size: 11px; float: right; }
+    .live-row .status.dead { color: #d44; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="pane" id="history-pane">
+      <div class="pane-header">history</div>
+      <div class="list" id="history-list"></div>
+    </div>
+    <div class="pane" id="middle">
+      <div class="pane-header" id="middle-title">no session</div>
+      <div id="term-wrap"><div id="empty">Pick a session on the left to resume, or use the live panel on the right to switch.</div></div>
+    </div>
+    <div class="pane" id="live-pane">
+      <div class="pane-header">live sessions</div>
+      <div class="list" id="live-list"></div>
+    </div>
+  </div>
+  <script src="node_modules/xterm/lib/xterm.js"></script>
+  <script src="node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>

@@ -13,7 +13,7 @@ tech stack detection, tool call deduplication, and a Parquet cold archive.
 | Runtime | Node.js 22+ (CJS hooks + ESM helpers) |
 | Hot store | SQLite via node:sqlite built-in (FTS5 + WAL) |
 | Cold archive | Apache Parquet via @duckdb/node-api (Lambda architecture) |
-| Dashboard | Express 4 + Chart.js SPA (24 read-only API endpoints) |
+| Dashboard | Express 4 + Chart.js SPA (44 read-only API endpoints) |
 | AI agents | Codex CLI via `.agents/config.toml` (15 enabled) |
 | Package manager | npm |
 
@@ -25,6 +25,15 @@ cd C:\GIT\vaultflow && npm install --ignore-scripts
 
 # Dashboard
 npm run dashboard              # http://localhost:7700
+
+# TUI — multi-pane blessed UI, each session is its own claude PTY in the same window
+npm run tui                    # left: sessions list; right: live PTY for the focused session
+                               # N = new claude session, K = kill, P = popout to external term
+                               # also reachable as `opentui` from any PowerShell window
+
+# csm browser — single-pane historical session list (from ~/.claude/history.jsonl)
+npm run tui:browse             # syncs vaultflow names → ~/.claude/sessions.json, then launches csm
+npm run tui:sync               # sync names only, no UI
 
 # Watcher (Copilot/Codex file tracking)
 npm run watcher
@@ -68,25 +77,52 @@ node .claude/helpers/stack-detector.mjs [project-path]
 
 ```
 .claude/helpers/
-  db.cjs                  — SQLite + DuckDB/Parquet core (28 exports)
-  hook-handler.cjs        — main event dispatcher (all hook events)
-  session.cjs             — session lifecycle (start/end/restore)
-  post-edit.cjs           — edit event recorder + live FTS5 re-index for wiki/vault files
-  router.cjs              — skill/agent routing
-  intelligence.cjs        — memory + pattern matching
-  auto-memory-hook.mjs    — vault/domain/ import → FTS memory
-  flush-parquet.mjs       — SQLite → Parquet export API
-  stack-detector.mjs      — 22-rule tech stack detector
-  skill-loader.mjs        — skill content loader + injection builder
-  dict.mjs                — dictionary import/search/CLI
-  watcher.mjs             — chokidar daemon (Copilot/Codex/background agent tracking)
-  gen-context.mjs         — context file generator
-  install-git-hooks.mjs   — git hook installer
-  backfill.mjs            — vault index → DB backfill
+  db.cjs                     — SQLite + DuckDB/Parquet core (28 exports)
+  code-graph.cjs             — lightweight per-file symbol + import indexer
+  embeddings.mjs             — local semantic embeddings for memory_entries
+  commit-indexer.cjs         — index git commit messages into FTS5 across projects
+  hook-handler.cjs           — main event dispatcher (all hook events)
+  session.cjs                — session lifecycle (start/end/restore)
+  session-start-bg.mjs       — background indexing for SessionStart
+  post-edit.cjs              — edit event recorder + live FTS5 re-index for wiki/vault files
+  router.cjs                 — skill/agent routing
+  model-router.cjs           — automatic model tier demotion for sub-agents
+  intelligence.cjs           — memory + pattern matching
+  pre-edit.cjs               — PreToolUse(Edit|Write|MultiEdit) blast-radius warning
+  pre-read.cjs               — PreToolUse(Read) file-context injection
+  pre-search.cjs             — PreToolUse(Grep|Glob) MCP-tool suggestion
+  pre-bash.cjs               — PreToolUse(Bash) MCP-equivalent suggestion
+  shell-intent.cjs           — extract read-intent file paths from a Bash command string
+  git-context.cjs            — surface current git state at session start
+  focus.cjs                  — load and write the per-project "current focus" file
+  project-id.cjs             — resolve canonical project name from a file path
+  copilot-resume.cjs         — prints a brief session resume block to stderr
+  auto-memory-hook.mjs       — vault/domain/ import → FTS memory
+  dict.mjs                   — dictionary import/search/CLI
+  backfill.mjs               — vault index → DB backfill
+  watcher.mjs                — chokidar daemon (Copilot/Codex/background agent tracking)
+  ensure-watcher.mjs         — idempotent watcher daemon launcher
+  flush-parquet.mjs          — SQLite → Parquet export API
+  cli-telemetry-backfill.mjs — one-shot Copilot/Codex session metadata backfill
+  nightly.mjs                — nightly maintenance (DB hygiene, code graph, embeddings, Parquet)
+  doctor.mjs                 — one-command health audit
+  audit.mjs                  — vaultflow health audit
+  lint.mjs                   — vaultflow data-hygiene linter
+  doc-drift-check.mjs        — verify CLAUDE.md claims against repo reality
+  one-time-cleanup.cjs       — one-time idempotent data cleanup against the live DB
+  stack-detector.mjs         — 22-rule tech stack detector
+  skill-loader.mjs           — skill content loader + injection builder
+  gen-context.mjs            — context file generator
+  install-git-hooks.mjs      — git hook installer
+  sync-csm-names.mjs         — derives friendly session names from prompts → ~/.claude/sessions.json (read by csm TUI; never overwrites user-set names)
+  plan-init.mjs              — project-lift plan scaffolder
+  project-audit.mjs          — inventory C:\GIT projects + correlate vaultflow history
+  mcp-server.cjs             — vaultflow MCP (Model Context Protocol) server
   dashboard/
-    server.mjs            — Express API server (12 endpoints)
-    index.html            — SPA shell
-    app.js                — Chart.js dashboard
+    server.mjs               — Express API server (44 endpoints)
+    gen.mjs                  — generate a self-contained HTML dashboard
+    index.html               — SPA shell
+    app.js                   — Chart.js dashboard
 
 config/
   resolve.cjs             — config resolution (local → yaml → example)

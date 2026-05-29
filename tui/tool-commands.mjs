@@ -35,6 +35,19 @@ export function buildToolCommand(tool, session, { mode = 'pty' } = {}) {
   const launchName = ensureSessionLaunchMeta(session);
   let args = [];
 
+  // Resuming a specific historical session UUID always wins over name-based modes.
+  if (session && session.resumeUuid && tool === 'claude') {
+    args = ['--resume', session.resumeUuid];
+    return {
+      cmd: def.cmd,
+      windowsCmd: def.windowsCmd || def.cmd,
+      args,
+      label: def.label,
+      launchName,
+      resumable: true,
+    };
+  }
+
   if (mode === 'pty') {
     if (tool === 'claude' && launchName) args = ['-n', launchName];
     else if (tool === 'copilot' && launchName) args = ['--name', launchName];

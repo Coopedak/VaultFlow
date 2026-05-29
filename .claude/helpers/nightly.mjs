@@ -487,6 +487,32 @@ results.ftsMaint = await step('fts-maintenance', () => {
   return out;
 });
 
+// 8k. doc-drift check — compare CLAUDE.md claims (endpoint counts, file map,
+//      skill / agent toggle counts) against repo reality. Writes a dated
+//      report to {metrics_root}/doc-drift/ and surfaces a summary in the
+//      nightly heartbeat so the doctor command can flag drift.
+results.docDrift = await step('doc-drift-check', async () => {
+  if (DRY_RUN) return { skipped: true };
+  const m = await import(pathToFileURL(path.resolve(__dirname, 'doc-drift-check.mjs')).href);
+  let metricsRoot = null;
+  try {
+    const yaml = require('js-yaml');
+    const cfgPath = require('../../config/resolve.cjs');
+    if (fs.existsSync(cfgPath)) {
+      const cfg = yaml.load(fs.readFileSync(cfgPath, 'utf8')) || {};
+      metricsRoot = cfg.paths && cfg.paths.metrics_root;
+    }
+  } catch (_) {}
+  const repoRoot = path.resolve(__dirname, '..', '..');
+  const r = m.runDocDriftCheck(repoRoot, metricsRoot);
+  return {
+    ok:          r.ok,
+    drift_count: r.drifts ? r.drifts.length : 0,
+    sections:    r.drifts ? [...new Set(r.drifts.map(d => d.section))] : [],
+    summary:     r.summary,
+  };
+});
+
 // 9. flush to Parquet
 results.parquet = await step('flush-parquet', async () => {
   if (DRY_RUN || SKIP_PARQUET) return { skipped: true };
