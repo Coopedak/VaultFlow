@@ -2,15 +2,6 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node C:/GIT/vaultflow/.claude/helpers/hook-handler.cjs pre-bash"
-          }
-        ]
-      },
-      {
         "matcher": "Read",
         "hooks": [
           {
@@ -25,86 +16,6 @@
           {
             "type": "command",
             "command": "node C:/GIT/vaultflow/.claude/helpers/hook-handler.cjs pre-skill"
-          }
-        ]
-      },
-      {
-        "matcher": "Task",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node C:/GIT/vaultflow/.claude/helpers/hook-handler.cjs pre-subagent"
-          }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Write|Edit|MultiEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node C:/GIT/vaultflow/.claude/helpers/post-edit.cjs"
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node C:/GIT/vaultflow/.claude/helpers/hook-handler.cjs route"
-          }
-        ]
-      }
-    ],
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node C:/GIT/vaultflow/.claude/helpers/hook-handler.cjs session-start"
-          }
-        ]
-      }
-    ],
-    "SessionEnd": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node C:/GIT/vaultflow/.claude/helpers/hook-handler.cjs session-end"
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node C:/GIT/vaultflow/.claude/helpers/hook-handler.cjs post-task"
-          }
-        ]
-      }
-    ],
-    "PreCompact": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node C:/GIT/vaultflow/.claude/helpers/hook-handler.cjs compact-manual"
-          }
-        ]
-      }
-    ],
-    "SubagentStop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node C:/GIT/vaultflow/.claude/helpers/hook-handler.cjs post-subagent"
           }
         ]
       }
