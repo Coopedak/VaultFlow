@@ -1030,6 +1030,78 @@ function escapeHtml(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+// ── Brain graph ─────────────────────────────────────────────────────────
+const BRAIN_COLORS = {
+  project: '#f59e0b', session: '#6366f1', file: '#22d3ee', symbol: '#a78bfa',
+  memory:  '#34d399', skill:   '#f472b6', pattern: '#fb7185', prompt: '#94a3b8',
+  commit:  '#facc15',
+};
+let brainCy = null;
+
+function brainElements(g) {
+  const nodes = g.nodes.map(n => ({ data: { id: n.id, label: n.label, type: n.type, weight: n.weight } }));
+  const edges = g.edges.map((e, i) => ({ data: { id: `e${i}`, source: e.source, target: e.target, kind: e.kind } }));
+  return [...nodes, ...edges];
+}
+
+function renderBrain(g) {
+  document.getElementById('brain-meta').textContent =
+    `${g.meta.mode} · ${g.meta.nodeCount} nodes · ${g.meta.edgeCount} edges${g.meta.truncated ? ' · truncated' : ''}`;
+  if (brainCy) brainCy.destroy();
+  brainCy = cytoscape({
+    container: document.getElementById('brain-graph'),
+    elements: brainElements(g),
+    style: [
+      { selector: 'node', style: {
+        'background-color': (n) => BRAIN_COLORS[n.data('type')] || '#888',
+        'label': 'data(label)', 'color': '#cbd5e1', 'font-size': 9,
+        'width': (n) => 12 + Math.min(28, Math.sqrt(n.data('weight') || 1) * 6),
+        'height': (n) => 12 + Math.min(28, Math.sqrt(n.data('weight') || 1) * 6),
+        'text-wrap': 'ellipsis', 'text-max-width': 80, 'min-zoomed-font-size': 6,
+      }},
+      { selector: 'edge', style: {
+        'width': 1, 'line-color': '#3a3a4a', 'target-arrow-color': '#3a3a4a',
+        'target-arrow-shape': 'triangle', 'arrow-scale': 0.6, 'curve-style': 'bezier', 'opacity': 0.6,
+      }},
+      { selector: 'node:selected', style: { 'border-width': 2, 'border-color': '#fff' } },
+    ],
+    layout: { name: 'cose', animate: false, nodeRepulsion: 8000, idealEdgeLength: 80 },
+  });
+  brainCy.on('tap', 'node', (evt) => brainExpand(evt.target.id()));
+}
+
+async function loadBrain() {
+  const depth = document.getElementById('brain-depth').value || 1;
+  const g = await api(`/api/brain/graph?limit=150&depth=${depth}`).catch(() => ({ nodes: [], edges: [], meta: { mode: 'overview', nodeCount: 0, edgeCount: 0 } }));
+  renderBrain(g);
+}
+
+async function brainExpand(nodeId) {
+  const depth = document.getElementById('brain-depth').value || 1;
+  const g = await api(`/api/brain/graph?center=${encodeURIComponent(nodeId)}&depth=${depth}&limit=150`).catch(() => null);
+  if (g) renderBrain(g);
+  brainDetail(nodeId);
+}
+
+function brainDetail(nodeId) {
+  const [type, ...rest] = nodeId.split(':');
+  const key = rest.join(':');
+  const el = document.getElementById('brain-detail');
+  el.innerHTML = `<div class="mono" style="font-size:13px">
+    <strong style="color:${BRAIN_COLORS[type] || '#fff'}">${type}</strong> · ${escapeHtml(key)}
+  </div>`;
+}
+
+document.getElementById('brain-reset')?.addEventListener('click', loadBrain);
+document.getElementById('brain-depth')?.addEventListener('change', loadBrain);
+document.getElementById('brain-search')?.addEventListener('keydown', async (e) => {
+  if (e.key !== 'Enter' || !e.target.value.trim()) return;
+  const hits = await api(`/api/search?q=${encodeURIComponent(e.target.value.trim())}&limit=1`).catch(() => null);
+  // unified search returns mixed rows; recenter on the first that maps to a graph node id, else no-op
+  const first = hits && (hits.results || hits)[0];
+  if (first && first.id) brainExpand(String(first.id));
+});
+
 // ── loader map ────────────────────────────────────────────────────────────────
 
 const LOADERS = {
@@ -1045,6 +1117,7 @@ const LOADERS = {
   discoveries: loadDiscoveries,
   memory:      loadMemory,
   graph:       loadGraph,
+  brain:       loadBrain,
   control:     loadControl,
 };
 
