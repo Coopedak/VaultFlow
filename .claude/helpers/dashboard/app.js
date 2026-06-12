@@ -1070,11 +1070,49 @@ function renderBrain(g) {
   brainCy.on('tap', 'node', (evt) => brainExpand(evt.target.id()));
 }
 
+// ── Live pulse (SSE) + Mission Control ──────────────────────────────────
+let pulseSource = null; // EventSource handle
+const PULSE_KINDS = { edit: '#22d3ee', prompt: '#94a3b8', tool: '#a78bfa', inject: '#f472b6', route: '#64748b' };
+
+function startPulse() {
+  if (pulseSource) return;
+  pulseSource = new EventSource('/api/brain/events');
+  pulseSource.onmessage = (msg) => {
+    let e; try { e = JSON.parse(msg.data); } catch { return; }
+    // ticker line
+    const ticker = document.getElementById('pulse-ticker');
+    if (ticker) ticker.textContent = `${e.kind} · ${e.label || ''} · ${(e.ts || '').slice(11, 19)}`;
+    // pulse referenced nodes on the graph
+    if (brainCy && Array.isArray(e.refs)) {
+      for (const id of e.refs) {
+        const node = brainCy.getElementById(id);
+        if (node && node.length) {
+          node.animate({ style: { 'background-color': PULSE_KINDS[e.kind] || '#fff', 'border-width': 4, 'border-color': PULSE_KINDS[e.kind] || '#fff' } }, { duration: 200 })
+              .animate({ style: { 'border-width': 0 } }, { duration: 600 });
+        }
+      }
+    }
+  };
+  pulseSource.onerror = () => { /* browser auto-reconnects EventSource */ };
+}
+function stopPulse() { if (pulseSource) { pulseSource.close(); pulseSource = null; } }
+
+async function loadMission() {
+  const mc = await api('/api/brain/mission').catch(() => ({ entries: [], counts: {} }));
+  const color = { running: '#22d3ee', zombie: '#fb7185', failed: '#f87171', scheduled: '#5b8def', done: '#34d399', idle: '#7a818c' };
+  const strip = document.getElementById('mission-strip');
+  strip.innerHTML = Object.entries(mc.counts).filter(([, n]) => n > 0)
+    .map(([status, n]) => `<div class="stat-card"><div class="label" style="color:${color[status]||'#fff'}">${status}</div><div class="value">${n}</div></div>`)
+    .join('') || '<div class="stat-card"><div class="label">idle</div><div class="value">0</div></div>';
+}
+
 async function loadBrain() {
   const depth = document.getElementById('brain-depth').value || 1;
   const g = await api(`/api/brain/graph?limit=150&depth=${depth}`).catch(() => ({ nodes: [], edges: [], meta: { mode: 'overview', nodeCount: 0, edgeCount: 0 } }));
   renderBrain(g);
   loadVitals();
+  loadMission();
+  if (document.getElementById('pulse-toggle')?.checked) startPulse();
 }
 
 async function loadVitals() {
@@ -1130,6 +1168,7 @@ function brainDetail(nodeId) {
 
 document.getElementById('brain-reset')?.addEventListener('click', loadBrain);
 document.getElementById('brain-depth')?.addEventListener('change', loadBrain);
+document.getElementById('pulse-toggle')?.addEventListener('change', (e) => e.target.checked ? startPulse() : stopPulse());
 document.getElementById('brain-search')?.addEventListener('keydown', async (e) => {
   if (e.key !== 'Enter' || !e.target.value.trim()) return;
   const hits = await api(`/api/search?q=${encodeURIComponent(e.target.value.trim())}&limit=5`).catch(() => null);
