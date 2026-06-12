@@ -62,6 +62,13 @@ npm run install-hooks [project-path]
 
 # Stack detection
 node .claude/helpers/stack-detector.mjs [project-path]
+
+# Headless brain access — query vaultflow's brain from any tool (Codex/Copilot/cron/scripts)
+vaultflow search <query> [--json]        # search memory/symbols/commits
+vaultflow context [project] [--json]     # context vaultflow would inject
+vaultflow graph [--center id] [--json]   # brain graph (nodes/edges/meta)
+vaultflow mission [--json]               # Mission Control ledger
+vaultflow doctor                         # health audit
 ```
 
 ## Critical Architecture Rules
