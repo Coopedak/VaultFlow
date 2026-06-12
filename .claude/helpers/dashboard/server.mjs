@@ -1080,6 +1080,39 @@ app.get('/api/brain/graph', (req, res) => {
   } catch (err) { apiErr(res, err); }
 });
 
+// ── GET /api/brain/mission ───────────────────────────────────────────────
+app.get('/api/brain/mission', (_req, res) => {
+  try { res.json(db.getMissionControl()); } catch (err) { apiErr(res, err); }
+});
+
+// ── GET /api/brain/events (Server-Sent Events) ────────────────────────────
+app.get('/api/brain/events', (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+  });
+  res.write(': connected\n\n');
+
+  let wm = {};
+  let alive = true;
+  const tick = () => {
+    if (!alive) return;
+    try {
+      ensureDb();
+      const { events, watermarks } = db.getEventsSince(wm);
+      wm = watermarks;
+      for (const e of events) res.write(`data: ${JSON.stringify(e)}\n\n`);
+    } catch (_) { /* DB locked — skip a beat, never error the stream */ }
+  };
+  // first call fast-forwards watermarks without replaying history
+  try { ensureDb(); wm = db.getEventsSince({}).watermarks; } catch (_) {}
+  const poll = setInterval(tick, 1500);
+  const keepAlive = setInterval(() => { if (alive) res.write(': ping\n\n'); }, 15000);
+
+  req.on('close', () => { alive = false; clearInterval(poll); clearInterval(keepAlive); });
+});
+
 // ── GET /api/brain/snapshots?metric=&scope=&days= ─────────────────────────
 
 app.get('/api/brain/snapshots', (req, res) => {
