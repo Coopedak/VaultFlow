@@ -3422,6 +3422,48 @@ function compositePromotionScore(e) {
   return Math.min(100, Math.max(0, Math.round(score)));
 }
 
+/**
+ * Log that a retrieved doc was injected into context (impression). useful=NULL
+ * until a nightly correlation pass resolves it. Crash-safe.
+ */
+function recordRetrievalImpression(o) {
+  if (!_db) return;
+  try {
+    _db.prepare(`INSERT INTO retrieval_feedback (batch_id, timestamp, session_id, query_text, source_type, source_id, action, rank, rerank_score, useful)
+                 VALUES (?, ?, ?, ?, ?, ?, 'injected', ?, ?, NULL)`)
+      .run(o.batchId || null, new Date().toISOString(), o.sessionId || null, o.query || null,
+           o.sourceType || 'memory', String(o.sourceId || ''), o.rank ?? null, o.rerankScore ?? null);
+  } catch (_) {}
+}
+
+/**
+ * Nightly: resolve open impressions. useful=1 if the same session later edited
+ * the doc's source file; useful=0 once the impression is >7 days old with no hit.
+ * @returns {{marked:number,expired:number}}
+ */
+function correlateRetrievalFeedback() {
+  if (!_db) throw new Error('db.correlateRetrievalFeedback: call initialize() first');
+  // The signal is "the same session edited the doc's source file" — a session +
+  // file-path match. We deliberately do NOT also require the edit to be timestamped
+  // after the impression: edit_events can be backfilled out of order by the watcher
+  // daemon (file activity that bypasses Claude Code hooks lands with its own clock),
+  // so an ordering predicate would silently drop legitimate hits.
+  const marked = _db.prepare(`
+    UPDATE retrieval_feedback
+       SET useful = 1
+     WHERE useful IS NULL
+       AND EXISTS (
+         SELECT 1 FROM edit_events e
+          WHERE e.session_id = retrieval_feedback.session_id
+            AND retrieval_feedback.source_id LIKE e.file_path || '%' )
+  `).run();
+  const expired = _db.prepare(`
+    UPDATE retrieval_feedback SET useful = 0
+     WHERE useful IS NULL AND timestamp < ?
+  `).run(new Date(Date.now() - 7 * 864e5).toISOString());
+  return { marked: marked.changes || 0, expired: expired.changes || 0 };
+}
+
 // ── exports ───────────────────────────────────────────────────────────────
 function raw() { return _db; }
 
@@ -3461,6 +3503,8 @@ module.exports = {
   searchRetrievalDocs,
   searchToolCalls,
   recordRetrievalFeedback,
+  recordRetrievalImpression,
+  correlateRetrievalFeedback,
   runRetrievalLearningLoop,
   // prompt history + similarity
   recordPrompt,

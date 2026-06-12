@@ -104,6 +104,9 @@ results.snapshot = await step('brain-snapshot', () => {
   return { metrics: n };
 });
 
+// N+1. resolve implicit retrieval feedback (did we inject docs the session then used?)
+results.feedback = await step('retrieval-feedback-correlate', () => DRY_RUN ? { skipped: true } : db.correlateRetrievalFeedback());
+
 // 5. retrieval learning loop
 results.learning = await step('retrieval-learning', () => DRY_RUN ? { skipped: true } : db.runRetrievalLearningLoop());
 

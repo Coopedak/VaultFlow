@@ -266,7 +266,16 @@ function getContext(prompt) {
 
     // Record injected sources in session state
     for (const r of filtered) {
-      if (r.source) session.addInjectedSource(r.source);
+      if (r.source) {
+        session.addInjectedSource(r.source);
+        try {
+          const sObj = session.get() || {};
+          getDb().recordRetrievalImpression({
+            sessionId: sObj.id || null, query: prompt,
+            sourceType: 'memory', sourceId: r.source, rank: r.rank,
+          });
+        } catch (_) {}
+      }
     }
 
     return [
