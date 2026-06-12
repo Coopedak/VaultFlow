@@ -1067,6 +1067,18 @@ app.get('/api/backlinks', (req, res) => {
   } catch (err) { apiErr(res, err); }
 });
 
+// ── GET /api/brain/graph ────────────────────────────────────────────────
+
+app.get('/api/brain/graph', (req, res) => {
+  try {
+    const center = req.query.center || null;
+    const depth  = Number(req.query.depth) || 1;
+    const limit  = Number(req.query.limit) || 150;
+    const types  = req.query.types ? String(req.query.types).split(',').filter(Boolean) : null;
+    res.json(db.getBrainGraph({ center, depth, types, limit }));
+  } catch (err) { apiErr(res, err); }
+});
+
 // ── root → dashboard ──────────────────────────────────────────────────────
 
 app.get('/', (_req, res) => {
@@ -1075,9 +1087,32 @@ app.get('/', (_req, res) => {
 
 // ── start ─────────────────────────────────────────────────────────────────
 
-app.listen(PORT, HOST, () => {
-  console.log(`[vaultflow dashboard] http://${HOST}:${PORT}`);
-  console.log(`[vaultflow dashboard] DB: ${path.join(METRICS, DB_FILE)}`);
-});
+// Boot the server on a (possibly ephemeral) port and return the http.Server so
+// tests can listen on port 0 and close it. Importing this module no longer
+// auto-listens — only a direct `node server.mjs` invocation does (below).
+export function startServer(opts = {}) {
+  if (opts.metricsRoot) {
+    // Test override: re-point the shared db singleton at an isolated fixture root.
+    db.close?.();
+    db.initialize(opts.metricsRoot, DB_FILE);
+  }
+  // When a caller passes an explicit port (e.g. tests using port 0), bind
+  // without the configured HOST. Binding to a hostname like 'localhost'
+  // triggers an async DNS lookup, leaving server.address() null until the
+  // 'listening' event — which breaks callers that read the ephemeral port
+  // synchronously. Omitting the host binds all interfaces synchronously
+  // (reachable via 127.0.0.1). Direct runs keep the configured HOST.
+  if (opts.port != null) return app.listen(opts.port);
+  return app.listen(PORT, HOST);
+}
+
+// Auto-start only when run directly (node server.mjs), not when imported by tests.
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))) {
+  const srv = startServer();
+  srv.on('listening', () => {
+    console.log(`[vaultflow dashboard] http://${HOST}:${PORT}`);
+    console.log(`[vaultflow dashboard] DB: ${path.join(METRICS, DB_FILE)}`);
+  });
+}
 
 export default app;
