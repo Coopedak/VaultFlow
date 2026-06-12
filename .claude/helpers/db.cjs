@@ -1290,6 +1290,10 @@ function initialize(metricsRoot, dbFile) {
     // re-enqueuing it for embedding. Existing rows get NULL (treated as miss
     // on first re-index, so they backfill naturally).
     'ALTER TABLE code_symbols ADD COLUMN content_hash TEXT',
+    // v5: decision_id on agent_verdicts — links a verdict to the
+    // skill_injection_decisions row that was active when the sub-agent ran,
+    // so verdict outcomes can be attributed back to the routing decision.
+    'ALTER TABLE agent_verdicts ADD COLUMN decision_id INTEGER',
   ]) {
     try { _db.exec(migration); } catch (err) {
       if (!err.message.includes('duplicate column')) {
@@ -2632,19 +2636,27 @@ function recordSkillInjectionDecision(args) {
  * @param {string}      [reason]    Human-readable explanation (max 500 chars).
  * @param {string|null} [flaggedAt] ISO timestamp if the verdict was flagged for review.
  */
-function recordVerdict(sessionId, agentType, verdict, reason, flaggedAt) {
+function recordVerdict(sessionId, agentType, verdict, reason, flaggedAt, decisionId) {
   if (!_db) throw new Error('db.recordVerdict: call initialize() first');
   _db.prepare(
-    `INSERT INTO agent_verdicts (timestamp, session_id, agent_type, verdict, reason, flagged_at)
-     VALUES (?, ?, ?, ?, ?, ?)`
+    `INSERT INTO agent_verdicts (timestamp, session_id, agent_type, verdict, reason, flagged_at, decision_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
   ).run(
     new Date().toISOString(),
     sessionId  || null,
     String(agentType  || '').slice(0, 100),
     String(verdict    || '').slice(0, 50),
     String(reason     || '').slice(0, 500),
-    flaggedAt  || null
+    flaggedAt  || null,
+    decisionId ?? null
   );
+}
+
+/** Most recent skill_injection_decisions.id for a session, or null. */
+function getLatestDecisionId(sessionId) {
+  if (!_db || !sessionId) return null;
+  try { return _db.prepare(`SELECT id FROM skill_injection_decisions WHERE session_id = ? ORDER BY id DESC LIMIT 1`).get(sessionId)?.id ?? null; }
+  catch (_) { return null; }
 }
 
 /**
@@ -3533,6 +3545,7 @@ module.exports = {
   getSymbolEmbeddingStats,
   // agent verdicts
   recordVerdict,
+  getLatestDecisionId,
   getVerdictSummary,
   // model routing
   recordModelVerdict,

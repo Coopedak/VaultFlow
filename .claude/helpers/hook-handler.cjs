@@ -593,7 +593,8 @@ async function dispatch(event) {
         const session = require('./session.cjs');
         db.initialize(null, null);
         const sess = session.get();
-        db.recordVerdict(sess ? sess.id : null, agentType, verdict, reason, flaggedAt);
+        const decisionId = db.getLatestDecisionId(sess ? sess.id : null);
+        db.recordVerdict(sess ? sess.id : null, agentType, verdict, reason, flaggedAt, decisionId);
         process.stderr.write(`[vaultflow] clear-review: verdict recorded — ${verdict} (${agentType})\n`);
       } catch (err) {
         process.stderr.write(`[vaultflow] clear-review: verdict record error — ${err.message}\n`);
