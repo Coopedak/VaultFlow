@@ -3444,10 +3444,10 @@ function recordRetrievalImpression(o) {
 function correlateRetrievalFeedback() {
   if (!_db) throw new Error('db.correlateRetrievalFeedback: call initialize() first');
   // The signal is "the same session edited the doc's source file" — a session +
-  // file-path match. We deliberately do NOT also require the edit to be timestamped
-  // after the impression: edit_events can be backfilled out of order by the watcher
-  // daemon (file activity that bypasses Claude Code hooks lands with its own clock),
-  // so an ordering predicate would silently drop legitimate hits.
+  // file-path match. We deliberately omit an edit-after-impression ordering predicate:
+  // this is a coincidental-positive-tolerant heuristic (the spec notes the signal
+  // "only needs to beat zero"), so strict timestamp ordering would add fragility for
+  // little gain.
   const marked = _db.prepare(`
     UPDATE retrieval_feedback
        SET useful = 1
