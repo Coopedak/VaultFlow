@@ -169,6 +169,12 @@ function overlapScore(promptTokens, descText) {
   return denom > 0 ? shared / denom : 0;
 }
 
+/** 10% multiplicative boost for promoted skills/tools, capped at 1.0. */
+const PROMOTED_BOOST = 1.10;
+function applyPromotedBoost(score, promoted) {
+  return promoted ? Math.min(1.0, score * PROMOTED_BOOST) : score;
+}
+
 function detectTier(promptTokens) {
   for (const w of promptTokens) {
     if (TIER_TOP.has(w)) return 'Top';
@@ -198,7 +204,7 @@ function routeTask(prompt) {
   for (const skill of skills) {
     // Include name tokens in the match surface
     const combined = skill.desc + ' ' + skill.name.replace(/-/g, ' ');
-    const score    = overlapScore(promptTokens, combined);
+    const score    = applyPromotedBoost(overlapScore(promptTokens, combined), !!skill.promoted);
     if (score > bestScore) {
       bestScore = score;
       best      = skill;
@@ -249,4 +255,4 @@ function getContext(prompt) {
 }
 
 // ── exports ───────────────────────────────────────────────────────────────
-module.exports = { routeTask, getContext };
+module.exports = { routeTask, getContext, applyPromotedBoost };
