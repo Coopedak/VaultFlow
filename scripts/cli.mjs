@@ -50,7 +50,13 @@ function printHelp() {
     `  install-hooks     Install git hooks into a project\n` +
     `  model-status      Show model routing status\n` +
     `  flush             Flush SQLite data to Parquet\n` +
-    `  mcp-server        Start the MCP server\n`
+    `  mcp-server        Start the MCP server\n` +
+    `\nQuery (headless brain access):\n` +
+    `  search <query>    Search memory/symbols/commits (add --json)\n` +
+    `  context [project] Show the context vaultflow would inject\n` +
+    `  graph [--center]  Print the brain graph (add --json)\n` +
+    `  mission           Mission Control ledger (add --json)\n` +
+    `  doctor            Run the health audit\n`
   );
 }
 
@@ -90,7 +96,12 @@ if (command === 'tui:dev') {
   forwardedArgs = ['--status', ...forwardedArgs];
 }
 
-if (scriptKey === 'dict:import') {
+const QUERY_COMMANDS = new Set(['search', 'context', 'graph', 'mission', 'doctor']);
+
+if (QUERY_COMMANDS.has(command)) {
+  // Pass the full args (incl. subcommand) so cli-query.mjs sees argv[0]=subcommand.
+  runNodeScript(path.join(ROOT, 'scripts', 'cli-query.mjs'), args, nodeArgs);
+} else if (scriptKey === 'dict:import') {
   runNodeScript(path.join(ROOT, '.claude', 'helpers', 'dict.mjs'), ['--import', ...forwardedArgs], nodeArgs);
 } else {
   const segments = COMMANDS[scriptKey];
