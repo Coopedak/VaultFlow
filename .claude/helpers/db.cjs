@@ -3396,6 +3396,32 @@ function getBrainSnapshots(opts) {
   return _db.prepare(`SELECT * FROM brain_snapshots WHERE snapshot_date >= ? ORDER BY metric, snapshot_date ASC`).all(cutoff);
 }
 
+const PROMOTED_TAGS = new Set(['decision', 'pattern', 'architecture', 'design', 'global']);
+const SCORE_RECENCY_PEAK_MS = 24 * 60 * 60 * 1000;   // full boost under 24h
+const SCORE_RECENCY_MAX_MS  = 30 * 24 * 60 * 60 * 1000; // decays to 0 at 30d
+
+/**
+ * 0–100 composite score for promoting a memory/pattern entry.
+ *   +30 high-signal type (decision|pattern)
+ *   +10 per cross-project reference
+ *   +5  per reference/fire
+ *   +20 if any tag is a promoted tag
+ *   +15 recency, full <24h, linear decay to 0 at 30d
+ * @param {{type?:string,crossProjectRefs?:number,references?:number,tags?:string[],ageMs?:number}} e
+ * @returns {number} integer 0..100
+ */
+function compositePromotionScore(e) {
+  let score = 0;
+  if (e.type === 'decision' || e.type === 'pattern') score += 30;
+  score += (Number(e.crossProjectRefs) || 0) * 10;
+  score += (Number(e.references) || 0) * 5;
+  if (Array.isArray(e.tags) && e.tags.some(t => PROMOTED_TAGS.has(String(t).toLowerCase()))) score += 20;
+  const age = Number(e.ageMs) || 0;
+  if (age <= SCORE_RECENCY_PEAK_MS) score += 15;
+  else if (age < SCORE_RECENCY_MAX_MS) score += Math.round(15 * (1 - (age - SCORE_RECENCY_PEAK_MS) / (SCORE_RECENCY_MAX_MS - SCORE_RECENCY_PEAK_MS)));
+  return Math.min(100, Math.max(0, Math.round(score)));
+}
+
 // ── exports ───────────────────────────────────────────────────────────────
 function raw() { return _db; }
 
@@ -3419,6 +3445,7 @@ module.exports = {
   // brain vitals trend snapshots
   recordBrainSnapshot,
   getBrainSnapshots,
+  compositePromotionScore,
   searchMemoryBacklinks,
   getMemoryLinkGraph,
   detectStaleMemory,
