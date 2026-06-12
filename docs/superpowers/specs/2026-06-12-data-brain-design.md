@@ -2,7 +2,16 @@
 
 - **Date:** 2026-06-12
 - **Status:** Draft — pending user review
-- **Scope:** Dashboard "Brain" tab (graph + vitals + live pulse), learning-loop circuit closures, snapshot trend infrastructure
+- **Scope:** Dashboard "Brain" tab (graph + vitals + live pulse), learning-loop circuit closures, snapshot trend infrastructure, unified `vaultflow` core CLI
+
+> **Source study note:** the Wayland repo (github.com/ferroxlabs/wayland, AGPL-3.0 with
+> some Apache-2.0 files) was cloned and studied to inform this design. **Architecture
+> and schemas were studied; no code was copied** — everything below is reimplemented
+> vaultflow-native. Two marketing claims turned out not to exist in the open source:
+> the 5-partition memory lives in an external proprietary MCP server (the OSS app has
+> a simpler file-based archive), and the skill-prompt eval harness is not implemented
+> at all. vaultflow's SQLite + FTS5 + embeddings memory already exceeds what Wayland's
+> repo actually ships; the eval-harness backlog item would leapfrog it.
 
 ---
 
@@ -20,8 +29,9 @@ Mapping the Wayland concepts onto vaultflow:
 | Shared memory across agents | SQLite DB + MCP server (`mcp-server.cjs`) already queryable by any agent | Brain graph makes the shared memory visible (Phase 1) |
 | Self-improvement loop | patterns → promotion, routing-miss audit, model demotion (all partially dead-ended) | Circuit closures + measurable vitals (Phase 2) |
 | Mission Control live view | none (dashboard is request/response only) | SSE pulse + active-session strip (Phase 3) |
-| 5-partition memory (working/episodic/semantic/procedural/user-model) | flat: memory_entries, session_summaries, patterns, dictionary | Backlog — classification view over existing tables |
-| Skill eval harness (rewrite, score, promote prompts) | routing-miss audit surfaces gaps, no auto-tuning | Backlog — builds on Phase 2 attribution data |
+| 5-partition memory (working/episodic/semantic/procedural/user-model) | flat: memory_entries, session_summaries, patterns, dictionary — already SQLite + FTS5 + embeddings, which exceeds Wayland's OSS file-based archive | Backlog — classification view over existing tables |
+| Skill eval harness (rewrite, score, promote prompts) | routing-miss audit surfaces gaps, no auto-tuning | Backlog — builds on Phase 2 attribution data (unimplemented in Wayland too) |
+| Standalone core engine (wayland-core, closed source) | capabilities scattered across helper CLIs + MCP server | unified `vaultflow` bin (Phase 4) |
 | Task scheduler | nightly.mjs, Loop 13 (3AM session review) | Surfaced in Mission Control (Phase 3) |
 | Constitution file | CLAUDE.md + `~/.claude/rules/` + gen-context.mjs | Already covered — no work |
 | Remote control / messaging channels | dashboard on :7700 (localhost) | Out of scope |
@@ -153,6 +163,18 @@ Helpers in `db.cjs`: `recordBrainSnapshot()`, `getBrainSnapshots({metric, scope,
    Dashboard Control tab gets a panel with per-recommendation Accept buttons —
    same interaction pattern as the existing pattern-promote button. **Deliberately
    one-click, not auto-apply**; auto-apply can become a config toggle later.
+5. **Composite promotion score (Wayland-informed).** Replace the blunt
+   fire_count/confidence thresholds with a 0–100 composite score for patterns and
+   memory entries, computed nightly and stored as a snapshot metric:
+   - +30 high-signal type (pattern/decision types)
+   - +10 per cross-project occurrence
+   - +5 per reference/fire
+   - +20 promoted-tag match (architecture/design/decision tags)
+   - +15 recency boost, full under 24h, linear decay to 0 at 30 days
+   - Promote at ≥90 (calibrated so today's promotion candidates still qualify).
+   The existing nightly promotion step swaps its predicate for this score; the
+   formula lives in one exported function in `db.cjs` so the dashboard can show
+   per-entry scores.
 
 ### Vitals panel (on the Brain tab)
 
@@ -186,11 +208,62 @@ Helpers in `db.cjs`: `recordBrainSnapshot()`, `getBrainSnapshots({metric, scope,
 - **Node pulses:** graph nodes referenced by `refs` flash when an event touches them.
 - **Pipeline strip** per active session: prompt → route → inject → edit flowing
   left to right.
-- **Mission Control strip:** active sessions (any session with events in the last
-  10 minutes, across all CLIs), watcher daemon status (endpoint exists), nightly
-  last-run (from existing `/api/health` data).
+- **Mission Control strip — unified ledger (Wayland-informed).** One projection
+  over live sessions and scheduled jobs, modeled on Wayland's `LedgerEntry`:
+
+  ```
+  { id, source: 'session'|'job', title, status, owner, detail,
+    lastHeartbeat, startedAt, updatedAt }
+  ```
+
+  Statuses and how vaultflow derives them:
+
+  | Status | Derivation |
+  |---|---|
+  | `running` | session events within the last 10 min |
+  | `zombie` | session has no ended_at and no events for 30+ min |
+  | `scheduled` | nightly / Loop 13 with next-run time |
+  | `failed` | last nightly step error, watcher daemon down |
+  | `done` | sessions ended cleanly today |
+  | `idle` | watcher running, nothing active |
+
+  Rendered urgency-first (needs-attention → active → scheduled → done → idle),
+  matching Wayland's section ordering. Zombie detection is the piece vaultflow
+  has never had — sessions that die without firing SessionEnd currently linger
+  as false-active forever; the dashboard `/api/health` stale-session check
+  becomes user-visible here.
 
 ---
+
+## Phase 4 — `vaultflow` core CLI (the Wayland-Core answer)
+
+Wayland-Core's appeal is a standalone, headless engine any tool can invoke with one
+command (`npx @ferroxlabs/wayland-core "..."`). Its source is closed — the OSS
+desktop app merely spawns it. vaultflow already has the equivalent capabilities
+scattered across helper scripts and the MCP server; this phase unifies them into
+one bin with **no new logic**:
+
+```jsonc
+// package.json
+"bin": { "vaultflow": ".claude/helpers/cli.mjs" }
+```
+
+| Subcommand | Delegates to (existing) |
+|---|---|
+| `vaultflow search <q>` | unified_search (RRF: memory + symbols + commits + dictionary + tools) |
+| `vaultflow context [project]` | intelligence getContext / agent-context.json |
+| `vaultflow graph [--center id]` | Phase 1 `getBrainGraph()` |
+| `vaultflow mission` | Phase 3 ledger snapshot (text rendering) |
+| `vaultflow doctor` | doctor.mjs |
+| `vaultflow nightly` | nightly.mjs |
+| `vaultflow dict <q>` | dict.mjs |
+| `vaultflow flush` | flush-parquet.mjs |
+
+`cli.mjs` is a thin argv router (~100 lines) that `await import()`s the right
+helper. Output is plain text by default, `--json` for machine consumers. This is
+what makes vaultflow's brain available headlessly to Codex, Copilot, cron jobs,
+and shell scripts — the same role wayland-core plays for Wayland, built from
+parts that already exist.
 
 ## Testing
 
@@ -203,6 +276,8 @@ fixtures pattern, against a fixture DB:
 - `tests/retrieval-feedback.test.mjs` — impression logging + nightly correlation
 - `tests/brain-endpoints.test.mjs` — response shapes for `/api/brain/*`,
   `/api/model/recommendations`
+- `tests/cli.test.mjs` — `vaultflow` bin smoke test: each subcommand resolves to
+  its helper and `--json` output parses
 
 UI verified manually against the live DB (no frontend test harness exists in the
 project; not introducing one).
@@ -234,10 +309,15 @@ project; not introducing one).
    user-model partition; expose as a graph filter and getContext() weighting.
 2. **Skill-prompt eval harness** — use Phase 2 verdict attribution data to score
    skill descriptions, propose rewrites for high-miss skills, A/B them via the
-   router, promote winners. (Wayland's self-improvement loop, vaultflow-native.)
-3. **Auto-apply model recommendations** — config toggle once one-click accept has
+   router, promote winners. (Wayland *advertises* this but has not implemented
+   it — source inspection confirmed. Shipping it would leapfrog the reference.)
+3. **Cost/token attribution** — Wayland tracks per-conversation `CostEvent`
+   rows (model, tokens, USD) with budgets that warn/pause. vaultflow captures no
+   token counts today; investigate whether hook payloads expose usage, then add
+   a `cost_events` table + Mission Control budget strip.
+4. **Auto-apply model recommendations** — config toggle once one-click accept has
    built trust.
-4. **Agent auto-retirement** — flag vault_agents/vault_tools with zero use in 90
+5. **Agent auto-retirement** — flag vault_agents/vault_tools with zero use in 90
    days for review.
-5. **Remote access hardening** — Tailscale-style guidance for reaching the
+6. **Remote access hardening** — Tailscale-style guidance for reaching the
    dashboard off-box.
