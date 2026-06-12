@@ -3476,6 +3476,38 @@ function correlateRetrievalFeedback() {
   return { marked: marked.changes || 0, expired: expired.changes || 0 };
 }
 
+/**
+ * Tail recent activity using rowid watermarks (DB-as-bus for the SSE pulse).
+ * Pass the watermarks returned by the previous call; the first call (empty wm)
+ * fast-forwards to the current max so old rows aren't replayed as "new".
+ * @param {object} wm previous {prompts,tool_calls,edit_events,skill_injection_decisions}
+ * @returns {{events:Array,watermarks:object}}
+ */
+function getEventsSince(wm) {
+  if (!_db) throw new Error('db.getEventsSince: call initialize() first');
+  const prev = wm || {};
+  const maxRow = (tbl) => { try { return _db.prepare(`SELECT COALESCE(MAX(rowid),0) m FROM ${tbl}`).get().m; } catch (_) { return 0; } };
+  const out = { prompts: maxRow('prompts'), tool_calls: maxRow('tool_calls'), edit_events: maxRow('edit_events'), skill_injection_decisions: maxRow('skill_injection_decisions') };
+  const events = [];
+  // First call = caller supplied no watermark keys at all (seed/fast-forward so old
+  // rows aren't replayed). Once any key is present — even a legitimate 0 from a
+  // previously-empty DB — treat it as a resume and report new rows past the mark.
+  const firstCall = !('edit_events' in prev) && !('prompts' in prev) && !('tool_calls' in prev) && !('skill_injection_decisions' in prev);
+  if (firstCall) return { events, watermarks: out };
+
+  try { for (const r of _db.prepare(`SELECT rowid, timestamp, session_id, file_path, project FROM edit_events WHERE rowid > ? ORDER BY rowid LIMIT 100`).all(prev.edit_events || 0))
+    events.push({ kind: 'edit', ts: r.timestamp, session_id: r.session_id, project: r.project, label: String(r.file_path).split(/[/\\]/).pop(), refs: [`session:${r.session_id}`, `file:${r.file_path}`] }); } catch (_) {}
+  try { for (const r of _db.prepare(`SELECT rowid, timestamp, session_id, prompt_text, skill_routed FROM prompts WHERE rowid > ? ORDER BY rowid LIMIT 100`).all(prev.prompts || 0))
+    events.push({ kind: 'prompt', ts: r.timestamp, session_id: r.session_id, project: null, label: String(r.prompt_text || '').slice(0, 60), refs: [`session:${r.session_id}`, ...(r.skill_routed ? [`skill:${r.skill_routed}`] : [])] }); } catch (_) {}
+  try { for (const r of _db.prepare(`SELECT rowid, timestamp, session_id, tool_name FROM tool_calls WHERE rowid > ? ORDER BY rowid LIMIT 100`).all(prev.tool_calls || 0))
+    events.push({ kind: 'tool', ts: r.timestamp, session_id: r.session_id, project: null, label: r.tool_name, refs: [`session:${r.session_id}`] }); } catch (_) {}
+  try { for (const r of _db.prepare(`SELECT rowid, timestamp, session_id, chosen_skill, injected FROM skill_injection_decisions WHERE rowid > ? ORDER BY rowid LIMIT 100`).all(prev.skill_injection_decisions || 0))
+    events.push({ kind: r.injected ? 'inject' : 'route', ts: r.timestamp, session_id: r.session_id, project: null, label: r.chosen_skill, refs: [`session:${r.session_id}`, ...(r.chosen_skill ? [`skill:${r.chosen_skill}`] : [])] }); } catch (_) {}
+
+  events.sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
+  return { events, watermarks: out };
+}
+
 // ── exports ───────────────────────────────────────────────────────────────
 function raw() { return _db; }
 
@@ -3496,6 +3528,7 @@ module.exports = {
   replaceMemorySource,
   searchMemory,
   getBrainGraph,
+  getEventsSince,
   // brain vitals trend snapshots
   recordBrainSnapshot,
   getBrainSnapshots,
