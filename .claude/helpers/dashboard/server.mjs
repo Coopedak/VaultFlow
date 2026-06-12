@@ -44,6 +44,7 @@ const HOST        = cfg.dashboard && cfg.dashboard.host     || 'localhost';
 // ── db helpers ────────────────────────────────────────────────────────────
 
 const db = require('../db.cjs');
+const modelRouter = require('../model-router.cjs');
 
 function ensureDb() {
   db.initialize(METRICS, DB_FILE);
@@ -1076,6 +1077,39 @@ app.get('/api/brain/graph', (req, res) => {
     const limit  = Number(req.query.limit) || 150;
     const types  = req.query.types ? String(req.query.types).split(',').filter(Boolean) : null;
     res.json(db.getBrainGraph({ center, depth, types, limit }));
+  } catch (err) { apiErr(res, err); }
+});
+
+// ── GET /api/brain/snapshots?metric=&scope=&days= ─────────────────────────
+
+app.get('/api/brain/snapshots', (req, res) => {
+  try {
+    res.json(db.getBrainSnapshots({ metric: req.query.metric || null, scope: req.query.scope || '', days: Number(req.query.days) || 30 }));
+  } catch (err) { apiErr(res, err); }
+});
+
+// ── GET /api/model/recommendations ────────────────────────────────────────
+
+app.get('/api/model/recommendations', (_req, res) => {
+  try {
+    const p = path.join(METRICS, 'model-recommendations.json');
+    res.json(fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf8')) : {});
+  } catch (err) { apiErr(res, err); }
+});
+
+// ── POST /api/model/recommendations/accept { agent } ──────────────────────
+
+app.post('/api/model/recommendations/accept', (req, res) => {
+  try {
+    const agent = req.body && req.body.agent;
+    if (!agent) return res.status(400).json({ error: 'agent required' });
+    const p = path.join(METRICS, 'model-recommendations.json');
+    const recs = fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf8')) : {};
+    const rec = recs[agent];
+    if (!rec) return res.status(404).json({ error: 'no recommendation for agent' });
+    const applied = modelRouter.applyRecommendation(agent, rec.model);
+    if (applied) { delete recs[agent]; fs.writeFileSync(p, JSON.stringify(recs, null, 2)); }
+    res.json({ ok: !!applied, applied });
   } catch (err) { apiErr(res, err); }
 });
 
