@@ -1096,10 +1096,11 @@ document.getElementById('brain-reset')?.addEventListener('click', loadBrain);
 document.getElementById('brain-depth')?.addEventListener('change', loadBrain);
 document.getElementById('brain-search')?.addEventListener('keydown', async (e) => {
   if (e.key !== 'Enter' || !e.target.value.trim()) return;
-  const hits = await api(`/api/search?q=${encodeURIComponent(e.target.value.trim())}&limit=1`).catch(() => null);
-  // unified search returns mixed rows; recenter on the first that maps to a graph node id, else no-op
-  const first = hits && (hits.results || hits)[0];
-  if (first && first.id) brainExpand(String(first.id));
+  const hits = await api(`/api/search?q=${encodeURIComponent(e.target.value.trim())}&limit=5`).catch(() => null);
+  // /api/search returns { memory, symbols, commits, dictionary, vault_tools }.
+  // Only memory hits map to overview graph nodes (memory:<source>), so prefer those.
+  const mem = hits && hits.memory && hits.memory[0];
+  if (mem && mem.source) brainExpand(`memory:${mem.source}`);
 });
 
 // ── loader map ────────────────────────────────────────────────────────────────
