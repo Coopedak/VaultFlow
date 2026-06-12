@@ -675,6 +675,16 @@ const SCHEMA_SQL = `
     PRIMARY KEY (caller_file, caller_name, callee_name, line)
   );
 
+  -- Daily brain-vitals trend table. One row per (date, metric, scope) so the
+  -- nightly snapshot step overwrites rather than duplicates when re-run.
+  CREATE TABLE IF NOT EXISTS brain_snapshots (
+    snapshot_date TEXT NOT NULL,
+    metric        TEXT NOT NULL,
+    scope         TEXT NOT NULL DEFAULT '',
+    value         REAL NOT NULL,
+    PRIMARY KEY (snapshot_date, metric, scope)
+  );
+
   CREATE INDEX IF NOT EXISTS idx_code_calls_callee  ON code_calls(callee_name);
   CREATE INDEX IF NOT EXISTS idx_code_calls_caller  ON code_calls(caller_file, caller_name);
   CREATE INDEX IF NOT EXISTS idx_code_calls_project ON code_calls(project);
@@ -3354,6 +3364,38 @@ function getBrainGraph(opts) {
   };
 }
 
+/**
+ * Upsert a daily metric snapshot. Key is (snapshot_date, metric, scope) so
+ * re-running nightly the same day overwrites rather than duplicates.
+ * @param {string} date YYYY-MM-DD
+ * @param {string} metric dotted key e.g. 'patterns.count'
+ * @param {string} scope  '' for global, else project/agent
+ * @param {number} value
+ */
+function recordBrainSnapshot(date, metric, scope, value) {
+  if (!_db) throw new Error('db.recordBrainSnapshot: call initialize() first');
+  _db.prepare(`
+    INSERT INTO brain_snapshots (snapshot_date, metric, scope, value)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(snapshot_date, metric, scope) DO UPDATE SET value = excluded.value
+  `).run(date, metric, scope || '', Number(value) || 0);
+}
+
+/**
+ * Read a metric's trend. @returns {Array<{snapshot_date,metric,scope,value}>} ASC by date.
+ */
+function getBrainSnapshots(opts) {
+  if (!_db) throw new Error('db.getBrainSnapshots: call initialize() first');
+  const o = opts || {};
+  const days = Math.max(1, o.days || 30);
+  const cutoff = new Date(Date.now() - days * 864e5).toISOString().slice(0, 10);
+  if (o.metric) {
+    return _db.prepare(`SELECT * FROM brain_snapshots WHERE metric = ? AND scope = ? AND snapshot_date >= ? ORDER BY snapshot_date ASC`)
+      .all(o.metric, o.scope || '', cutoff);
+  }
+  return _db.prepare(`SELECT * FROM brain_snapshots WHERE snapshot_date >= ? ORDER BY metric, snapshot_date ASC`).all(cutoff);
+}
+
 // ── exports ───────────────────────────────────────────────────────────────
 function raw() { return _db; }
 
@@ -3374,6 +3416,9 @@ module.exports = {
   replaceMemorySource,
   searchMemory,
   getBrainGraph,
+  // brain vitals trend snapshots
+  recordBrainSnapshot,
+  getBrainSnapshots,
   searchMemoryBacklinks,
   getMemoryLinkGraph,
   detectStaleMemory,
