@@ -3245,8 +3245,62 @@ function getBrainGraph(opts) {
     if (nodes.has(source) && nodes.has(target)) edges.push({ source, target, kind, weight: weight || 1 });
   };
 
-  // ── overview: top-N nodes per type over the last 30 days ──────────────────
   const q = (sql, ...p) => _db.prepare(sql).all(...p);
+
+  if (center) {
+    // ── neighborhood: BFS out from the center node ─────────────────────────
+    const [ctype, ...crest] = center.split(':');
+    const ckey = crest.join(':');
+    const labelFor = (id) => id.split(':').slice(1).join(':').split(/[/\\]/).pop();
+    addNode(center, ctype, labelFor(center), 5);
+
+    const expand = (id) => {
+      const [t, ...rest] = id.split(':');
+      const key = rest.join(':');
+      if (t === 'session') {
+        for (const r of q(`SELECT DISTINCT file_path FROM edit_events WHERE session_id = ? LIMIT 50`, key)) {
+          if (addNode(`file:${r.file_path}`, 'file', String(r.file_path).split(/[/\\]/).pop(), 1))
+            addEdge(id, `file:${r.file_path}`, 'edited', 1);
+        }
+        const s = q(`SELECT project FROM sessions WHERE id = ? LIMIT 1`, key)[0];
+        if (s && s.project) { addNode(`project:${s.project}`, 'project', s.project, 1); addEdge(id, `project:${s.project}`, 'belongs', 1); }
+      } else if (t === 'file') {
+        for (const r of q(`SELECT DISTINCT session_id FROM edit_events WHERE file_path = ? LIMIT 50`, key)) {
+          if (addNode(`session:${r.session_id}`, 'session', r.session_id, 1))
+            addEdge(`session:${r.session_id}`, id, 'edited', 1);
+        }
+        try { for (const r of q(`SELECT target FROM code_imports WHERE file = ? LIMIT 50`, key)) {
+          if (addNode(`file:${r.target}`, 'file', String(r.target).split(/[/\\]/).pop(), 1)) addEdge(id, `file:${r.target}`, 'imports', 1);
+        } } catch (_) {}
+      } else if (t === 'memory') {
+        try { for (const r of q(`SELECT target FROM memory_links WHERE source = ? LIMIT 50`, key)) {
+          if (addNode(`memory:${r.target}`, 'memory', r.target, 1)) addEdge(id, `memory:${r.target}`, 'links', 1);
+        } } catch (_) {}
+        try { for (const r of q(`SELECT source FROM memory_links WHERE target = ? LIMIT 50`, key)) {
+          if (addNode(`memory:${r.source}`, 'memory', r.source, 1)) addEdge(`memory:${r.source}`, id, 'links', 1);
+        } } catch (_) {}
+      } else if (t === 'project') {
+        for (const r of q(`SELECT id, started_at FROM sessions WHERE project = ? ORDER BY started_at DESC LIMIT 30`, key)) {
+          if (addNode(`session:${r.id}`, 'session', r.id, 1)) addEdge(`session:${r.id}`, id, 'belongs', 1);
+        }
+      } else if (t === 'skill') {
+        try { for (const r of q(`SELECT pattern_key FROM patterns WHERE agent = ? LIMIT 30`, key)) {
+          if (addNode(`pattern:${r.pattern_key}`, 'pattern', r.pattern_key, 1)) addEdge(`pattern:${r.pattern_key}`, id, 'owns', 1);
+        } } catch (_) {}
+      }
+    };
+
+    let frontier = [center];
+    for (let d = 0; d < depth; d++) {
+      const next = [];
+      for (const id of frontier) { expand(id); }
+      // depth 2: expand the newly added nodes once more
+      for (const n of nodes.keys()) if (!frontier.includes(n)) next.push(n);
+      frontier = next;
+      if (depth === 1) break;
+    }
+  } else {
+  // ── overview: top-N nodes per type over the last 30 days ──────────────────
 
   // projects by session count
   for (const r of q(`SELECT project, COUNT(*) n FROM sessions WHERE project IS NOT NULL GROUP BY project ORDER BY n DESC LIMIT 10`))
@@ -3286,6 +3340,7 @@ function getBrainGraph(opts) {
   // edit edges among selected sessions+files
   try { for (const r of q(`SELECT DISTINCT session_id, file_path FROM edit_events LIMIT 500`))
     addEdge(`session:${r.session_id}`, `file:${r.file_path}`, 'edited', 1); } catch (_) {}
+  }
 
   const truncated = nodes.size > NODE_CAP;
   const nodeArr = Array.from(nodes.values()).sort((a, b) => b.weight - a.weight).slice(0, NODE_CAP);
