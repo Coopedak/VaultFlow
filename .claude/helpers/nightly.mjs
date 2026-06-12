@@ -82,6 +82,28 @@ results.promotion = await step('promote-vault-tools', () => {
   return { promoted, eligible: eligible.length };
 });
 
+// 4b. record daily brain vitals snapshot (trend data for the dashboard)
+results.snapshot = await step('brain-snapshot', () => {
+  if (DRY_RUN) return { skipped: true };
+  const today = new Date().toISOString().slice(0, 10);
+  const conn = db.raw();
+  const one = (sql) => { try { return conn.prepare(sql).get()?.v ?? 0; } catch (_) { return 0; } };
+  const metrics = {
+    'patterns.count':        one(`SELECT COUNT(*) v FROM patterns`),
+    'patterns.fires.total':  one(`SELECT COALESCE(SUM(fire_count),0) v FROM patterns`),
+    'memory.count':          one(`SELECT COUNT(*) v FROM memory_entries`),
+    'memory.stale.count':    one(`SELECT COUNT(*) v FROM memory_stale`),
+    'sessions.total':        one(`SELECT COUNT(*) v FROM sessions`),
+    'tools.calls.total':     one(`SELECT COUNT(*) v FROM tool_calls`),
+    'verdicts.total':        one(`SELECT COUNT(*) v FROM agent_verdicts`),
+    'verdicts.approved':     one(`SELECT COUNT(*) v FROM agent_verdicts WHERE verdict='APPROVED'`),
+    'embeddings.memory':     one(`SELECT COUNT(*) v FROM memory_embeddings`),
+  };
+  let n = 0;
+  for (const [metric, value] of Object.entries(metrics)) { db.recordBrainSnapshot(today, metric, '', value); n++; }
+  return { metrics: n };
+});
+
 // 5. retrieval learning loop
 results.learning = await step('retrieval-learning', () => DRY_RUN ? { skipped: true } : db.runRetrievalLearningLoop());
 
