@@ -3210,6 +3210,95 @@ function close() {
   }
 }
 
+/**
+ * Build a cross-entity graph over existing edge tables for the Brain dashboard.
+ * Pure read. No schema changes — UNIONs the relationship tables vaultflow
+ * already maintains. Hard-capped so the browser never receives the full graph.
+ *
+ * @param {object} [opts]
+ * @param {string|null} [opts.center] node id "type:key"; null = overview mode
+ * @param {number} [opts.depth=1]     neighborhood depth, clamped to [1,2]
+ * @param {string[]|null} [opts.types] node-type allowlist; null = all
+ * @param {number} [opts.limit=150]   soft node cap, clamped to [1,500]
+ * @returns {{nodes:Array,edges:Array,meta:object}}
+ */
+function getBrainGraph(opts) {
+  if (!_db) throw new Error('db.getBrainGraph: call initialize() first');
+  const o      = opts || {};
+  const center = o.center || null;
+  const depth  = Math.min(2, Math.max(1, o.depth || 1));
+  const types  = Array.isArray(o.types) && o.types.length ? new Set(o.types) : null;
+  const NODE_CAP = Math.min(500, Math.max(1, o.limit || 150));
+  const EDGE_CAP = NODE_CAP * 3;
+
+  const nodes = new Map();   // id -> node
+  const edges = [];
+  const allow = (t) => !types || types.has(t);
+  const addNode = (id, type, label, weight) => {
+    if (!allow(type)) return false;
+    if (!nodes.has(id)) nodes.set(id, { id, type, label: String(label ?? id).slice(0, 80), weight: weight || 1 });
+    else if (weight && weight > nodes.get(id).weight) nodes.get(id).weight = weight;
+    return true;
+  };
+  const addEdge = (source, target, kind, weight) => {
+    if (edges.length >= EDGE_CAP) return;
+    if (nodes.has(source) && nodes.has(target)) edges.push({ source, target, kind, weight: weight || 1 });
+  };
+
+  // ── overview: top-N nodes per type over the last 30 days ──────────────────
+  const q = (sql, ...p) => _db.prepare(sql).all(...p);
+
+  // projects by session count
+  for (const r of q(`SELECT project, COUNT(*) n FROM sessions WHERE project IS NOT NULL GROUP BY project ORDER BY n DESC LIMIT 10`))
+    addNode(`project:${r.project}`, 'project', r.project, r.n);
+  // sessions (recent)
+  for (const r of q(`SELECT id, project, started_at, COALESCE(edits,0) edits FROM sessions ORDER BY started_at DESC LIMIT 15`)) {
+    if (addNode(`session:${r.id}`, 'session', `${r.project || '?'} ${String(r.started_at).slice(0,10)}`, r.edits))
+      if (r.project) { addNode(`project:${r.project}`, 'project', r.project, 1); addEdge(`session:${r.id}`, `project:${r.project}`, 'belongs', 1); }
+  }
+  // hub files by edit frequency
+  for (const r of q(`SELECT file_path, project, COUNT(*) n FROM edit_events GROUP BY file_path ORDER BY n DESC LIMIT 15`)) {
+    const base = String(r.file_path).split(/[/\\]/).pop();
+    if (addNode(`file:${r.file_path}`, 'file', base, r.n) && r.project) {
+      addNode(`project:${r.project}`, 'project', r.project, 1);
+      addEdge(`file:${r.file_path}`, `project:${r.project}`, 'belongs', 1);
+    }
+  }
+  // skills by use_count
+  try { for (const r of q(`SELECT name, COALESCE(use_count,0) uc FROM vault_agents ORDER BY uc DESC LIMIT 10`))
+    addNode(`skill:${r.name}`, 'skill', r.name, r.uc); } catch (_) {}
+  // patterns by fire_count
+  try { for (const r of q(`SELECT pattern_key, agent, COALESCE(fire_count,0) fc FROM patterns ORDER BY fc DESC LIMIT 10`)) {
+    if (addNode(`pattern:${r.pattern_key}`, 'pattern', r.pattern_key, r.fc) && r.agent) {
+      addNode(`skill:${r.agent}`, 'skill', r.agent, 1);
+      addEdge(`pattern:${r.pattern_key}`, `skill:${r.agent}`, 'owns', 1);
+    }
+  } } catch (_) {}
+  // memory entries by backlink count
+  try { for (const r of q(`SELECT m.source, m.title, COUNT(l.target) n FROM memory_entries m
+                            LEFT JOIN memory_links l ON l.target = m.source
+                            GROUP BY m.source ORDER BY n DESC LIMIT 10`))
+    addNode(`memory:${r.source}`, 'memory', r.title || r.source, r.n + 1); } catch (_) {}
+
+  // edges among selected memory nodes
+  try { for (const r of q(`SELECT source, target FROM memory_links LIMIT 500`))
+    addEdge(`memory:${r.source}`, `memory:${r.target}`, 'links', 1); } catch (_) {}
+  // edit edges among selected sessions+files
+  try { for (const r of q(`SELECT DISTINCT session_id, file_path FROM edit_events LIMIT 500`))
+    addEdge(`session:${r.session_id}`, `file:${r.file_path}`, 'edited', 1); } catch (_) {}
+
+  const truncated = nodes.size > NODE_CAP;
+  const nodeArr = Array.from(nodes.values()).sort((a, b) => b.weight - a.weight).slice(0, NODE_CAP);
+  const keep = new Set(nodeArr.map(n => n.id));
+  const edgeArr = edges.filter(e => keep.has(e.source) && keep.has(e.target));
+
+  return {
+    nodes: nodeArr,
+    edges: edgeArr,
+    meta: { mode: center ? 'neighborhood' : 'overview', truncated, nodeCount: nodeArr.length, edgeCount: edgeArr.length },
+  };
+}
+
 // ── exports ───────────────────────────────────────────────────────────────
 function raw() { return _db; }
 
@@ -3229,6 +3318,7 @@ module.exports = {
   upsertMemoryEntry,
   replaceMemorySource,
   searchMemory,
+  getBrainGraph,
   searchMemoryBacklinks,
   getMemoryLinkGraph,
   detectStaleMemory,
