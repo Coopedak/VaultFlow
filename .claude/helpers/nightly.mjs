@@ -82,6 +82,22 @@ results.promotion = await step('promote-vault-tools', () => {
   return { promoted, eligible: eligible.length };
 });
 
+// N+2. score-based pattern promotion (composite 0-100, promote at >=90)
+results.scorePromote = await step('promote-patterns-by-score', () => {
+  if (DRY_RUN) return { skipped: true };
+  const conn = db.raw();
+  const rows = conn.prepare(`SELECT pattern_key, agent, COALESCE(fire_count,0) fc, last_fired, COALESCE(promoted,0) promoted FROM patterns WHERE COALESCE(promoted,0)=0`).all();
+  let promoted = 0;
+  for (const r of rows) {
+    const ageMs = r.last_fired ? (Date.now() - new Date(r.last_fired).getTime()) : 40 * 864e5;
+    const score = db.compositePromotionScore({ type: 'pattern', references: r.fc, crossProjectRefs: 0, tags: ['pattern'], ageMs });
+    // markPromoted takes an array of pattern_key values (UPDATE ... WHERE pattern_key IN (...)),
+    // so wrap the single key — passing a bare string would make .map/.length misbehave.
+    if (score >= 90) { try { db.markPromoted([r.pattern_key]); promoted++; } catch (_) {} }
+  }
+  return { scanned: rows.length, promoted };
+});
+
 // 4b. record daily brain vitals snapshot (trend data for the dashboard)
 results.snapshot = await step('brain-snapshot', () => {
   if (DRY_RUN) return { skipped: true };
