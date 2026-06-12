@@ -3508,6 +3508,53 @@ function getEventsSince(wm) {
   return { events, watermarks: out };
 }
 
+/**
+ * Project live sessions + scheduled jobs into one Mission Control ledger.
+ * Status derivation (vaultflow-native, modeled on the studied Wayland ledger):
+ *   running  — open session with activity in the last 10 min
+ *   zombie   — open session with no activity for 30+ min (died without SessionEnd)
+ *   done     — session ended today
+ *   scheduled/idle/failed — reserved for jobs (nightly), filled when job metadata exists
+ * @returns {{generatedAt:string, entries:Array, counts:object}}
+ */
+function getMissionControl() {
+  if (!_db) throw new Error('db.getMissionControl: call initialize() first');
+  const now = Date.now();
+  const RUN_MS = 10 * 60 * 1000, ZOMBIE_MS = 30 * 60 * 1000, TODAY = new Date().toISOString().slice(0, 10);
+  const entries = [];
+  const counts = { running: 0, zombie: 0, scheduled: 0, done: 0, idle: 0, failed: 0 };
+
+  const sessions = _db.prepare(`
+    SELECT s.id, s.project, s.started_at, s.ended_at,
+           (SELECT MAX(timestamp) FROM edit_events e WHERE e.session_id = s.id) AS last_edit
+      FROM sessions s
+     WHERE s.started_at >= ?
+     ORDER BY s.started_at DESC LIMIT 50
+  `).all(new Date(now - 2 * 864e5).toISOString());
+
+  for (const s of sessions) {
+    const lastTs = s.last_edit || s.started_at;
+    const sinceMs = now - new Date(lastTs).getTime();
+    let status;
+    if (s.ended_at) status = String(s.ended_at).slice(0, 10) === TODAY ? 'done' : 'idle';
+    else if (sinceMs <= RUN_MS) status = 'running';
+    else if (sinceMs >= ZOMBIE_MS) status = 'zombie';
+    else status = 'running';
+    counts[status] = (counts[status] || 0) + 1;
+    entries.push({
+      id: `session:${s.id}`, source: 'session', title: s.project || s.id, status,
+      owner: s.project || null, detail: s.ended_at ? 'ended' : (status === 'zombie' ? 'no activity 30m+' : 'active'),
+      lastHeartbeat: new Date(lastTs).getTime(), startedAt: new Date(s.started_at).getTime(),
+      updatedAt: new Date(lastTs).getTime(),
+    });
+  }
+
+  // urgency-first ordering: zombie/failed, running, scheduled, done, idle
+  const rank = { zombie: 0, failed: 1, running: 2, scheduled: 3, done: 4, idle: 5 };
+  entries.sort((a, b) => (rank[a.status] - rank[b.status]) || (b.updatedAt - a.updatedAt));
+  return { generatedAt: new Date(now).toISOString(), entries, counts };
+}
+
 // ── exports ───────────────────────────────────────────────────────────────
 function raw() { return _db; }
 
@@ -3529,6 +3576,7 @@ module.exports = {
   searchMemory,
   getBrainGraph,
   getEventsSince,
+  getMissionControl,
   // brain vitals trend snapshots
   recordBrainSnapshot,
   getBrainSnapshots,
