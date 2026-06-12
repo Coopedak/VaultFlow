@@ -513,6 +513,19 @@
     <div id="brain-detail" class="table-card" style="margin-top:12px;min-height:40px">
       <span class="loading">Click a node to inspect it.</span>
     </div>
+    <div class="chart-full" style="margin-top:16px">
+      <h2>Brain Vitals — trends</h2>
+      <div id="brain-vitals" class="stat-row"></div>
+    </div>
+    <div class="chart-grid">
+      <div class="chart-card"><h2>Patterns fired (total)</h2><canvas id="chart-vital-fires"></canvas></div>
+      <div class="chart-card"><h2>Memory entries</h2><canvas id="chart-vital-memory"></canvas></div>
+    </div>
+    <div class="table-card" style="margin-top:12px">
+      <h2>Pending model recommendations</h2>
+      <table><thead><tr><th>Agent</th><th>→ Model</th><th>From</th><th></th></tr></thead>
+        <tbody id="model-recs-body"><tr><td colspan="4" class="loading">Loading…</td></tr></tbody></table>
+    </div>
   </section>
 
   <!-- ── Memory ── -->

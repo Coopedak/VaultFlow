@@ -1074,6 +1074,42 @@ async function loadBrain() {
   const depth = document.getElementById('brain-depth').value || 1;
   const g = await api(`/api/brain/graph?limit=150&depth=${depth}`).catch(() => ({ nodes: [], edges: [], meta: { mode: 'overview', nodeCount: 0, edgeCount: 0 } }));
   renderBrain(g);
+  loadVitals();
+}
+
+async function loadVitals() {
+  const [snaps, recs] = await Promise.all([
+    api('/api/brain/snapshots?days=30').catch(() => []),
+    api('/api/model/recommendations').catch(() => ({})),
+  ]);
+  // group snapshots by metric
+  const byMetric = {};
+  for (const s of snaps) (byMetric[s.metric] ||= []).push(s);
+  const latest = (m) => { const a = byMetric[m] || []; return a.length ? a[a.length - 1].value : 0; };
+  const delta  = (m) => { const a = byMetric[m] || []; return a.length > 1 ? a[a.length - 1].value - a[0].value : 0; };
+  const card = (label, m) => { const d = delta(m); const arrow = d > 0 ? '▲' : d < 0 ? '▼' : '·';
+    return `<div class="stat-card"><div class="label">${label}</div><div class="value">${fmtNum(latest(m))}</div><div class="mono" style="font-size:11px;opacity:.6">${arrow} ${d>=0?'+':''}${fmtNum(d)}</div></div>`; };
+  document.getElementById('brain-vitals').innerHTML =
+    card('Patterns', 'patterns.count') + card('Pattern fires', 'patterns.fires.total') +
+    card('Memory', 'memory.count') + card('Stale memory', 'memory.stale.count') +
+    card('Verdicts', 'verdicts.total');
+
+  const line = (id, m, color) => { const a = byMetric[m] || [];
+    if (!a.length) return;
+    makeChart(id, 'line', { labels: a.map(r => r.snapshot_date), datasets: [{ label: m, data: a.map(r => r.value), borderColor: color, backgroundColor: color + '33', tension: .3, fill: true }] }, CHART_DEFAULTS); };
+  line('chart-vital-fires', 'patterns.fires.total', '#fb7185');
+  line('chart-vital-memory', 'memory.count', '#34d399');
+
+  const body = document.getElementById('model-recs-body');
+  const entries = Object.entries(recs);
+  body.innerHTML = entries.length
+    ? entries.map(([agent, r]) => `<tr><td>${escapeHtml(agent)}</td><td class="mono">${escapeHtml(r.model)}</td><td class="mono" style="opacity:.6">${escapeHtml(r.demoted_from||'')}</td>
+        <td><button class="rec-accept" data-agent="${escapeHtml(agent)}">Accept</button></td></tr>`).join('')
+    : '<tr><td colspan="4" class="loading">None pending</td></tr>';
+  document.querySelectorAll('.rec-accept').forEach(b => b.addEventListener('click', async () => {
+    await fetch('/api/model/recommendations/accept', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agent: b.dataset.agent }) });
+    loadVitals();
+  }));
 }
 
 async function brainExpand(nodeId) {
