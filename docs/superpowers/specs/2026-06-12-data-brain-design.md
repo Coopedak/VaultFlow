@@ -4,14 +4,26 @@
 - **Status:** Draft — pending user review
 - **Scope:** Dashboard "Brain" tab (graph + vitals + live pulse), learning-loop circuit closures, snapshot trend infrastructure, unified `vaultflow` core CLI
 
-> **Source study note:** the Wayland repo (github.com/ferroxlabs/wayland, AGPL-3.0 with
-> some Apache-2.0 files) was cloned and studied to inform this design. **Architecture
-> and schemas were studied; no code was copied** — everything below is reimplemented
-> vaultflow-native. Two marketing claims turned out not to exist in the open source:
-> the 5-partition memory lives in an external proprietary MCP server (the OSS app has
-> a simpler file-based archive), and the skill-prompt eval harness is not implemented
-> at all. vaultflow's SQLite + FTS5 + embeddings memory already exceeds what Wayland's
-> repo actually ships; the eval-harness backlog item would leapfrog it.
+> **Source study note:** two open-source repos were cloned and studied to inform
+> this design. **Architecture and schemas were studied; no code was copied** —
+> everything below is reimplemented vaultflow-native against our own stack
+> (CJS + `node:sqlite`, not their ESM).
+>
+> 1. **Wayland desktop app** — github.com/ferroxlabs/wayland (AGPL-3.0 + some
+>    Apache-2.0). The Electron command center. Its own memory is a simple
+>    file-based markdown archive (linear search, no FTS/embeddings).
+> 2. **IJFW engine** — github.com/FerroxLabs/ijfw, **MIT licensed**, published as
+>    `@ijfw/install` on npm. This is the real "5-partition memory brain": the
+>    desktop app spawns it as a local MCP server at `~/.ijfw/mcp-server`. It was
+>    never proprietary — just lives in a different repo than the app. MIT means
+>    **no copyleft contamination risk**, but we still reimplement rather than copy.
+>
+> Reality check on the marketing: the skill-prompt eval harness is **not
+> implemented** in either repo. The 5-partition memory **is** real and is worth
+> learning from (see backlog item 1, now concrete). vaultflow's existing SQLite +
+> FTS5 + embeddings + RRF search already matches IJFW's hot/warm search tiers;
+> what IJFW adds that we lack is **semantic-tier promotion, a bi-temporal facts
+> table, contradiction-driven staleness, and a user-model profile.**
 
 ---
 
@@ -303,10 +315,42 @@ project; not introducing one).
 
 ## Backlog (post-v1, Wayland-inspired)
 
-1. **5-partition memory classification** — tag existing stores as
-   working (session state), episodic (session_summaries/edit_events),
-   semantic (memory_entries/dictionary), procedural (patterns/skills), and a new
-   user-model partition; expose as a graph filter and getContext() weighting.
+1. **5-partition memory (IJFW-informed, now concrete).** IJFW implements this as a
+   single `tier_semantic` column on one `memory_entries` table, not five tables —
+   the same shape vaultflow can adopt:
+   - **Add `tier_semantic` column** to `memory_entries` (`working` default),
+     enum: working / episodic / semantic / procedural / procedural_candidate.
+   - **Promotion ladder (nightly):**
+     - working → episodic: at session end, concatenate a session's working rows
+       into one episodic summary (we already build session_summaries — promote
+       those rather than re-deriving).
+     - episodic → semantic: Jaccard token-overlap > 0.7 between two episodic
+       entries, or an explicit `promote:semantic` tag.
+     - working → procedural: a task ≥ 5 min that recurs as 3+ similar
+       task→commit chains (Jaccard > 0.7) — vaultflow already has the patterns
+       table; this is the same signal expressed as a memory tier.
+   - **Bi-temporal facts table** (genuinely new, high value):
+     ```sql
+     CREATE TABLE facts (
+       id INTEGER PRIMARY KEY AUTOINCREMENT,
+       subject TEXT NOT NULL, predicate TEXT NOT NULL, object TEXT NOT NULL,
+       confidence REAL DEFAULT 1.0, memory_id TEXT, source TEXT,
+       valid_from TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+       valid_to TEXT, created_at INTEGER NOT NULL);
+     ```
+     Storing a contradicting (subject, predicate) closes the prior row's
+     `valid_to` instead of accumulating conflicts — "what did we believe about X
+     on date Y" becomes queryable. Facts are substring-grounded against their
+     source text (hallucination guard).
+   - **Contradiction-driven staleness:** vaultflow's `memory_stale` today only
+     flags missing source files. IJFW propagates staleness by BFS over the code
+     graph from a superseded node (depth ≤ 2, edge weight ≥ 0.5), flagging
+     memory rows that mention reached symbols. We already have code_calls /
+     code_imports — the graph exists.
+   - **User-model partition** (the 5th, which vaultflow has *nothing* like): a
+     profile of inferences about the user (expertise, style, preferences) with
+     provenance, an audit verb, and right-to-be-forgotten purge. Maps cleanly
+     onto our existing MEMORY.md `user`/`feedback` memory types.
 2. **Skill-prompt eval harness** — use Phase 2 verdict attribution data to score
    skill descriptions, propose rewrites for high-miss skills, A/B them via the
    router, promote winners. (Wayland *advertises* this but has not implemented
