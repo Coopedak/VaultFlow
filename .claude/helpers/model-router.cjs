@@ -310,6 +310,35 @@ function getStatusTable() {
   }
 }
 
+/**
+ * Apply a pending model recommendation: set the agent's current model to the
+ * recommended one (mark prior current=0, new row current=1). Mirrors the
+ * checkAndDemote write but driven by an explicit operator accept.
+ * @param {string} agent
+ * @param {string} toModel
+ * @returns {{applied:boolean, agent:string, model:string}|null}
+ */
+function applyRecommendation(agent, toModel) {
+  try {
+    const db = getDb(); db.initialize(null, null);
+    const rows = db.getModelPerformance(agent) || [];
+    const cur  = rows.find(r => r.current === 1);
+    const now  = new Date().toISOString();
+    if (cur) db.upsertModelPerformance(agent, cur.model, {
+      task_type: 'general', verdicts_total: cur.verdicts_total, verdicts_approved: cur.verdicts_approved,
+      sessions_on_model: cur.sessions_on_model, promoted_at: cur.promoted_at, demoted_at: now, current: 0,
+    });
+    db.upsertModelPerformance(agent, toModel, {
+      task_type: 'general', verdicts_total: 0, verdicts_approved: 0, sessions_on_model: 0,
+      promoted_at: now, demoted_at: null, current: 1,
+    });
+    return { applied: true, agent, model: toModel };
+  } catch (err) {
+    process.stderr.write(`[model-router] applyRecommendation error — ${err.message}\n`);
+    return null;
+  }
+}
+
 // ── CLI ───────────────────────────────────────────────────────────────────
 
 if (require.main === module && process.argv.includes('--status')) {
@@ -378,4 +407,5 @@ module.exports = {
   getRecommendedModel,
   checkAndDemote,
   getStatusTable,
+  applyRecommendation,
 };

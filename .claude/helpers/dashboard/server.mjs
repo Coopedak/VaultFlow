@@ -44,6 +44,7 @@ const HOST        = cfg.dashboard && cfg.dashboard.host     || 'localhost';
 // ── db helpers ────────────────────────────────────────────────────────────
 
 const db = require('../db.cjs');
+const modelRouter = require('../model-router.cjs');
 
 function ensureDb() {
   db.initialize(METRICS, DB_FILE);
@@ -1067,6 +1068,84 @@ app.get('/api/backlinks', (req, res) => {
   } catch (err) { apiErr(res, err); }
 });
 
+// ── GET /api/brain/graph ────────────────────────────────────────────────
+
+app.get('/api/brain/graph', (req, res) => {
+  try {
+    const center = req.query.center || null;
+    const depth  = Number(req.query.depth) || 1;
+    const limit  = Number(req.query.limit) || 150;
+    const types  = req.query.types ? String(req.query.types).split(',').filter(Boolean) : null;
+    res.json(db.getBrainGraph({ center, depth, types, limit }));
+  } catch (err) { apiErr(res, err); }
+});
+
+// ── GET /api/brain/mission ───────────────────────────────────────────────
+app.get('/api/brain/mission', (_req, res) => {
+  try { res.json(db.getMissionControl()); } catch (err) { apiErr(res, err); }
+});
+
+// ── GET /api/brain/events (Server-Sent Events) ────────────────────────────
+app.get('/api/brain/events', (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+  });
+  res.write(': connected\n\n');
+
+  let wm = {};
+  let alive = true;
+  const tick = () => {
+    if (!alive) return;
+    try {
+      ensureDb();
+      const { events, watermarks } = db.getEventsSince(wm);
+      wm = watermarks;
+      for (const e of events) res.write(`data: ${JSON.stringify(e)}\n\n`);
+    } catch (_) { /* DB locked — skip a beat, never error the stream */ }
+  };
+  // first call fast-forwards watermarks without replaying history
+  try { ensureDb(); wm = db.getEventsSince({}).watermarks; } catch (_) {}
+  const poll = setInterval(tick, 1500);
+  const keepAlive = setInterval(() => { if (alive) res.write(': ping\n\n'); }, 15000);
+
+  req.on('close', () => { alive = false; clearInterval(poll); clearInterval(keepAlive); });
+});
+
+// ── GET /api/brain/snapshots?metric=&scope=&days= ─────────────────────────
+
+app.get('/api/brain/snapshots', (req, res) => {
+  try {
+    res.json(db.getBrainSnapshots({ metric: req.query.metric || null, scope: req.query.scope || '', days: Number(req.query.days) || 30 }));
+  } catch (err) { apiErr(res, err); }
+});
+
+// ── GET /api/model/recommendations ────────────────────────────────────────
+
+app.get('/api/model/recommendations', (_req, res) => {
+  try {
+    const p = path.join(METRICS, 'model-recommendations.json');
+    res.json(fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf8')) : {});
+  } catch (err) { apiErr(res, err); }
+});
+
+// ── POST /api/model/recommendations/accept { agent } ──────────────────────
+
+app.post('/api/model/recommendations/accept', (req, res) => {
+  try {
+    const agent = req.body && req.body.agent;
+    if (!agent) return res.status(400).json({ error: 'agent required' });
+    const p = path.join(METRICS, 'model-recommendations.json');
+    const recs = fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, 'utf8')) : {};
+    const rec = recs[agent];
+    if (!rec) return res.status(404).json({ error: 'no recommendation for agent' });
+    const applied = modelRouter.applyRecommendation(agent, rec.model);
+    if (applied) { delete recs[agent]; fs.writeFileSync(p, JSON.stringify(recs, null, 2)); }
+    res.json({ ok: !!applied, applied });
+  } catch (err) { apiErr(res, err); }
+});
+
 // ── root → dashboard ──────────────────────────────────────────────────────
 
 app.get('/', (_req, res) => {
@@ -1075,9 +1154,32 @@ app.get('/', (_req, res) => {
 
 // ── start ─────────────────────────────────────────────────────────────────
 
-app.listen(PORT, HOST, () => {
-  console.log(`[vaultflow dashboard] http://${HOST}:${PORT}`);
-  console.log(`[vaultflow dashboard] DB: ${path.join(METRICS, DB_FILE)}`);
-});
+// Boot the server on a (possibly ephemeral) port and return the http.Server so
+// tests can listen on port 0 and close it. Importing this module no longer
+// auto-listens — only a direct `node server.mjs` invocation does (below).
+export function startServer(opts = {}) {
+  if (opts.metricsRoot) {
+    // Test override: re-point the shared db singleton at an isolated fixture root.
+    db.close?.();
+    db.initialize(opts.metricsRoot, DB_FILE);
+  }
+  // When a caller passes an explicit port (e.g. tests using port 0), bind
+  // without the configured HOST. Binding to a hostname like 'localhost'
+  // triggers an async DNS lookup, leaving server.address() null until the
+  // 'listening' event — which breaks callers that read the ephemeral port
+  // synchronously. Omitting the host binds all interfaces synchronously
+  // (reachable via 127.0.0.1). Direct runs keep the configured HOST.
+  if (opts.port != null) return app.listen(opts.port);
+  return app.listen(PORT, HOST);
+}
+
+// Auto-start only when run directly (node server.mjs), not when imported by tests.
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))) {
+  const srv = startServer();
+  srv.on('listening', () => {
+    console.log(`[vaultflow dashboard] http://${HOST}:${PORT}`);
+    console.log(`[vaultflow dashboard] DB: ${path.join(METRICS, DB_FILE)}`);
+  });
+}
 
 export default app;

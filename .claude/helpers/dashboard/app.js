@@ -1030,6 +1030,154 @@ function escapeHtml(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+// ── Brain graph ─────────────────────────────────────────────────────────
+const BRAIN_COLORS = {
+  project: '#f59e0b', session: '#6366f1', file: '#22d3ee', symbol: '#a78bfa',
+  memory:  '#34d399', skill:   '#f472b6', pattern: '#fb7185', prompt: '#94a3b8',
+  commit:  '#facc15',
+};
+let brainCy = null;
+
+function brainElements(g) {
+  const nodes = g.nodes.map(n => ({ data: { id: n.id, label: n.label, type: n.type, weight: n.weight } }));
+  const edges = g.edges.map((e, i) => ({ data: { id: `e${i}`, source: e.source, target: e.target, kind: e.kind } }));
+  return [...nodes, ...edges];
+}
+
+function renderBrain(g) {
+  document.getElementById('brain-meta').textContent =
+    `${g.meta.mode} · ${g.meta.nodeCount} nodes · ${g.meta.edgeCount} edges${g.meta.truncated ? ' · truncated' : ''}`;
+  if (brainCy) brainCy.destroy();
+  brainCy = cytoscape({
+    container: document.getElementById('brain-graph'),
+    elements: brainElements(g),
+    style: [
+      { selector: 'node', style: {
+        'background-color': (n) => BRAIN_COLORS[n.data('type')] || '#888',
+        'label': 'data(label)', 'color': '#cbd5e1', 'font-size': 9,
+        'width': (n) => 12 + Math.min(28, Math.sqrt(n.data('weight') || 1) * 6),
+        'height': (n) => 12 + Math.min(28, Math.sqrt(n.data('weight') || 1) * 6),
+        'text-wrap': 'ellipsis', 'text-max-width': 80, 'min-zoomed-font-size': 6,
+      }},
+      { selector: 'edge', style: {
+        'width': 1, 'line-color': '#3a3a4a', 'target-arrow-color': '#3a3a4a',
+        'target-arrow-shape': 'triangle', 'arrow-scale': 0.6, 'curve-style': 'bezier', 'opacity': 0.6,
+      }},
+      { selector: 'node:selected', style: { 'border-width': 2, 'border-color': '#fff' } },
+    ],
+    layout: { name: 'cose', animate: false, nodeRepulsion: 8000, idealEdgeLength: 80 },
+  });
+  brainCy.on('tap', 'node', (evt) => brainExpand(evt.target.id()));
+}
+
+// ── Live pulse (SSE) + Mission Control ──────────────────────────────────
+let pulseSource = null; // EventSource handle
+const PULSE_KINDS = { edit: '#22d3ee', prompt: '#94a3b8', tool: '#a78bfa', inject: '#f472b6', route: '#64748b' };
+
+function startPulse() {
+  if (pulseSource) return;
+  pulseSource = new EventSource('/api/brain/events');
+  pulseSource.onmessage = (msg) => {
+    let e; try { e = JSON.parse(msg.data); } catch { return; }
+    // ticker line
+    const ticker = document.getElementById('pulse-ticker');
+    if (ticker) ticker.textContent = `${e.kind} · ${e.label || ''} · ${(e.ts || '').slice(11, 19)}`;
+    // pulse referenced nodes on the graph
+    if (brainCy && Array.isArray(e.refs)) {
+      for (const id of e.refs) {
+        const node = brainCy.getElementById(id);
+        if (node && node.length) {
+          node.animate({ style: { 'background-color': PULSE_KINDS[e.kind] || '#fff', 'border-width': 4, 'border-color': PULSE_KINDS[e.kind] || '#fff' } }, { duration: 200 })
+              .animate({ style: { 'border-width': 0 } }, { duration: 600 });
+        }
+      }
+    }
+  };
+  pulseSource.onerror = () => { /* browser auto-reconnects EventSource */ };
+}
+function stopPulse() { if (pulseSource) { pulseSource.close(); pulseSource = null; } }
+
+async function loadMission() {
+  const mc = await api('/api/brain/mission').catch(() => ({ entries: [], counts: {} }));
+  const color = { running: '#22d3ee', zombie: '#fb7185', failed: '#f87171', scheduled: '#5b8def', done: '#34d399', idle: '#7a818c' };
+  const strip = document.getElementById('mission-strip');
+  strip.innerHTML = Object.entries(mc.counts).filter(([, n]) => n > 0)
+    .map(([status, n]) => `<div class="stat-card"><div class="label" style="color:${color[status]||'#fff'}">${status}</div><div class="value">${n}</div></div>`)
+    .join('') || '<div class="stat-card"><div class="label">idle</div><div class="value">0</div></div>';
+}
+
+async function loadBrain() {
+  const depth = document.getElementById('brain-depth').value || 1;
+  const g = await api(`/api/brain/graph?limit=150&depth=${depth}`).catch(() => ({ nodes: [], edges: [], meta: { mode: 'overview', nodeCount: 0, edgeCount: 0 } }));
+  renderBrain(g);
+  loadVitals();
+  loadMission();
+  if (document.getElementById('pulse-toggle')?.checked) startPulse();
+}
+
+async function loadVitals() {
+  const [snaps, recs] = await Promise.all([
+    api('/api/brain/snapshots?days=30').catch(() => []),
+    api('/api/model/recommendations').catch(() => ({})),
+  ]);
+  // group snapshots by metric
+  const byMetric = {};
+  for (const s of snaps) (byMetric[s.metric] ||= []).push(s);
+  const latest = (m) => { const a = byMetric[m] || []; return a.length ? a[a.length - 1].value : 0; };
+  const delta  = (m) => { const a = byMetric[m] || []; return a.length > 1 ? a[a.length - 1].value - a[0].value : 0; };
+  const card = (label, m) => { const d = delta(m); const arrow = d > 0 ? '▲' : d < 0 ? '▼' : '·';
+    return `<div class="stat-card"><div class="label">${label}</div><div class="value">${fmtNum(latest(m))}</div><div class="mono" style="font-size:11px;opacity:.6">${arrow} ${d>=0?'+':''}${fmtNum(d)}</div></div>`; };
+  document.getElementById('brain-vitals').innerHTML =
+    card('Patterns', 'patterns.count') + card('Pattern fires', 'patterns.fires.total') +
+    card('Memory', 'memory.count') + card('Stale memory', 'memory.stale.count') +
+    card('Verdicts', 'verdicts.total');
+
+  const line = (id, m, color) => { const a = byMetric[m] || [];
+    if (!a.length) return;
+    makeChart(id, 'line', { labels: a.map(r => r.snapshot_date), datasets: [{ label: m, data: a.map(r => r.value), borderColor: color, backgroundColor: color + '33', tension: .3, fill: true }] }, CHART_DEFAULTS); };
+  line('chart-vital-fires', 'patterns.fires.total', '#fb7185');
+  line('chart-vital-memory', 'memory.count', '#34d399');
+
+  const body = document.getElementById('model-recs-body');
+  const entries = Object.entries(recs);
+  body.innerHTML = entries.length
+    ? entries.map(([agent, r]) => `<tr><td>${escapeHtml(agent)}</td><td class="mono">${escapeHtml(r.model)}</td><td class="mono" style="opacity:.6">${escapeHtml(r.demoted_from||'')}</td>
+        <td><button class="rec-accept" data-agent="${escapeHtml(agent)}">Accept</button></td></tr>`).join('')
+    : '<tr><td colspan="4" class="loading">None pending</td></tr>';
+  document.querySelectorAll('.rec-accept').forEach(b => b.addEventListener('click', async () => {
+    await fetch('/api/model/recommendations/accept', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ agent: b.dataset.agent }) });
+    loadVitals();
+  }));
+}
+
+async function brainExpand(nodeId) {
+  const depth = document.getElementById('brain-depth').value || 1;
+  const g = await api(`/api/brain/graph?center=${encodeURIComponent(nodeId)}&depth=${depth}&limit=150`).catch(() => null);
+  if (g) renderBrain(g);
+  brainDetail(nodeId);
+}
+
+function brainDetail(nodeId) {
+  const [type, ...rest] = nodeId.split(':');
+  const key = rest.join(':');
+  const el = document.getElementById('brain-detail');
+  el.innerHTML = `<div class="mono" style="font-size:13px">
+    <strong style="color:${BRAIN_COLORS[type] || '#fff'}">${type}</strong> · ${escapeHtml(key)}
+  </div>`;
+}
+
+document.getElementById('brain-reset')?.addEventListener('click', loadBrain);
+document.getElementById('brain-depth')?.addEventListener('change', loadBrain);
+document.getElementById('pulse-toggle')?.addEventListener('change', (e) => e.target.checked ? startPulse() : stopPulse());
+document.getElementById('brain-search')?.addEventListener('keydown', async (e) => {
+  if (e.key !== 'Enter' || !e.target.value.trim()) return;
+  const hits = await api(`/api/search?q=${encodeURIComponent(e.target.value.trim())}&limit=5`).catch(() => null);
+  // /api/search returns { memory, symbols, commits, dictionary, vault_tools }.
+  // Only memory hits map to overview graph nodes (memory:<source>), so prefer those.
+  const mem = hits && hits.memory && hits.memory[0];
+  if (mem && mem.source) brainExpand(`memory:${mem.source}`);
+});
+
 // ── loader map ────────────────────────────────────────────────────────────────
 
 const LOADERS = {
@@ -1045,6 +1193,7 @@ const LOADERS = {
   discoveries: loadDiscoveries,
   memory:      loadMemory,
   graph:       loadGraph,
+  brain:       loadBrain,
   control:     loadControl,
 };
 

@@ -675,6 +675,16 @@ const SCHEMA_SQL = `
     PRIMARY KEY (caller_file, caller_name, callee_name, line)
   );
 
+  -- Daily brain-vitals trend table. One row per (date, metric, scope) so the
+  -- nightly snapshot step overwrites rather than duplicates when re-run.
+  CREATE TABLE IF NOT EXISTS brain_snapshots (
+    snapshot_date TEXT NOT NULL,
+    metric        TEXT NOT NULL,
+    scope         TEXT NOT NULL DEFAULT '',
+    value         REAL NOT NULL,
+    PRIMARY KEY (snapshot_date, metric, scope)
+  );
+
   CREATE INDEX IF NOT EXISTS idx_code_calls_callee  ON code_calls(callee_name);
   CREATE INDEX IF NOT EXISTS idx_code_calls_caller  ON code_calls(caller_file, caller_name);
   CREATE INDEX IF NOT EXISTS idx_code_calls_project ON code_calls(project);
@@ -1280,6 +1290,10 @@ function initialize(metricsRoot, dbFile) {
     // re-enqueuing it for embedding. Existing rows get NULL (treated as miss
     // on first re-index, so they backfill naturally).
     'ALTER TABLE code_symbols ADD COLUMN content_hash TEXT',
+    // v5: decision_id on agent_verdicts — links a verdict to the
+    // skill_injection_decisions row that was active when the sub-agent ran,
+    // so verdict outcomes can be attributed back to the routing decision.
+    'ALTER TABLE agent_verdicts ADD COLUMN decision_id INTEGER',
   ]) {
     try { _db.exec(migration); } catch (err) {
       if (!err.message.includes('duplicate column')) {
@@ -2622,19 +2636,27 @@ function recordSkillInjectionDecision(args) {
  * @param {string}      [reason]    Human-readable explanation (max 500 chars).
  * @param {string|null} [flaggedAt] ISO timestamp if the verdict was flagged for review.
  */
-function recordVerdict(sessionId, agentType, verdict, reason, flaggedAt) {
+function recordVerdict(sessionId, agentType, verdict, reason, flaggedAt, decisionId) {
   if (!_db) throw new Error('db.recordVerdict: call initialize() first');
   _db.prepare(
-    `INSERT INTO agent_verdicts (timestamp, session_id, agent_type, verdict, reason, flagged_at)
-     VALUES (?, ?, ?, ?, ?, ?)`
+    `INSERT INTO agent_verdicts (timestamp, session_id, agent_type, verdict, reason, flagged_at, decision_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
   ).run(
     new Date().toISOString(),
     sessionId  || null,
     String(agentType  || '').slice(0, 100),
     String(verdict    || '').slice(0, 50),
     String(reason     || '').slice(0, 500),
-    flaggedAt  || null
+    flaggedAt  || null,
+    decisionId ?? null
   );
+}
+
+/** Most recent skill_injection_decisions.id for a session, or null. */
+function getLatestDecisionId(sessionId) {
+  if (!_db || !sessionId) return null;
+  try { return _db.prepare(`SELECT id FROM skill_injection_decisions WHERE session_id = ? ORDER BY id DESC LIMIT 1`).get(sessionId)?.id ?? null; }
+  catch (_) { return null; }
 }
 
 /**
@@ -3210,6 +3232,329 @@ function close() {
   }
 }
 
+/**
+ * Build a cross-entity graph over existing edge tables for the Brain dashboard.
+ * Pure read. No schema changes — UNIONs the relationship tables vaultflow
+ * already maintains. Hard-capped so the browser never receives the full graph.
+ *
+ * @param {object} [opts]
+ * @param {string|null} [opts.center] node id "type:key"; null = overview mode
+ * @param {number} [opts.depth=1]     neighborhood depth, clamped to [1,2]
+ * @param {string[]|null} [opts.types] node-type allowlist; null = all
+ * @param {number} [opts.limit=150]   soft node cap, clamped to [1,500]
+ * @returns {{nodes:Array,edges:Array,meta:object}}
+ */
+function getBrainGraph(opts) {
+  if (!_db) throw new Error('db.getBrainGraph: call initialize() first');
+  const o      = opts || {};
+  const center = o.center || null;
+  const depth  = Math.min(2, Math.max(1, o.depth || 1));
+  const types  = Array.isArray(o.types) && o.types.length ? new Set(o.types) : null;
+  const NODE_CAP = Math.min(500, Math.max(1, o.limit || 150));
+  const EDGE_CAP = NODE_CAP * 3;
+
+  const nodes = new Map();   // id -> node
+  const edges = [];
+  const allow = (t) => !types || types.has(t);
+  const addNode = (id, type, label, weight) => {
+    if (!allow(type)) return false;
+    if (!nodes.has(id)) nodes.set(id, { id, type, label: String(label ?? id).slice(0, 80), weight: weight || 1 });
+    else if (weight && weight > nodes.get(id).weight) nodes.get(id).weight = weight;
+    return true;
+  };
+  const addEdge = (source, target, kind, weight) => {
+    if (edges.length >= EDGE_CAP) return;
+    if (nodes.has(source) && nodes.has(target)) edges.push({ source, target, kind, weight: weight || 1 });
+  };
+
+  const q = (sql, ...p) => _db.prepare(sql).all(...p);
+
+  if (center) {
+    // ── neighborhood: BFS out from the center node ─────────────────────────
+    const [ctype, ...crest] = center.split(':');
+    const ckey = crest.join(':');
+    const labelFor = (id) => id.split(':').slice(1).join(':').split(/[/\\]/).pop();
+    addNode(center, ctype, labelFor(center), 5);
+
+    const expand = (id) => {
+      const [t, ...rest] = id.split(':');
+      const key = rest.join(':');
+      if (t === 'session') {
+        for (const r of q(`SELECT DISTINCT file_path FROM edit_events WHERE session_id = ? LIMIT 50`, key)) {
+          if (addNode(`file:${r.file_path}`, 'file', String(r.file_path).split(/[/\\]/).pop(), 1))
+            addEdge(id, `file:${r.file_path}`, 'edited', 1);
+        }
+        const s = q(`SELECT project FROM sessions WHERE id = ? LIMIT 1`, key)[0];
+        if (s && s.project) { addNode(`project:${s.project}`, 'project', s.project, 1); addEdge(id, `project:${s.project}`, 'belongs', 1); }
+      } else if (t === 'file') {
+        for (const r of q(`SELECT DISTINCT session_id FROM edit_events WHERE file_path = ? LIMIT 50`, key)) {
+          if (addNode(`session:${r.session_id}`, 'session', r.session_id, 1))
+            addEdge(`session:${r.session_id}`, id, 'edited', 1);
+        }
+        try { for (const r of q(`SELECT target FROM code_imports WHERE file = ? LIMIT 50`, key)) {
+          if (addNode(`file:${r.target}`, 'file', String(r.target).split(/[/\\]/).pop(), 1)) addEdge(id, `file:${r.target}`, 'imports', 1);
+        } } catch (_) {}
+      } else if (t === 'memory') {
+        try { for (const r of q(`SELECT target FROM memory_links WHERE source = ? LIMIT 50`, key)) {
+          if (addNode(`memory:${r.target}`, 'memory', r.target, 1)) addEdge(id, `memory:${r.target}`, 'links', 1);
+        } } catch (_) {}
+        try { for (const r of q(`SELECT source FROM memory_links WHERE target = ? LIMIT 50`, key)) {
+          if (addNode(`memory:${r.source}`, 'memory', r.source, 1)) addEdge(`memory:${r.source}`, id, 'links', 1);
+        } } catch (_) {}
+      } else if (t === 'project') {
+        for (const r of q(`SELECT id, started_at FROM sessions WHERE project = ? ORDER BY started_at DESC LIMIT 30`, key)) {
+          if (addNode(`session:${r.id}`, 'session', r.id, 1)) addEdge(`session:${r.id}`, id, 'belongs', 1);
+        }
+      } else if (t === 'skill') {
+        try { for (const r of q(`SELECT pattern_key FROM patterns WHERE agent = ? LIMIT 30`, key)) {
+          if (addNode(`pattern:${r.pattern_key}`, 'pattern', r.pattern_key, 1)) addEdge(`pattern:${r.pattern_key}`, id, 'owns', 1);
+        } } catch (_) {}
+      }
+    };
+
+    let frontier = [center];
+    for (let d = 0; d < depth; d++) {
+      const next = [];
+      for (const id of frontier) { expand(id); }
+      // depth 2: expand the newly added nodes once more
+      for (const n of nodes.keys()) if (!frontier.includes(n)) next.push(n);
+      frontier = next;
+      if (depth === 1) break;
+    }
+  } else {
+  // ── overview: top-N nodes per type over the last 30 days ──────────────────
+
+  // projects by session count
+  for (const r of q(`SELECT project, COUNT(*) n FROM sessions WHERE project IS NOT NULL GROUP BY project ORDER BY n DESC LIMIT 10`))
+    addNode(`project:${r.project}`, 'project', r.project, r.n);
+  // sessions (recent)
+  for (const r of q(`SELECT id, project, started_at, COALESCE(edits,0) edits FROM sessions ORDER BY started_at DESC LIMIT 15`)) {
+    if (addNode(`session:${r.id}`, 'session', `${r.project || '?'} ${String(r.started_at).slice(0,10)}`, r.edits))
+      if (r.project) { addNode(`project:${r.project}`, 'project', r.project, 1); addEdge(`session:${r.id}`, `project:${r.project}`, 'belongs', 1); }
+  }
+  // hub files by edit frequency
+  for (const r of q(`SELECT file_path, project, COUNT(*) n FROM edit_events GROUP BY file_path ORDER BY n DESC LIMIT 15`)) {
+    const base = String(r.file_path).split(/[/\\]/).pop();
+    if (addNode(`file:${r.file_path}`, 'file', base, r.n) && r.project) {
+      addNode(`project:${r.project}`, 'project', r.project, 1);
+      addEdge(`file:${r.file_path}`, `project:${r.project}`, 'belongs', 1);
+    }
+  }
+  // skills by use_count
+  try { for (const r of q(`SELECT name, COALESCE(use_count,0) uc FROM vault_agents ORDER BY uc DESC LIMIT 10`))
+    addNode(`skill:${r.name}`, 'skill', r.name, r.uc); } catch (_) {}
+  // patterns by fire_count
+  try { for (const r of q(`SELECT pattern_key, agent, COALESCE(fire_count,0) fc FROM patterns ORDER BY fc DESC LIMIT 10`)) {
+    if (addNode(`pattern:${r.pattern_key}`, 'pattern', r.pattern_key, r.fc) && r.agent) {
+      addNode(`skill:${r.agent}`, 'skill', r.agent, 1);
+      addEdge(`pattern:${r.pattern_key}`, `skill:${r.agent}`, 'owns', 1);
+    }
+  } } catch (_) {}
+  // memory entries by backlink count
+  try { for (const r of q(`SELECT m.source, m.title, COUNT(l.target) n FROM memory_entries m
+                            LEFT JOIN memory_links l ON l.target = m.source
+                            GROUP BY m.source ORDER BY n DESC LIMIT 10`))
+    addNode(`memory:${r.source}`, 'memory', r.title || r.source, r.n + 1); } catch (_) {}
+
+  // edges among selected memory nodes
+  try { for (const r of q(`SELECT source, target FROM memory_links LIMIT 500`))
+    addEdge(`memory:${r.source}`, `memory:${r.target}`, 'links', 1); } catch (_) {}
+  // edit edges among selected sessions+files
+  try { for (const r of q(`SELECT DISTINCT session_id, file_path FROM edit_events LIMIT 500`))
+    addEdge(`session:${r.session_id}`, `file:${r.file_path}`, 'edited', 1); } catch (_) {}
+  }
+
+  const truncated = nodes.size > NODE_CAP;
+  const nodeArr = Array.from(nodes.values()).sort((a, b) => b.weight - a.weight).slice(0, NODE_CAP);
+  const keep = new Set(nodeArr.map(n => n.id));
+  const edgeArr = edges.filter(e => keep.has(e.source) && keep.has(e.target));
+
+  return {
+    nodes: nodeArr,
+    edges: edgeArr,
+    meta: { mode: center ? 'neighborhood' : 'overview', truncated, nodeCount: nodeArr.length, edgeCount: edgeArr.length },
+  };
+}
+
+/**
+ * Upsert a daily metric snapshot. Key is (snapshot_date, metric, scope) so
+ * re-running nightly the same day overwrites rather than duplicates.
+ * @param {string} date YYYY-MM-DD
+ * @param {string} metric dotted key e.g. 'patterns.count'
+ * @param {string} scope  '' for global, else project/agent
+ * @param {number} value
+ */
+function recordBrainSnapshot(date, metric, scope, value) {
+  if (!_db) throw new Error('db.recordBrainSnapshot: call initialize() first');
+  _db.prepare(`
+    INSERT INTO brain_snapshots (snapshot_date, metric, scope, value)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(snapshot_date, metric, scope) DO UPDATE SET value = excluded.value
+  `).run(date, metric, scope || '', Number(value) || 0);
+}
+
+/**
+ * Read a metric's trend. @returns {Array<{snapshot_date,metric,scope,value}>} ASC by date.
+ */
+function getBrainSnapshots(opts) {
+  if (!_db) throw new Error('db.getBrainSnapshots: call initialize() first');
+  const o = opts || {};
+  const days = Math.max(1, o.days || 30);
+  const cutoff = new Date(Date.now() - days * 864e5).toISOString().slice(0, 10);
+  if (o.metric) {
+    return _db.prepare(`SELECT * FROM brain_snapshots WHERE metric = ? AND scope = ? AND snapshot_date >= ? ORDER BY snapshot_date ASC`)
+      .all(o.metric, o.scope || '', cutoff);
+  }
+  return _db.prepare(`SELECT * FROM brain_snapshots WHERE snapshot_date >= ? ORDER BY metric, snapshot_date ASC`).all(cutoff);
+}
+
+const PROMOTED_TAGS = new Set(['decision', 'pattern', 'architecture', 'design', 'global']);
+const SCORE_RECENCY_PEAK_MS = 24 * 60 * 60 * 1000;   // full boost under 24h
+const SCORE_RECENCY_MAX_MS  = 30 * 24 * 60 * 60 * 1000; // decays to 0 at 30d
+
+/**
+ * 0–100 composite score for promoting a memory/pattern entry.
+ *   +30 high-signal type (decision|pattern)
+ *   +10 per cross-project reference
+ *   +5  per reference/fire
+ *   +20 if any tag is a promoted tag
+ *   +15 recency, full <24h, linear decay to 0 at 30d
+ * @param {{type?:string,crossProjectRefs?:number,references?:number,tags?:string[],ageMs?:number}} e
+ * @returns {number} integer 0..100
+ */
+function compositePromotionScore(e) {
+  let score = 0;
+  if (e.type === 'decision' || e.type === 'pattern') score += 30;
+  score += (Number(e.crossProjectRefs) || 0) * 10;
+  score += (Number(e.references) || 0) * 5;
+  if (Array.isArray(e.tags) && e.tags.some(t => PROMOTED_TAGS.has(String(t).toLowerCase()))) score += 20;
+  const age = Number(e.ageMs) || 0;
+  if (age <= SCORE_RECENCY_PEAK_MS) score += 15;
+  else if (age < SCORE_RECENCY_MAX_MS) score += Math.round(15 * (1 - (age - SCORE_RECENCY_PEAK_MS) / (SCORE_RECENCY_MAX_MS - SCORE_RECENCY_PEAK_MS)));
+  return Math.min(100, Math.max(0, Math.round(score)));
+}
+
+/**
+ * Log that a retrieved doc was injected into context (impression). useful=NULL
+ * until a nightly correlation pass resolves it. Crash-safe.
+ */
+function recordRetrievalImpression(o) {
+  if (!_db) return;
+  try {
+    _db.prepare(`INSERT INTO retrieval_feedback (batch_id, timestamp, session_id, query_text, source_type, source_id, action, rank, rerank_score, useful)
+                 VALUES (?, ?, ?, ?, ?, ?, 'injected', ?, ?, NULL)`)
+      .run(o.batchId || null, new Date().toISOString(), o.sessionId || null, o.query || null,
+           o.sourceType || 'memory', String(o.sourceId || ''), o.rank ?? null, o.rerankScore ?? null);
+  } catch (_) {}
+}
+
+/**
+ * Nightly: resolve open impressions. useful=1 if the same session later edited
+ * the doc's source file; useful=0 once the impression is >7 days old with no hit.
+ * @returns {{marked:number,expired:number}}
+ */
+function correlateRetrievalFeedback() {
+  if (!_db) throw new Error('db.correlateRetrievalFeedback: call initialize() first');
+  // The signal is "the same session edited the doc's source file" — a session +
+  // file-path match. We deliberately omit an edit-after-impression ordering predicate:
+  // this is a coincidental-positive-tolerant heuristic (the spec notes the signal
+  // "only needs to beat zero"), so strict timestamp ordering would add fragility for
+  // little gain.
+  const marked = _db.prepare(`
+    UPDATE retrieval_feedback
+       SET useful = 1
+     WHERE useful IS NULL
+       AND EXISTS (
+         SELECT 1 FROM edit_events e
+          WHERE e.session_id = retrieval_feedback.session_id
+            AND retrieval_feedback.source_id LIKE e.file_path || '%' )
+  `).run();
+  const expired = _db.prepare(`
+    UPDATE retrieval_feedback SET useful = 0
+     WHERE useful IS NULL AND timestamp < ?
+  `).run(new Date(Date.now() - 7 * 864e5).toISOString());
+  return { marked: marked.changes || 0, expired: expired.changes || 0 };
+}
+
+/**
+ * Tail recent activity using rowid watermarks (DB-as-bus for the SSE pulse).
+ * Pass the watermarks returned by the previous call; the first call (empty wm)
+ * fast-forwards to the current max so old rows aren't replayed as "new".
+ * @param {object} wm previous {prompts,tool_calls,edit_events,skill_injection_decisions}
+ * @returns {{events:Array,watermarks:object}}
+ */
+function getEventsSince(wm) {
+  if (!_db) throw new Error('db.getEventsSince: call initialize() first');
+  const prev = wm || {};
+  const maxRow = (tbl) => { try { return _db.prepare(`SELECT COALESCE(MAX(rowid),0) m FROM ${tbl}`).get().m; } catch (_) { return 0; } };
+  const out = { prompts: maxRow('prompts'), tool_calls: maxRow('tool_calls'), edit_events: maxRow('edit_events'), skill_injection_decisions: maxRow('skill_injection_decisions') };
+  const events = [];
+  // First call = caller supplied no watermark keys at all (seed/fast-forward so old
+  // rows aren't replayed). Once any key is present — even a legitimate 0 from a
+  // previously-empty DB — treat it as a resume and report new rows past the mark.
+  const firstCall = !('edit_events' in prev) && !('prompts' in prev) && !('tool_calls' in prev) && !('skill_injection_decisions' in prev);
+  if (firstCall) return { events, watermarks: out };
+
+  try { for (const r of _db.prepare(`SELECT rowid, timestamp, session_id, file_path, project FROM edit_events WHERE rowid > ? ORDER BY rowid LIMIT 100`).all(prev.edit_events || 0))
+    events.push({ kind: 'edit', ts: r.timestamp, session_id: r.session_id, project: r.project, label: String(r.file_path).split(/[/\\]/).pop(), refs: [`session:${r.session_id}`, `file:${r.file_path}`] }); } catch (_) {}
+  try { for (const r of _db.prepare(`SELECT rowid, timestamp, session_id, prompt_text, skill_routed FROM prompts WHERE rowid > ? ORDER BY rowid LIMIT 100`).all(prev.prompts || 0))
+    events.push({ kind: 'prompt', ts: r.timestamp, session_id: r.session_id, project: null, label: String(r.prompt_text || '').slice(0, 60), refs: [`session:${r.session_id}`, ...(r.skill_routed ? [`skill:${r.skill_routed}`] : [])] }); } catch (_) {}
+  try { for (const r of _db.prepare(`SELECT rowid, timestamp, session_id, tool_name FROM tool_calls WHERE rowid > ? ORDER BY rowid LIMIT 100`).all(prev.tool_calls || 0))
+    events.push({ kind: 'tool', ts: r.timestamp, session_id: r.session_id, project: null, label: r.tool_name, refs: [`session:${r.session_id}`] }); } catch (_) {}
+  try { for (const r of _db.prepare(`SELECT rowid, timestamp, session_id, chosen_skill, injected FROM skill_injection_decisions WHERE rowid > ? ORDER BY rowid LIMIT 100`).all(prev.skill_injection_decisions || 0))
+    events.push({ kind: r.injected ? 'inject' : 'route', ts: r.timestamp, session_id: r.session_id, project: null, label: r.chosen_skill, refs: [`session:${r.session_id}`, ...(r.chosen_skill ? [`skill:${r.chosen_skill}`] : [])] }); } catch (_) {}
+
+  events.sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
+  return { events, watermarks: out };
+}
+
+/**
+ * Project live sessions + scheduled jobs into one Mission Control ledger.
+ * Status derivation (vaultflow-native, modeled on the studied Wayland ledger):
+ *   running  — open session with activity in the last 10 min
+ *   zombie   — open session with no activity for 30+ min (died without SessionEnd)
+ *   done     — session ended today
+ *   scheduled/idle/failed — reserved for jobs (nightly), filled when job metadata exists
+ * @returns {{generatedAt:string, entries:Array, counts:object}}
+ */
+function getMissionControl() {
+  if (!_db) throw new Error('db.getMissionControl: call initialize() first');
+  const now = Date.now();
+  const RUN_MS = 10 * 60 * 1000, ZOMBIE_MS = 30 * 60 * 1000, TODAY = new Date().toISOString().slice(0, 10);
+  const entries = [];
+  const counts = { running: 0, zombie: 0, scheduled: 0, done: 0, idle: 0, failed: 0 };
+
+  const sessions = _db.prepare(`
+    SELECT s.id, s.project, s.started_at, s.ended_at,
+           (SELECT MAX(timestamp) FROM edit_events e WHERE e.session_id = s.id) AS last_edit
+      FROM sessions s
+     WHERE s.started_at >= ?
+     ORDER BY s.started_at DESC LIMIT 50
+  `).all(new Date(now - 2 * 864e5).toISOString());
+
+  for (const s of sessions) {
+    const lastTs = s.last_edit || s.started_at;
+    const sinceMs = now - new Date(lastTs).getTime();
+    let status;
+    if (s.ended_at) status = String(s.ended_at).slice(0, 10) === TODAY ? 'done' : 'idle';
+    else if (sinceMs <= RUN_MS) status = 'running';
+    else if (sinceMs >= ZOMBIE_MS) status = 'zombie';
+    else status = 'running';
+    counts[status] = (counts[status] || 0) + 1;
+    entries.push({
+      id: `session:${s.id}`, source: 'session', title: s.project || s.id, status,
+      owner: s.project || null, detail: s.ended_at ? 'ended' : (status === 'zombie' ? 'no activity 30m+' : 'active'),
+      lastHeartbeat: new Date(lastTs).getTime(), startedAt: new Date(s.started_at).getTime(),
+      updatedAt: new Date(lastTs).getTime(),
+    });
+  }
+
+  // urgency-first ordering: zombie/failed, running, scheduled, done, idle
+  const rank = { zombie: 0, failed: 1, running: 2, scheduled: 3, done: 4, idle: 5 };
+  entries.sort((a, b) => (rank[a.status] - rank[b.status]) || (b.updatedAt - a.updatedAt));
+  return { generatedAt: new Date(now).toISOString(), entries, counts };
+}
+
 // ── exports ───────────────────────────────────────────────────────────────
 function raw() { return _db; }
 
@@ -3229,6 +3574,13 @@ module.exports = {
   upsertMemoryEntry,
   replaceMemorySource,
   searchMemory,
+  getBrainGraph,
+  getEventsSince,
+  getMissionControl,
+  // brain vitals trend snapshots
+  recordBrainSnapshot,
+  getBrainSnapshots,
+  compositePromotionScore,
   searchMemoryBacklinks,
   getMemoryLinkGraph,
   detectStaleMemory,
@@ -3244,6 +3596,8 @@ module.exports = {
   searchRetrievalDocs,
   searchToolCalls,
   recordRetrievalFeedback,
+  recordRetrievalImpression,
+  correlateRetrievalFeedback,
   runRetrievalLearningLoop,
   // prompt history + similarity
   recordPrompt,
@@ -3272,6 +3626,7 @@ module.exports = {
   getSymbolEmbeddingStats,
   // agent verdicts
   recordVerdict,
+  getLatestDecisionId,
   getVerdictSummary,
   // model routing
   recordModelVerdict,

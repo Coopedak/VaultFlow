@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>vaultflow dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/cytoscape@3.30.2/dist/cytoscape.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -347,6 +348,7 @@
   <button data-tab="dictionary">Dictionary</button>
   <button data-tab="agents">Agents</button>
   <button data-tab="discoveries">Discoveries</button>
+  <button data-tab="brain">🧠 Brain</button>
   <button data-tab="graph">Graph</button>
   <button data-tab="control">⚙ Control</button>
 </nav>
@@ -494,6 +496,40 @@
         <thead><tr><th>File</th><th>Pattern</th><th>Agent</th><th>Date</th><th>Fires</th><th>Promoted</th><th>Preview</th></tr></thead>
         <tbody id="discoveries-body"><tr><td colspan="7" class="loading">Loading…</td></tr></tbody>
       </table>
+    </div>
+  </section>
+
+  <!-- ── Brain ── -->
+  <section class="section" id="tab-brain">
+    <div class="brain-toolbar" style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+      <input id="brain-search" type="search" placeholder="Search & recenter…" style="flex:1;min-width:200px" />
+      <label class="mono" style="font-size:12px">depth
+        <select id="brain-depth"><option value="1">1</option><option value="2">2</option></select>
+      </label>
+      <button id="brain-reset">Overview</button>
+      <span id="brain-meta" class="mono" style="font-size:12px;opacity:.7"></span>
+    </div>
+    <div id="mission-strip" class="stat-row" style="margin-bottom:10px"></div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <label class="mono" style="font-size:12px"><input type="checkbox" id="pulse-toggle" checked /> live pulse</label>
+      <div id="pulse-ticker" class="mono" style="font-size:12px;opacity:.8;white-space:nowrap;overflow:hidden;flex:1"></div>
+    </div>
+    <div id="brain-graph" style="height:600px;border:1px solid #2a2a3a;border-radius:8px;background:#0e0e16"></div>
+    <div id="brain-detail" class="table-card" style="margin-top:12px;min-height:40px">
+      <span class="loading">Click a node to inspect it.</span>
+    </div>
+    <div class="chart-full" style="margin-top:16px">
+      <h2>Brain Vitals — trends</h2>
+      <div id="brain-vitals" class="stat-row"></div>
+    </div>
+    <div class="chart-grid">
+      <div class="chart-card"><h2>Patterns fired (total)</h2><canvas id="chart-vital-fires"></canvas></div>
+      <div class="chart-card"><h2>Memory entries</h2><canvas id="chart-vital-memory"></canvas></div>
+    </div>
+    <div class="table-card" style="margin-top:12px">
+      <h2>Pending model recommendations</h2>
+      <table><thead><tr><th>Agent</th><th>→ Model</th><th>From</th><th></th></tr></thead>
+        <tbody id="model-recs-body"><tr><td colspan="4" class="loading">Loading…</td></tr></tbody></table>
     </div>
   </section>
 

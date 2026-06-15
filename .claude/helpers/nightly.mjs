@@ -82,6 +82,47 @@ results.promotion = await step('promote-vault-tools', () => {
   return { promoted, eligible: eligible.length };
 });
 
+// N+2. score-based pattern promotion (composite 0-100, promote at >=90)
+results.scorePromote = await step('promote-patterns-by-score', () => {
+  if (DRY_RUN) return { skipped: true };
+  const conn = db.raw();
+  const rows = conn.prepare(`SELECT pattern_key, agent, COALESCE(fire_count,0) fc, last_fired, COALESCE(promoted,0) promoted FROM patterns WHERE COALESCE(promoted,0)=0`).all();
+  let promoted = 0;
+  for (const r of rows) {
+    const ageMs = r.last_fired ? (Date.now() - new Date(r.last_fired).getTime()) : 40 * 864e5;
+    const score = db.compositePromotionScore({ type: 'pattern', references: r.fc, crossProjectRefs: 0, tags: ['pattern'], ageMs });
+    // markPromoted takes an array of pattern_key values (UPDATE ... WHERE pattern_key IN (...)),
+    // so wrap the single key — passing a bare string would make .map/.length misbehave.
+    if (score >= 90) { try { db.markPromoted([r.pattern_key]); promoted++; } catch (_) {} }
+  }
+  return { scanned: rows.length, promoted };
+});
+
+// 4b. record daily brain vitals snapshot (trend data for the dashboard)
+results.snapshot = await step('brain-snapshot', () => {
+  if (DRY_RUN) return { skipped: true };
+  const today = new Date().toISOString().slice(0, 10);
+  const conn = db.raw();
+  const one = (sql) => { try { return conn.prepare(sql).get()?.v ?? 0; } catch (_) { return 0; } };
+  const metrics = {
+    'patterns.count':        one(`SELECT COUNT(*) v FROM patterns`),
+    'patterns.fires.total':  one(`SELECT COALESCE(SUM(fire_count),0) v FROM patterns`),
+    'memory.count':          one(`SELECT COUNT(*) v FROM memory_entries`),
+    'memory.stale.count':    one(`SELECT COUNT(*) v FROM memory_stale`),
+    'sessions.total':        one(`SELECT COUNT(*) v FROM sessions`),
+    'tools.calls.total':     one(`SELECT COUNT(*) v FROM tool_calls`),
+    'verdicts.total':        one(`SELECT COUNT(*) v FROM agent_verdicts`),
+    'verdicts.approved':     one(`SELECT COUNT(*) v FROM agent_verdicts WHERE verdict='APPROVED'`),
+    'embeddings.memory':     one(`SELECT COUNT(*) v FROM memory_embeddings`),
+  };
+  let n = 0;
+  for (const [metric, value] of Object.entries(metrics)) { db.recordBrainSnapshot(today, metric, '', value); n++; }
+  return { metrics: n };
+});
+
+// N+1. resolve implicit retrieval feedback (did we inject docs the session then used?)
+results.feedback = await step('retrieval-feedback-correlate', () => DRY_RUN ? { skipped: true } : db.correlateRetrievalFeedback());
+
 // 5. retrieval learning loop
 results.learning = await step('retrieval-learning', () => DRY_RUN ? { skipped: true } : db.runRetrievalLearningLoop());
 
