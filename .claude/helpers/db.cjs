@@ -3377,6 +3377,116 @@ function getBrainGraph(opts) {
 }
 
 /**
+ * Fetch a single brain node as a readable "note" for the dashboard's
+ * Obsidian-style reader. Resolves a `<type>:<key>` graph id (the ids
+ * getBrainGraph emits) into renderable content: title, markdown body,
+ * frontmatter-style meta, tags, and the linked-mentions (backlinks) + outgoing
+ * links that make the vault feel interconnected. Read-only; returns a minimal
+ * shell for unknown ids rather than throwing — the UI always gets something.
+ */
+function getBrainNote(id) {
+  if (!_db) throw new Error('db.getBrainNote: call initialize() first');
+  const sep  = String(id || '').indexOf(':');
+  const type = sep >= 0 ? id.slice(0, sep) : 'note';
+  const key  = sep >= 0 ? id.slice(sep + 1) : String(id || '');
+  const q    = (sql, ...p) => _db.prepare(sql).all(...p);
+  const one  = (sql, ...p) => _db.prepare(sql).get(...p);
+  const base = (s) => String(s).split(/[/\\]/).pop();
+  const note = { id, type, key, title: key, body: '', tags: [], meta: [], backlinks: [], outlinks: [] };
+
+  try {
+    if (type === 'memory') {
+      let row = one(`SELECT source,title,body,tags FROM memory_entries WHERE source = ? LIMIT 1`, key);
+      if (!row) row = one(`SELECT source,title,body,tags FROM memory_entries WHERE source LIKE ? OR title = ? LIMIT 1`, `%${key}%`, key);
+      if (row) {
+        note.title = row.title || base(row.source);
+        note.body  = row.body || '';
+        note.tags  = String(row.tags || '').split(/[,\s]+/).filter(Boolean);
+        note.meta.push({ k: 'source', v: row.source });
+        for (const r of q(`SELECT DISTINCT target FROM memory_links WHERE source = ? LIMIT 100`, row.source))
+          note.outlinks.push({ id: `memory:${r.target}`, title: r.target });
+      }
+      const slug = base(key).replace(/\.md.*$/i, '').toLowerCase();
+      for (const r of q(`SELECT DISTINCT source, title FROM memory_links WHERE target = ? OR target = ? LIMIT 100`, String(key).toLowerCase(), slug))
+        note.backlinks.push({ id: `memory:${r.source}`, title: r.title || base(r.source) });
+    } else if (type === 'pattern') {
+      const row = one(`SELECT pattern_key,agent,confidence,fire_count,last_fired,promoted FROM patterns WHERE pattern_key = ? LIMIT 1`, key);
+      note.title = key;
+      if (row) {
+        note.meta.push({ k: 'agent', v: row.agent || '—' }, { k: 'fires', v: row.fire_count || 0 },
+          { k: 'confidence', v: row.confidence ?? '—' }, { k: 'promoted', v: row.promoted ? 'yes' : 'no' },
+          { k: 'last fired', v: row.last_fired || '—' });
+        note.body = `Learned pattern \`${key}\`, owned by agent **${row.agent || '—'}**. Fired ${row.fire_count || 0} times.`;
+        if (row.agent) note.outlinks.push({ id: `skill:${row.agent}`, title: row.agent });
+      }
+    } else if (type === 'skill') {
+      const row = one(`SELECT name,source,description,use_count,last_used FROM vault_agents WHERE name = ? LIMIT 1`, key);
+      note.title = key;
+      if (row) {
+        note.body = row.description || '';
+        note.meta.push({ k: 'source', v: row.source || '—' }, { k: 'uses', v: row.use_count || 0 }, { k: 'last used', v: row.last_used || '—' });
+        for (const r of q(`SELECT pattern_key FROM patterns WHERE agent = ? ORDER BY fire_count DESC LIMIT 30`, key))
+          note.outlinks.push({ id: `pattern:${r.pattern_key}`, title: r.pattern_key });
+      }
+    } else if (type === 'project') {
+      note.title = key;
+      const sc = one(`SELECT COUNT(*) n FROM sessions WHERE project = ?`, key);
+      const stacks = q(`SELECT stack_key FROM project_stacks WHERE project = ? ORDER BY confidence DESC LIMIT 12`, key).map(r => r.stack_key);
+      note.meta.push({ k: 'sessions', v: sc ? sc.n : 0 });
+      if (stacks.length) note.tags = stacks;
+      note.body = `Project hub for **${key}**.` + (stacks.length ? `\n\nDetected stack: ${stacks.join(', ')}.` : '');
+      for (const r of q(`SELECT id, started_at FROM sessions WHERE project = ? ORDER BY started_at DESC LIMIT 20`, key))
+        note.outlinks.push({ id: `session:${r.id}`, title: `${key} ${String(r.started_at).slice(0, 10)}` });
+    } else if (type === 'session') {
+      const ss = one(`SELECT session_id,project,duration_ms,top_files,patterns,summary_at FROM session_summaries WHERE session_id = ? LIMIT 1`, key);
+      const s  = one(`SELECT id,project,started_at,COALESCE(edits,0) edits FROM sessions WHERE id = ? LIMIT 1`, key);
+      const proj = (ss && ss.project) || (s && s.project) || '?';
+      note.title = `Session · ${proj}`;
+      if (ss) {
+        const mins = ss.duration_ms ? Math.round(ss.duration_ms / 60000) : 0;
+        note.meta.push({ k: 'project', v: proj }, { k: 'duration', v: `${mins}m` }, { k: 'when', v: ss.summary_at || (s && s.started_at) || '—' });
+        const files = String(ss.top_files || '').split(/[,;]+/).map(x => x.trim()).filter(Boolean);
+        note.body = (ss.patterns ? `Patterns: ${ss.patterns}\n\n` : '') + (files.length ? `Files touched:\n${files.map(f => `- ${f}`).join('\n')}` : 'No summary recorded.');
+      } else if (s) {
+        note.meta.push({ k: 'project', v: proj }, { k: 'edits', v: s.edits }, { k: 'when', v: s.started_at });
+        note.body = 'Session activity.';
+      }
+      if (proj && proj !== '?') note.outlinks.push({ id: `project:${proj}`, title: proj });
+      for (const r of q(`SELECT DISTINCT file_path FROM edit_events WHERE session_id = ? LIMIT 30`, key))
+        note.outlinks.push({ id: `file:${r.file_path}`, title: base(r.file_path) });
+    } else if (type === 'commit') {
+      const row = one(`SELECT sha,project,author,committed_at,subject,body FROM git_commits WHERE sha = ? OR sha LIKE ? LIMIT 1`, key, `${key}%`);
+      note.title = row ? row.subject : key;
+      if (row) {
+        note.meta.push({ k: 'project', v: row.project || '—' }, { k: 'author', v: row.author || '—' },
+          { k: 'date', v: row.committed_at || '—' }, { k: 'sha', v: String(row.sha).slice(0, 10) });
+        note.body = `**${row.subject || ''}**\n\n${row.body || ''}`;
+        if (row.project) note.outlinks.push({ id: `project:${row.project}`, title: row.project });
+      }
+    } else if (type === 'file') {
+      note.title = base(key);
+      const ec = one(`SELECT COUNT(*) n, MAX(project) project FROM edit_events WHERE file_path = ?`, key);
+      note.meta.push({ k: 'path', v: key }, { k: 'edits', v: ec ? ec.n : 0 });
+      note.body = `Source file \`${key}\`.`;
+      if (ec && ec.project) note.outlinks.push({ id: `project:${ec.project}`, title: ec.project });
+      try {
+        for (const r of q(`SELECT DISTINCT session_id FROM edit_events WHERE file_path = ? ORDER BY session_id DESC LIMIT 15`, key))
+          note.outlinks.push({ id: `session:${r.session_id}`, title: `session ${String(r.session_id).slice(0, 8)}` });
+      } catch (_) {}
+    } else {
+      note.title = key;
+    }
+  } catch (err) {
+    note.error = err.message;
+  }
+
+  const seen = new Set();
+  note.outlinks  = note.outlinks.filter(l => l.id && !seen.has(l.id) && seen.add(l.id)).slice(0, 60);
+  note.backlinks = note.backlinks.slice(0, 60);
+  return note;
+}
+
+/**
  * Upsert a daily metric snapshot. Key is (snapshot_date, metric, scope) so
  * re-running nightly the same day overwrites rather than duplicates.
  * @param {string} date YYYY-MM-DD
@@ -3579,6 +3689,7 @@ module.exports = {
   replaceMemorySource,
   searchMemory,
   getBrainGraph,
+  getBrainNote,
   getEventsSince,
   getMissionControl,
   // brain vitals trend snapshots

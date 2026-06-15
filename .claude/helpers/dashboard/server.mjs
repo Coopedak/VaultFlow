@@ -1080,6 +1080,13 @@ app.get('/api/brain/graph', (req, res) => {
   } catch (err) { apiErr(res, err); }
 });
 
+// ── GET /api/brain/note?id=<type:key> ─────────────────────────────────────
+// One node's readable note (body + meta + tags + backlinks/outlinks) for the
+// Obsidian-style reader pane.
+app.get('/api/brain/note', (req, res) => {
+  try { res.json(db.getBrainNote(String(req.query.id || ''))); } catch (err) { apiErr(res, err); }
+});
+
 // ── GET /api/brain/mission ───────────────────────────────────────────────
 app.get('/api/brain/mission', (_req, res) => {
   try { res.json(db.getMissionControl()); } catch (err) { apiErr(res, err); }

@@ -1037,6 +1037,7 @@ const BRAIN_COLORS = {
   commit:  '#facc15',
 };
 let brainCy = null;
+let brainCurrent = null;  // currently-opened node id (so re-renders can restore the local-graph highlight)
 
 function brainElements(g) {
   const nodes = g.nodes.map(n => ({ data: { id: n.id, label: n.label, type: n.type, weight: n.weight } }));
@@ -1055,19 +1056,53 @@ function renderBrain(g) {
       { selector: 'node', style: {
         'background-color': (n) => BRAIN_COLORS[n.data('type')] || '#888',
         'label': 'data(label)', 'color': '#cbd5e1', 'font-size': 9,
-        'width': (n) => 12 + Math.min(28, Math.sqrt(n.data('weight') || 1) * 6),
-        'height': (n) => 12 + Math.min(28, Math.sqrt(n.data('weight') || 1) * 6),
-        'text-wrap': 'ellipsis', 'text-max-width': 80, 'min-zoomed-font-size': 6,
+        // size by connection weight (degree-ish) — hubs read bigger, like Obsidian
+        'width': (n) => 14 + Math.min(34, Math.sqrt(n.data('weight') || 1) * 7),
+        'height': (n) => 14 + Math.min(34, Math.sqrt(n.data('weight') || 1) * 7),
+        'border-width': 0, 'border-color': '#e8e8f0',
+        'text-wrap': 'ellipsis', 'text-max-width': 90, 'min-zoomed-font-size': 6,
+        'transition-property': 'opacity', 'transition-duration': '120ms',
       }},
       { selector: 'edge', style: {
-        'width': 1, 'line-color': '#3a3a4a', 'target-arrow-color': '#3a3a4a',
-        'target-arrow-shape': 'triangle', 'arrow-scale': 0.6, 'curve-style': 'bezier', 'opacity': 0.6,
+        'width': 1, 'line-color': '#34344a', 'target-arrow-color': '#34344a',
+        'target-arrow-shape': 'triangle', 'arrow-scale': 0.55, 'curve-style': 'bezier', 'opacity': 0.5,
       }},
-      { selector: 'node:selected', style: { 'border-width': 2, 'border-color': '#fff' } },
+      { selector: 'node.hl',    style: { 'border-width': 3, 'border-color': '#e8e8f0' } },
+      { selector: 'node.hover', style: { 'border-width': 3, 'border-color': '#ffffff' } },
+      { selector: '.faded',     style: { 'opacity': 0.12 } },
+      { selector: 'node:selected', style: { 'border-width': 3, 'border-color': '#ffffff' } },
     ],
-    layout: { name: 'cose', animate: false, nodeRepulsion: 8000, idealEdgeLength: 80 },
+    layout: { name: 'cose', animate: false, nodeRepulsion: 9000, idealEdgeLength: 90, padding: 20 },
   });
+  // single click = open the note + focus its local graph (Obsidian feel)
   brainCy.on('tap', 'node', (evt) => brainExpand(evt.target.id()));
+  brainCy.on('tap', (evt) => { if (evt.target === brainCy) brainCy.elements().removeClass('faded'); });
+  brainCy.on('mouseover', 'node', (evt) => brainHoverOn(evt.target));
+  brainCy.on('mouseout', 'node', () => brainHoverOff());
+  if (brainCurrent) brainHighlight(brainCurrent);
+}
+
+// Dim everything except a node and its direct neighbors — the "local graph".
+function brainHighlight(id) {
+  if (!brainCy) return;
+  brainCy.elements().removeClass('faded hl');
+  const n = brainCy.getElementById(id);
+  if (!n || !n.length) return;
+  brainCy.elements().addClass('faded');
+  n.closedNeighborhood().removeClass('faded');
+  n.addClass('hl');
+}
+function brainHoverOn(node) {
+  if (!brainCy) return;
+  brainCy.elements().addClass('faded');
+  node.closedNeighborhood().removeClass('faded');
+  node.addClass('hover');
+}
+function brainHoverOff() {
+  if (!brainCy) return;
+  brainCy.nodes().removeClass('hover');
+  brainCy.elements().removeClass('faded');
+  if (brainCurrent) brainHighlight(brainCurrent);
 }
 
 // ── Live pulse (SSE) + Mission Control ──────────────────────────────────
@@ -1151,19 +1186,56 @@ async function loadVitals() {
 }
 
 async function brainExpand(nodeId) {
+  brainCurrent = nodeId;
   const depth = document.getElementById('brain-depth').value || 1;
   const g = await api(`/api/brain/graph?center=${encodeURIComponent(nodeId)}&depth=${depth}&limit=150`).catch(() => null);
   if (g) renderBrain(g);
-  brainDetail(nodeId);
+  brainHighlight(nodeId);
+  brainOpenNote(nodeId);
 }
 
-function brainDetail(nodeId) {
-  const [type, ...rest] = nodeId.split(':');
-  const key = rest.join(':');
-  const el = document.getElementById('brain-detail');
-  el.innerHTML = `<div class="mono" style="font-size:13px">
-    <strong style="color:${BRAIN_COLORS[type] || '#fff'}">${type}</strong> · ${escapeHtml(key)}
-  </div>`;
+// Minimal markdown → HTML for note bodies (no external dependency). Escapes
+// first, then re-introduces only the tags we emit — safe against HTML in data.
+// Handles fenced code, headings, bold/italic/inline-code, bullet lists,
+// [[wikilinks]] (clickable), and [text](url) links.
+function mdToHtml(src) {
+  if (!src) return '';
+  return String(src).split('```').map((blk, i) => {
+    if (i % 2 === 1) return `<pre><code>${escapeHtml(blk.replace(/^\w*\n/, ''))}</code></pre>`;
+    let h = escapeHtml(blk);
+    h = h.replace(/`([^`]+)`/g, '<code>$1</code>');
+    h = h.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    h = h.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+    h = h.replace(/^### (.+)$/gm, '<h3>$1</h3>').replace(/^## (.+)$/gm, '<h2>$1</h2>').replace(/^# (.+)$/gm, '<h2>$1</h2>');
+    h = h.replace(/\[\[([^\]]+)\]\]/g, (_, t) => `<span class="wikilink" data-link="${escapeHtml(t)}">${escapeHtml(t)}</span>`);
+    h = h.replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    h = h.replace(/(?:^|\n)((?:- .+(?:\n|$))+)/g, (m, items) =>
+      `<ul>${items.trim().split('\n').map(l => `<li>${l.replace(/^- /, '')}</li>`).join('')}</ul>`);
+    return h.replace(/\n{2,}/g, '<br><br>').replace(/\n/g, '<br>');
+  }).join('');
+}
+
+// Render one brain node as a note in the right-hand pane, Obsidian-style:
+// type chip, title, frontmatter meta, #tags, markdown body, and the linked
+// mentions (backlinks) + outgoing links — all clickable to walk the graph.
+async function brainOpenNote(nodeId) {
+  const pane = document.getElementById('brain-note');
+  if (!pane) return;
+  pane.innerHTML = '<div class="brain-note-empty">Loading…</div>';
+  const note = await api(`/api/brain/note?id=${encodeURIComponent(nodeId)}`).catch(() => null);
+  if (!note) { pane.innerHTML = '<div class="brain-note-empty">Could not load note.</div>'; return; }
+  const color = BRAIN_COLORS[note.type] || '#888';
+  const linkRow = (l) => `<div class="bn-link" data-id="${escapeHtml(l.id)}"><span class="dot" style="background:${BRAIN_COLORS[String(l.id).split(':')[0]] || '#888'}"></span>${escapeHtml(l.title || l.id)}</div>`;
+  let html = `<div class="bn-type" style="background:${color}">${escapeHtml(note.type)}</div>`;
+  html += `<div class="bn-title">${escapeHtml(note.title || note.key)}</div>`;
+  if (note.meta && note.meta.length)  html += `<div class="bn-meta">${note.meta.map(m => `<span>${escapeHtml(m.k)}: ${escapeHtml(String(m.v))}</span>`).join('')}</div>`;
+  if (note.tags && note.tags.length)  html += `<div class="bn-tags">${note.tags.map(t => `<span class="bn-tag">#${escapeHtml(t)}</span>`).join('')}</div>`;
+  html += `<div class="bn-body">${mdToHtml(note.body) || '<span style="opacity:.5">No content.</span>'}</div>`;
+  if (note.backlinks && note.backlinks.length) html += `<div class="bn-section"><h4>&#8627; Linked mentions (${note.backlinks.length})</h4>${note.backlinks.map(linkRow).join('')}</div>`;
+  if (note.outlinks && note.outlinks.length)   html += `<div class="bn-section"><h4>&#8594; Links (${note.outlinks.length})</h4>${note.outlinks.map(linkRow).join('')}</div>`;
+  pane.innerHTML = html;
+  pane.querySelectorAll('.bn-link').forEach(el => el.onclick = () => brainExpand(el.dataset.id));
+  pane.querySelectorAll('.wikilink').forEach(el => el.onclick = () => brainExpand(`memory:${String(el.dataset.link).toLowerCase()}`));
 }
 
 document.getElementById('brain-reset')?.addEventListener('click', loadBrain);

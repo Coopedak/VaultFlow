@@ -514,9 +514,37 @@
       <label class="mono" style="font-size:12px"><input type="checkbox" id="pulse-toggle" checked /> live pulse</label>
       <div id="pulse-ticker" class="mono" style="font-size:12px;opacity:.8;white-space:nowrap;overflow:hidden;flex:1"></div>
     </div>
-    <div id="brain-graph" style="height:600px;border:1px solid #2a2a3a;border-radius:8px;background:#0e0e16"></div>
-    <div id="brain-detail" class="table-card" style="margin-top:12px;min-height:40px">
-      <span class="loading">Click a node to inspect it.</span>
+    <style>
+      .brain-vault { display:flex; gap:12px; align-items:stretch; }
+      #brain-graph { flex:1.7; height:620px; border:1px solid #2a2a3a; border-radius:8px; background:#0e0e16; }
+      #brain-note { flex:1; min-width:300px; max-width:480px; height:620px; overflow:auto; border:1px solid #2a2a3a; border-radius:8px; background:#0e0e16; padding:18px 20px; }
+      #brain-note .brain-note-empty { color:var(--muted); font-size:13px; line-height:1.6; }
+      .bn-type { display:inline-block; font:600 10px/1 ui-monospace,monospace; text-transform:uppercase; letter-spacing:.08em; padding:3px 7px; border-radius:5px; color:#0e0e16; }
+      .bn-title { font-size:18px; font-weight:700; margin:10px 0 6px; color:#e8e8f0; word-break:break-word; }
+      .bn-meta { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
+      .bn-meta span { font:11px/1.4 ui-monospace,monospace; color:var(--muted); background:#181826; border:1px solid #2a2a3a; border-radius:4px; padding:2px 6px; }
+      .bn-tags { margin:8px 0; }
+      .bn-tag { display:inline-block; font-size:11px; color:#34d399; background:#10241c; border-radius:10px; padding:2px 9px; margin:2px 4px 2px 0; }
+      .bn-body { font-size:13px; line-height:1.65; color:#c7c7d4; margin:12px 0; word-break:break-word; }
+      .bn-body h1,.bn-body h2,.bn-body h3 { color:#e8e8f0; margin:14px 0 6px; font-size:14px; }
+      .bn-body code { background:#181826; border-radius:4px; padding:1px 5px; font-size:12px; color:#f0abfc; }
+      .bn-body pre { background:#11111c; border:1px solid #2a2a3a; border-radius:6px; padding:10px; overflow:auto; }
+      .bn-body pre code { background:none; padding:0; }
+      .bn-body ul { padding-left:18px; margin:6px 0; }
+      .wikilink { color:#6ea8fe; cursor:pointer; border-bottom:1px dashed #6ea8fe55; }
+      .wikilink:hover { color:#9cc4ff; }
+      .bn-section { margin-top:16px; }
+      .bn-section h4 { font:600 11px/1 ui-monospace,monospace; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin:0 0 8px; }
+      .bn-link { display:block; padding:5px 8px; margin:3px 0; border-radius:5px; background:#15151f; border:1px solid #22222e; cursor:pointer; font-size:12px; color:#c7c7d4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+      .bn-link:hover { background:#1d1d2b; color:#e8e8f0; }
+      .bn-link .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:7px; vertical-align:middle; }
+      @media (max-width:900px){ .brain-vault{flex-direction:column} #brain-note{max-width:none;height:380px} }
+    </style>
+    <div class="brain-vault">
+      <div id="brain-graph"></div>
+      <aside id="brain-note">
+        <div class="brain-note-empty">Click a node to open its note. Backlinks and <code>[[wikilinks]]</code> weave the graph together.</div>
+      </aside>
     </div>
     <div class="chart-full" style="margin-top:16px">
       <h2>Brain Vitals — trends</h2>
