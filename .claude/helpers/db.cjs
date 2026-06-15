@@ -3520,7 +3520,11 @@ function getEventsSince(wm) {
 function getMissionControl() {
   if (!_db) throw new Error('db.getMissionControl: call initialize() first');
   const now = Date.now();
-  const RUN_MS = 10 * 60 * 1000, ZOMBIE_MS = 30 * 60 * 1000, TODAY = new Date().toISOString().slice(0, 10);
+  // DONE_MS: an ended session counts as "done" if it finished within the last
+  // 12h, else "idle". Recency window — NOT calendar-day equality — because a
+  // UTC-date check has a hard cliff at UTC midnight (which isn't the user's
+  // local midnight) that would flip last-evening sessions to "idle" mid-view.
+  const RUN_MS = 10 * 60 * 1000, ZOMBIE_MS = 30 * 60 * 1000, DONE_MS = 12 * 60 * 60 * 1000;
   const entries = [];
   const counts = { running: 0, zombie: 0, scheduled: 0, done: 0, idle: 0, failed: 0 };
 
@@ -3536,7 +3540,7 @@ function getMissionControl() {
     const lastTs = s.last_edit || s.started_at;
     const sinceMs = now - new Date(lastTs).getTime();
     let status;
-    if (s.ended_at) status = String(s.ended_at).slice(0, 10) === TODAY ? 'done' : 'idle';
+    if (s.ended_at) status = (now - new Date(s.ended_at).getTime()) <= DONE_MS ? 'done' : 'idle';
     else if (sinceMs <= RUN_MS) status = 'running';
     else if (sinceMs >= ZOMBIE_MS) status = 'zombie';
     else status = 'running';
