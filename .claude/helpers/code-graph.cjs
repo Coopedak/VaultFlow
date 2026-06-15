@@ -37,9 +37,22 @@ function langFor(filePath) {
 function shouldIndex(filePath) {
   if (!filePath) return false;
   const norm = filePath.replace(/\\/g, '/');
+  const low  = norm.toLowerCase();
   if (norm.includes('/node_modules/')) return false;
   if (norm.includes('/.git/')) return false;
   if (norm.includes('/dist/') || norm.includes('/build/') || norm.includes('/bin/') || norm.includes('/obj/')) return false;
+  // Vendored Python deps + bytecode caches — third-party code, not the user's.
+  // 16k+ symbols had leaked in from .venv/site-packages (pyarrow, duckdb, …).
+  if (norm.includes('/.venv/') || norm.includes('/venv/') || norm.includes('/site-packages/') || norm.includes('/__pycache__/')) return false;
+  // Transient git worktrees: agent worktrees under .claude/worktrees/, and the
+  // user's "<project>-wt" sibling worktree dirs. These are duplicate trees of
+  // real source — indexing them double-counts every symbol under a stale path.
+  // The `-wt/` guard matches a path *segment* (e.g. /PRGJSMES-wt/), so a source
+  // file merely ending in "-wt" (widget-wt.ts) still indexes.
+  if (norm.includes('/.claude/worktrees/')) return false;
+  if (/\/[^/]+-wt\//.test(norm)) return false;
+  // Auto-generated C# WCF/SOAP proxies — always under "Service References/".
+  if (low.includes('/service references/')) return false;
   if (norm.match(/\.(min|bundle)\.(js|ts)$/)) return false;
   if (norm.endsWith('.d.ts')) return false;
   return SOURCE_EXTS.has(path.extname(norm).toLowerCase());
@@ -178,6 +191,50 @@ function clearFile(rawDb, filePath) {
   rawDb.prepare('DELETE FROM code_symbols WHERE file = ?').run(filePath);
   rawDb.prepare('DELETE FROM code_imports WHERE file = ?').run(filePath);
   rawDb.prepare('DELETE FROM code_calls   WHERE caller_file = ?').run(filePath);
+}
+
+/**
+ * Retroactive code-graph cleanup. Drops rows whose file path is no longer
+ * indexable under shouldIndex (vendored/generated/worktree junk that leaked in
+ * before the exclude rules tightened) and — when checkExistence is set — rows
+ * for files that no longer exist on disk (deleted files, removed worktrees).
+ *
+ * Walks the union of files across code_symbols, code_imports and code_calls so
+ * a file present in only one table is still reclaimed. Single transaction;
+ * also clears orphaned symbol_embeddings. Returns counts — the caller decides
+ * whether to VACUUM (deletes alone don't shrink the file).
+ */
+function purgeCodeGraph(db, opts = {}) {
+  const { checkExistence = true } = opts;
+  db.initialize(null, null);
+  const conn = db.raw();
+
+  const files = new Set();
+  for (const r of conn.prepare('SELECT DISTINCT file FROM code_symbols').all())        if (r.file)        files.add(r.file);
+  for (const r of conn.prepare('SELECT DISTINCT file FROM code_imports').all())        if (r.file)        files.add(r.file);
+  for (const r of conn.prepare('SELECT DISTINCT caller_file FROM code_calls').all())   if (r.caller_file) files.add(r.caller_file);
+
+  let junkFiles = 0, missingFiles = 0;
+  const tx = conn.prepare('BEGIN'), co = conn.prepare('COMMIT'), rb = conn.prepare('ROLLBACK');
+  tx.run();
+  try {
+    for (const f of files) {
+      let reason = null;
+      if (!shouldIndex(f)) reason = 'junk';
+      else if (checkExistence) {
+        try { fs.statSync(f); } catch (_) { reason = 'missing'; }
+      }
+      if (!reason) continue;
+      clearFile(conn, f);
+      if (db.clearSymbolEmbeddings) { try { db.clearSymbolEmbeddings(f); } catch (_) {} }
+      if (reason === 'junk') junkFiles++; else missingFiles++;
+    }
+    co.run();
+  } catch (err) {
+    try { rb.run(); } catch (_) {}
+    throw err;
+  }
+  return { filesPurged: junkFiles + missingFiles, junkFiles, missingFiles };
 }
 
 // Reserved words that look like function calls in regex but aren't —
@@ -626,6 +683,7 @@ module.exports = {
   shouldIndex,
   indexFile,
   clearFile,
+  purgeCodeGraph,
   getSymbols,
   getBlastRadius,
   getGraphStats,

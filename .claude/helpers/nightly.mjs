@@ -189,6 +189,26 @@ results.graph = await step('refresh-code-graph', async () => {
   return { projects: projects.length, files: indexed };
 });
 
+// 8a. code-graph hygiene — drop vendored/generated/worktree junk and rows for
+//     files that no longer exist on disk, then reclaim space. shouldIndex now
+//     blocks new junk at index time; this sweep catches what leaked in before
+//     the exclude rules tightened (16k+ symbols from .venv/site-packages,
+//     transient agent worktrees, generated C# Service References).
+results.codeGraphPurge = await step('purge-code-graph', () => {
+  if (DRY_RUN || SKIP_GRAPH) return { skipped: true };
+  const cg = require('./code-graph.cjs');
+  const r = cg.purgeCodeGraph(db, { checkExistence: true });
+  // VACUUM rewrites the file to reclaim freed pages — DELETEs alone don't
+  // shrink it. Only run it when something was purged (a full-DB rewrite on a
+  // large file is costly and pointless on a no-op night). Must be outside a
+  // transaction; purgeCodeGraph commits before returning.
+  if (r.filesPurged > 0) {
+    try { db.raw().exec('VACUUM'); r.vacuumed = true; }
+    catch (err) { r.vacuum_error = err.message; }
+  }
+  return r;
+});
+
 // 8b. detect stale memory entries (source files that vanished)
 results.staleMemory = await step('detect-stale-memory', () => DRY_RUN ? { skipped: true } : db.detectStaleMemory());
 
