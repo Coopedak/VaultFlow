@@ -22,8 +22,8 @@ const COMMANDS = {
   'install-hooks': ['.claude', 'helpers', 'install-git-hooks.mjs'],
   'model-status':  ['.claude', 'helpers', 'model-router.cjs'],
   'mcp-server':    ['.claude', 'helpers', 'mcp-server.cjs'],
-  dashboard:       ['.claude', 'helpers', 'dashboard', 'gen.mjs'],
-  'dashboard:open': ['.claude', 'helpers', 'dashboard', 'gen.mjs'],
+  dashboard:       ['.claude', 'helpers', 'dashboard', 'server.mjs'],
+  'dashboard:open': ['.claude', 'helpers', 'dashboard', 'server.mjs'],
   'dashboard:serve': ['.claude', 'helpers', 'dashboard', 'server.mjs'],
   status:          ['.claude', 'helpers', 'watcher.mjs'],
 };
@@ -37,9 +37,9 @@ function printHelp() {
     `  vaultflow [command]       Same as vault\n\n` +
     `Commands:\n` +
     `  tui               Launch the TUI (default)\n` +
-    `  dashboard         Generate the static dashboard HTML\n` +
-    `  dashboard:open    Generate and open the static dashboard HTML\n` +
-    `  dashboard:serve   Start the dashboard web server\n` +
+    `  dashboard         Start the dashboard server (http://localhost:7700)\n` +
+    `  dashboard:open    Start the dashboard server and open it in the browser\n` +
+    `  dashboard:serve   Alias for dashboard\n` +
     `  backfill          Run the index backfill\n` +
     `  project-audit     Audit C:\\GIT projects using git + vaultflow history\n` +
     `  watcher           Start or control the watcher\n` +

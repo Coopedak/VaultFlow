@@ -1,8 +1,7 @@
 # dependencies
 node_modules/
 
-# generated dashboard output
-.claude/helpers/dashboard/dashboard.html
+# dashboard launcher log
 .claude/helpers/dashboard/dashboard-launcher.log
 
 # generated desktop launcher output

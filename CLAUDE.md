@@ -126,10 +126,9 @@ vaultflow doctor                         # health audit
   project-audit.mjs          — inventory C:\GIT projects + correlate vaultflow history
   mcp-server.cjs             — vaultflow MCP (Model Context Protocol) server
   dashboard/
-    server.mjs               — Express API server (44 endpoints)
-    gen.mjs                  — generate a self-contained HTML dashboard
-    index.html               — SPA shell
-    app.js                   — Chart.js dashboard
+    server.mjs               — Express API server + serves the live SPA (the one dashboard)
+    index.html               — SPA shell (Brain tab + operational tabs)
+    app.js                   — Chart.js + Cytoscape dashboard logic
 
 config/
   resolve.cjs             — config resolution (local → yaml → example)

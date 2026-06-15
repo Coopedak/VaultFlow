@@ -1177,8 +1177,19 @@ export function startServer(opts = {}) {
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))) {
   const srv = startServer();
   srv.on('listening', () => {
-    console.log(`[vaultflow dashboard] http://${HOST}:${PORT}`);
+    const url = `http://${HOST}:${PORT}`;
+    console.log(`[vaultflow dashboard] ${url}`);
     console.log(`[vaultflow dashboard] DB: ${path.join(METRICS, DB_FILE)}`);
+    // `--open` launches the default browser once the server is listening.
+    // Replaces the old static generator's open behavior now that this is the
+    // single dashboard.
+    if (process.argv.includes('--open')) {
+      const { execSync } = require('node:child_process');
+      const cmd = process.platform === 'win32' ? `start "" "${url}"`
+                : process.platform === 'darwin' ? `open "${url}"`
+                : `xdg-open "${url}"`;
+      try { execSync(cmd, { stdio: 'ignore' }); } catch (_) {}
+    }
   });
 }
 

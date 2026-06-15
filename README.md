@@ -36,7 +36,7 @@ Every Claude Code session automatically:
 This repository is **not** a blank starter repo. A fresh clone includes the real VaultFlow source:
 
 - hook handlers and the SQLite/DuckDB data layer
-- the dashboard server + static dashboard generator
+- the dashboard server (Express + live SPA, incl. the Brain tab)
 - the TUI
 - tracked CLI launchers for Claude, Copilot, and Codex
 - config templates, scripts, and helper tooling
@@ -309,15 +309,21 @@ The tracked wrappers now also add a **live VaultFlow feedback loop** when you la
 
 That shortcut opens the real Copilot CLI through `scripts\tracked-cli.mjs`, which records a VaultFlow session start/end, launch metadata, and context-injection telemetry in SQLite.
 
-Generate a self-contained HTML analytics dashboard. Opens in any browser — no server required.
+Start the analytics dashboard — a live Express server backing the SPA at
+`http://localhost:7700`. A live server is required because the dashboard runs
+queries on demand (the Brain graph, vitals, and Mission Control all read the DB
+per request, and the live pulse streams events over SSE).
 
 ```bash
-npm run dashboard            # generate dashboard.html
-npm run dashboard:open       # generate + open in default browser
-npm run dashboard:serve      # start Express API server on localhost:7700
+npm run dashboard            # start the dashboard server on localhost:7700
+npm run dashboard:open       # start the server and open it in the browser
+npm run dashboard:serve      # alias for `npm run dashboard`
 ```
 
-The generated `dashboard.html` includes the main operational tabs: Overview, Sessions, Hot Files, Tool Calls, Patterns, Prompts, Stacks, Agents, Dictionary, Discoveries, Memory, Verdicts, and Control.
+The dashboard includes the operational tabs (Overview, Sessions, Hot Files, Tool
+Calls, Patterns, Prompts, Stacks, Agents, Dictionary, Discoveries, Memory,
+Control) plus the **Brain** tab — an interactive entity graph, learning-vitals
+trends, and a live Mission Control pulse.
 
 The **Control** tab includes the manual operational actions, including:
 
@@ -605,10 +611,9 @@ vaultflow/
 │       ├── audit.mjs           Health audit — DB integrity, sessions, Parquet, hooks
 │       ├── install-git-hooks.mjs   Install git commit hooks
 │       └── dashboard/
-│           ├── gen.mjs         Static HTML dashboard generator (primary)
-│           ├── server.mjs      Express API server (optional — npm run dashboard:serve)
-│           ├── index.html      SPA for Express server mode
-│           └── app.js          Chart.js frontend for Express server mode
+│           ├── server.mjs      Express API server + serves the live SPA (npm run dashboard)
+│           ├── index.html      SPA shell (Brain tab + operational tabs)
+│           └── app.js          Chart.js + Cytoscape frontend
 ├── config/
 │   ├── vaultflow.example.yaml  Template — copy this to vaultflow.yaml and fill in paths
 │   ├── vaultflow.yaml          Your working config — gitignored, never committed
