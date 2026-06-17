@@ -1250,6 +1250,301 @@ document.getElementById('brain-search')?.addEventListener('keydown', async (e) =
   if (mem && mem.source) brainExpand(`memory:${mem.source}`);
 });
 
+// ── Flows ─────────────────────────────────────────────────────────────────
+// Auto-discovered call-graph flows. Left pane lists flows (sorted by confidence);
+// clicking one renders a cose flowchart in #flow-graph and an annotate panel in
+// #flow-note. Annotating POSTs back and "claims" the flow as source='manual'.
+//
+// Node colors are keyed by `kind` (same spirit as BRAIN_COLORS). Terminal nodes
+// (exit the indexed graph) get a dashed, dimmed border; ambiguous nodes (a
+// bare name resolved to >1 target) get a dotted yellow marker. cose layout is
+// used (NOT breadthfirst) so cyclic "full-circle" flows render correctly.
+
+const FLOW_KINDS = {
+  function: '#6366f1', method: '#818cf8', class: '#a78bfa', route: '#22d3ee',
+  handler:  '#34d399', service: '#facc15', module:  '#fb923c', entry:   '#f472b6',
+};
+function flowKindColor(kind) { return FLOW_KINDS[String(kind || '').toLowerCase()] || '#94a3b8'; }
+
+let flowCy = null;
+let flowList = [];           // cached list rows (so we can patch a row after a save)
+let flowCurrentId = null;    // currently-opened flow id
+
+// Derive a human module label from "file::symbol" (or a bare path) entry point.
+function flowModule(entryPoint) {
+  if (!entryPoint) return '—';
+  const ep = String(entryPoint);
+  const idx = ep.lastIndexOf('::');
+  const file = idx >= 0 ? ep.slice(0, idx) : ep;
+  return file.split(/[\\/]/).pop() || ep;
+}
+
+function confColor(c) {
+  if (c == null) return 'var(--border)';
+  if (c >= 0.66) return '#14532d';   // green-ish bg
+  if (c >= 0.33) return '#78350f';   // amber bg
+  return '#7f1d1d';                  // red bg
+}
+function confText(c) {
+  if (c == null) return 'var(--muted)';
+  if (c >= 0.66) return 'var(--green)';
+  if (c >= 0.33) return 'var(--yellow)';
+  return 'var(--red)';
+}
+
+function flowConfPct(c) { return c == null ? 'n/a' : `${Math.round(c * 100)}%`; }
+
+function flowElements(full) {
+  const nodes = (full.nodes || []).map(n => ({
+    data: { id: n.node_id, label: n.label || n.node_id, kind: n.kind,
+            terminal: n.terminal ? 1 : 0, ambiguous: n.ambiguous ? 1 : 0 },
+    classes: [n.terminal ? 'terminal' : '', n.ambiguous ? 'ambiguous' : ''].filter(Boolean).join(' '),
+  }));
+  const edges = (full.edges || []).map((e, i) => ({
+    data: { id: `fe${i}`, source: e.source, target: e.target, kind: e.kind },
+  }));
+  return [...nodes, ...edges];
+}
+
+function renderFlowGraph(full) {
+  if (flowCy) { flowCy.destroy(); flowCy = null; }
+  flowCy = cytoscape({
+    container: document.getElementById('flow-graph'),
+    elements: flowElements(full),
+    style: [
+      { selector: 'node', style: {
+        'background-color': (n) => flowKindColor(n.data('kind')),
+        'label': 'data(label)', 'color': '#cbd5e1', 'font-size': 9,
+        'width': 22, 'height': 22, 'border-width': 0, 'border-color': '#e8e8f0',
+        'text-wrap': 'ellipsis', 'text-max-width': 100, 'min-zoomed-font-size': 6,
+        'text-valign': 'bottom', 'text-margin-y': 3,
+      }},
+      { selector: 'edge', style: {
+        'width': 1.4, 'line-color': '#34344a', 'target-arrow-color': '#5b5b7a',
+        'target-arrow-shape': 'triangle', 'arrow-scale': 0.9, 'curve-style': 'bezier', 'opacity': 0.7,
+      }},
+      // terminal: dashed border + dimmed — "exits indexed graph (may continue via DB/event)"
+      { selector: 'node.terminal', style: {
+        'border-width': 2, 'border-style': 'dashed', 'border-color': '#94a3b8', 'opacity': 0.55,
+      }},
+      // ambiguous: dotted yellow marker tint — a bare name resolved to >1 target
+      { selector: 'node.ambiguous', style: {
+        'border-width': 3, 'border-style': 'dotted', 'border-color': '#facc15',
+      }},
+    ],
+    // cose (force-directed) — renders cyclic flows correctly, unlike breadthfirst.
+    layout: { name: 'cose', animate: false, nodeRepulsion: 9000, idealEdgeLength: 95, padding: 24 },
+  });
+}
+
+async function loadFlows() {
+  const listEl = document.getElementById('flow-list');
+  try {
+    const r = await api('/api/flows');
+    flowList = Array.isArray(r) ? r : (r.flows || []);
+  } catch (e) {
+    listEl.innerHTML = `<div class="flow-list-empty" style="color:var(--red)">Failed to load flows: ${escapeHtml(e.message)}</div>`;
+    return;
+  }
+  renderFlowList();
+}
+
+function renderFlowList() {
+  const listEl = document.getElementById('flow-list');
+  if (!flowList.length) {
+    listEl.innerHTML = `<div class="flow-list-empty">
+      <strong>No flows discovered yet.</strong><br><br>
+      Auto-detection finds CLI/route flows but misses HTTP routes in monolithic files
+      and C# attribute routes — declare an entry point above to trace one.
+    </div>`;
+    return;
+  }
+  // sort by confidence desc (null confidence sinks to the bottom)
+  const rows = [...flowList].sort((a, b) => (b.confidence ?? -1) - (a.confidence ?? -1));
+  listEl.innerHTML = rows.map(f => flowRowHtml(f)).join('');
+  listEl.querySelectorAll('.flow-row').forEach(el =>
+    el.addEventListener('click', () => openFlow(el.dataset.id)));
+  if (flowCurrentId) markActiveFlowRow(flowCurrentId);
+}
+
+function sourceBadge(source) {
+  if (source === 'manual')   return '<span class="badge badge-purple">manual</span>';
+  if (source === 'declared') return '<span class="badge badge-blue">declared</span>';
+  return '<span class="badge badge-gray">auto</span>';
+}
+function statusBadgeHtml(status) {
+  const cls = status === 'active' ? 'badge-green' : status === 'deprecated' ? 'badge-yellow' : 'badge-gray';
+  return `<span class="badge ${cls}">${escapeHtml(status || 'active')}</span>`;
+}
+
+function flowRowHtml(f) {
+  const c = f.confidence;
+  const conf = `<span class="conf-badge" style="background:${confColor(c)};color:${confText(c)}">${flowConfPct(c)}</span>`;
+  const trunc = f.truncated ? '<span title="graph truncated — flow may be larger than indexed" style="color:var(--yellow)">⚠</span>' : '';
+  return `<div class="flow-row" data-id="${escapeHtml(String(f.id))}">
+    <div class="fr-name">${escapeHtml(f.name || '(unnamed flow)')} ${trunc}</div>
+    <div class="fr-module">${escapeHtml(flowModule(f.entry_point))}</div>
+    <div class="fr-badges">
+      ${conf}
+      ${sourceBadge(f.source)}
+      ${statusBadgeHtml(f.status)}
+      <span class="badge badge-blue">${fmtNum(f.node_count ?? 0)} nodes</span>
+    </div>
+  </div>`;
+}
+
+function markActiveFlowRow(id) {
+  document.querySelectorAll('#flow-list .flow-row').forEach(el =>
+    el.classList.toggle('active', el.dataset.id === String(id)));
+}
+
+async function openFlow(id) {
+  flowCurrentId = id;
+  markActiveFlowRow(id);
+  const note = document.getElementById('flow-note');
+  note.innerHTML = '<div class="fn-note-empty">Loading…</div>';
+  let full;
+  try {
+    full = await api(`/api/flows/${encodeURIComponent(id)}`);
+  } catch (e) {
+    note.innerHTML = `<div class="fn-note-empty" style="color:var(--red)">Could not load flow: ${escapeHtml(e.message)}</div>`;
+    return;
+  }
+  renderFlowGraph(full);
+  renderFlowNote(full.flow);
+}
+
+// Annotate panel: editable name / description / user_notes / status + Save.
+// Saving POSTs the changed fields and flips the flow to source='manual'.
+function renderFlowNote(flow) {
+  const note = document.getElementById('flow-note');
+  const statusOpt = (v) => `<option value="${v}"${flow.status === v ? ' selected' : ''}>${v}</option>`;
+  note.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+      <span class="bn-type" style="background:${flowKindColor('entry')};font:600 10px/1 ui-monospace,monospace;text-transform:uppercase;letter-spacing:.08em;padding:3px 7px;border-radius:5px;color:#0e0e16">flow</span>
+      ${sourceBadge(flow.source)}
+      ${statusBadgeHtml(flow.status)}
+      <span class="conf-badge" style="background:${confColor(flow.confidence)};color:${confText(flow.confidence)}">${flowConfPct(flow.confidence)} confidence</span>
+    </div>
+    <div class="fr-module" style="margin-bottom:10px">entry: ${escapeHtml(flow.entry_point || '—')}</div>
+
+    <div class="fn-field">
+      <label for="fn-name">Name</label>
+      <input id="fn-name" type="text" value="${escapeHtml(flow.name || '')}" />
+    </div>
+    <div class="fn-field">
+      <label for="fn-desc">Description</label>
+      <textarea id="fn-desc"></textarea>
+    </div>
+    <div class="fn-field">
+      <label for="fn-notes">Your notes</label>
+      <textarea id="fn-notes"></textarea>
+    </div>
+    <div class="fn-field">
+      <label for="fn-status">Status</label>
+      <select id="fn-status">${statusOpt('active')}${statusOpt('archived')}${statusOpt('deprecated')}</select>
+    </div>
+    <p class="fn-hint">Annotating claims this flow — it becomes <strong>manual</strong> and won't be overwritten by
+      auto-discovery; use your notes to add couplings the static graph can't see (DB tables, events).</p>
+    <button class="btn-action" id="fn-save">Save</button>
+    <div class="ctrl-status" id="fn-status-msg"></div>`;
+
+  // Set textarea content via .value (not innerHTML) so raw text containing & or <
+  // displays literally instead of as HTML entities. .value is not an XSS vector.
+  document.getElementById('fn-desc').value  = flow.description || '';
+  document.getElementById('fn-notes').value = flow.user_notes || '';
+
+  document.getElementById('fn-save').addEventListener('click', () => saveFlowAnnotation(flow.id));
+}
+
+async function saveFlowAnnotation(id) {
+  const btn = document.getElementById('fn-save');
+  const msg = document.getElementById('fn-status-msg');
+  const body = {
+    name:        document.getElementById('fn-name').value,
+    description: document.getElementById('fn-desc').value,
+    user_notes:  document.getElementById('fn-notes').value,
+    status:      document.getElementById('fn-status').value,
+  };
+  btn.disabled = true;
+  msg.className = 'ctrl-status';
+  msg.textContent = 'Saving…';
+  try {
+    const r = await fetch(`/api/flows/${encodeURIComponent(id)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || `${r.status} ${r.statusText}`);
+    const updated = data.flow || {};
+    // patch the cached list row + re-render so the source flips to "manual".
+    const i = flowList.findIndex(f => String(f.id) === String(id));
+    if (i >= 0) flowList[i] = { ...flowList[i], ...updated };
+    renderFlowList();
+    renderFlowNote({ ...updated, id });
+    const m2 = document.getElementById('fn-status-msg');
+    m2.className = 'ctrl-status ok';
+    m2.textContent = 'Saved — flow claimed (manual). Auto-discovery will no longer overwrite it.';
+  } catch (e) {
+    msg.className = 'ctrl-status err';
+    msg.textContent = `Save failed: ${e.message}`;
+    btn.disabled = false;
+  }
+}
+
+// Declare an entry point auto-detection misses (the RECALL FLOOR). POSTs to
+// /api/flows/declare, which registers the declaration + traces it (stored as
+// source='declared', prune-exempt). On success, refresh the list and open the
+// new flow so the user immediately sees what was traced.
+async function declareFlow() {
+  const btn = document.getElementById('fd-declare');
+  const msg = document.getElementById('fd-msg');
+  const file    = document.getElementById('fd-file').value.trim();
+  const symbol  = document.getElementById('fd-symbol').value.trim();
+  const name    = document.getElementById('fd-name').value.trim();
+  const project = document.getElementById('fd-project').value.trim();
+  if (!file || !symbol) {
+    msg.className = 'ctrl-status err';
+    msg.textContent = 'file and symbol are required.';
+    return;
+  }
+  const body = { file, symbol };
+  if (name) body.name = name;
+  if (project) body.project = project;
+
+  btn.disabled = true;
+  msg.className = 'ctrl-status';
+  msg.textContent = 'Declaring & tracing…';
+  try {
+    const r = await fetch('/api/flows/declare', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || `${r.status} ${r.statusText}`);
+    msg.className = 'ctrl-status ok';
+    if (data.flow) {
+      msg.textContent = `Declared and traced "${data.flow.name}". It is the recall floor — it won't be pruned and re-traces nightly.`;
+    } else {
+      msg.textContent = 'Declared. The trace resolved to nothing for now — the declaration persists and will re-trace nightly.';
+    }
+    // Clear the symbol/name inputs (keep file+project for declaring siblings).
+    document.getElementById('fd-symbol').value = '';
+    document.getElementById('fd-name').value = '';
+    await loadFlows();
+    if (data.flow && data.flow.id) openFlow(data.flow.id);
+  } catch (e) {
+    msg.className = 'ctrl-status err';
+    msg.textContent = `Declare failed: ${e.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+document.getElementById('fd-declare')?.addEventListener('click', declareFlow);
+
 // ── loader map ────────────────────────────────────────────────────────────────
 
 const LOADERS = {
@@ -1266,6 +1561,7 @@ const LOADERS = {
   memory:      loadMemory,
   graph:       loadGraph,
   brain:       loadBrain,
+  flows:       loadFlows,
   control:     loadControl,
 };
 

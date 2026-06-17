@@ -349,6 +349,7 @@
   <button data-tab="agents">Agents</button>
   <button data-tab="discoveries">Discoveries</button>
   <button data-tab="brain">🧠 Brain</button>
+  <button data-tab="flows">Flows</button>
   <button data-tab="graph">Graph</button>
   <button data-tab="control">⚙ Control</button>
 </nav>
@@ -558,6 +559,87 @@
       <h2>Pending model recommendations</h2>
       <table><thead><tr><th>Agent</th><th>→ Model</th><th>From</th><th></th></tr></thead>
         <tbody id="model-recs-body"><tr><td colspan="4" class="loading">Loading…</td></tr></tbody></table>
+    </div>
+  </section>
+
+  <!-- ── Flows ── -->
+  <section class="section" id="tab-flows">
+    <div class="flow-banner" role="note">
+      <strong>Approximate.</strong> Flows are auto-discovered from the call graph (bare-name resolution) — approximate.
+      Higher confidence = more resolved nodes. Curated (manual) flows + your notes are authoritative.
+    </div>
+    <style>
+      .flow-banner { background:#2b2410; border:1px solid #5c4a13; color:#facc15; border-radius:8px;
+        padding:10px 14px; margin-bottom:12px; font-size:12px; line-height:1.55; }
+      .flow-banner strong { color:#fde68a; }
+      .flow-vault { display:flex; gap:12px; align-items:stretch; }
+      #flow-list { flex:1; min-width:280px; max-width:420px; height:660px; overflow:auto;
+        border:1px solid #2a2a3a; border-radius:8px; background:#0e0e16; padding:8px; }
+      .flow-right { flex:2; display:flex; flex-direction:column; gap:12px; min-width:0; }
+      #flow-graph { flex:1; min-height:420px; border:1px solid #2a2a3a; border-radius:8px; background:#0e0e16; }
+      #flow-note { border:1px solid #2a2a3a; border-radius:8px; background:#0e0e16; padding:16px 18px; }
+      .flow-row { padding:9px 11px; margin:3px 0; border-radius:6px; background:#15151f; border:1px solid #22222e;
+        cursor:pointer; transition:background .12s,border-color .12s; }
+      .flow-row:hover { background:#1d1d2b; }
+      .flow-row.active { border-color:var(--accent); background:#1b1b30; }
+      .flow-row .fr-name { font-size:13px; font-weight:600; color:#e8e8f0; word-break:break-word; }
+      .flow-row .fr-module { font:11px/1.4 ui-monospace,monospace; color:var(--muted); word-break:break-all; margin:2px 0 6px; }
+      .flow-row .fr-badges { display:flex; flex-wrap:wrap; gap:5px; align-items:center; }
+      .flow-list-empty { color:var(--muted); font-size:13px; padding:16px; line-height:1.6; }
+      .conf-badge { display:inline-block; padding:2px 8px; border-radius:12px; font:600 11px/1 ui-monospace,monospace; }
+      .flow-legend { display:flex; flex-wrap:wrap; gap:12px; font-size:11px; color:var(--muted); padding:8px 4px 0; }
+      .flow-legend .lg { display:inline-flex; align-items:center; gap:5px; }
+      .flow-legend .sw { width:12px; height:12px; border-radius:3px; display:inline-block; }
+      .flow-legend .sw.term { border:2px dashed #94a3b8; background:transparent; opacity:.7; }
+      .flow-legend .sw.amb { background:#facc15; border:2px dotted #fde68a; }
+      .fn-field { margin:10px 0; }
+      .fn-field label { display:block; font:600 11px/1 ui-monospace,monospace; text-transform:uppercase;
+        letter-spacing:.06em; color:var(--muted); margin-bottom:5px; }
+      .fn-field input, .fn-field textarea, .fn-field select {
+        width:100%; background:#0a0e14; border:1px solid #1f2733; color:#e6e6e6; border-radius:5px;
+        padding:7px 9px; font-size:13px; font-family:inherit; outline:none; }
+      .fn-field input:focus, .fn-field textarea:focus, .fn-field select:focus { border-color:var(--accent); }
+      .fn-field textarea { resize:vertical; min-height:70px; font-family:'Cascadia Code','Consolas',monospace; font-size:12px; }
+      .fn-hint { font-size:11px; color:var(--muted); line-height:1.55; margin:8px 0 4px; }
+      .fn-note-empty { color:var(--muted); font-size:13px; line-height:1.6; }
+      @media (max-width:900px){ .flow-vault{flex-direction:column} #flow-list{max-width:none;height:300px} }
+    </style>
+    <div class="flow-declare" id="flow-declare">
+      <div class="fd-title">Declare an entry point</div>
+      <p class="fd-hint">Auto-detection finds CLI/route flows but misses HTTP routes in monolithic files and C# attribute routes.
+        Declare an entry point here to make it the <strong>recall floor</strong> — it is traced now and re-traced every nightly run.</p>
+      <div class="fd-row">
+        <input id="fd-file"   type="text" placeholder="file (e.g. src/api/routes.ts)" />
+        <input id="fd-symbol" type="text" placeholder="symbol (e.g. registerRoutes)" />
+        <input id="fd-name"   type="text" placeholder="flow name (optional)" />
+        <input id="fd-project" type="text" placeholder="project (optional)" />
+        <button class="btn-action" id="fd-declare">Declare</button>
+      </div>
+      <div class="ctrl-status" id="fd-msg"></div>
+    </div>
+    <style>
+      .flow-declare { border:1px solid #2a2a3a; border-radius:8px; background:#0e0e16; padding:12px 14px; margin-bottom:12px; }
+      .flow-declare .fd-title { font:600 13px/1 ui-monospace,monospace; color:#e8e8f0; margin-bottom:6px; }
+      .flow-declare .fd-hint { font-size:11px; color:var(--muted); line-height:1.55; margin:0 0 10px; }
+      .flow-declare .fd-row { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+      .flow-declare .fd-row input {
+        flex:1; min-width:150px; background:#0a0e14; border:1px solid #1f2733; color:#e6e6e6;
+        border-radius:5px; padding:7px 9px; font-size:13px; font-family:inherit; outline:none; }
+      .flow-declare .fd-row input:focus { border-color:var(--accent); }
+      .flow-declare .ctrl-status { margin-top:8px; }
+    </style>
+    <div class="flow-vault">
+      <div id="flow-list"><div class="flow-list-empty">Loading flows…</div></div>
+      <div class="flow-right">
+        <div id="flow-graph"></div>
+        <div class="flow-legend">
+          <span class="lg"><span class="sw term"></span> terminal node — exits indexed graph (may continue via DB/event)</span>
+          <span class="lg"><span class="sw amb"></span> ambiguous node — name resolved to multiple targets</span>
+        </div>
+        <aside id="flow-note">
+          <div class="fn-note-empty">Select a flow on the left to view its flowchart and annotate it.</div>
+        </aside>
+      </div>
     </div>
   </section>
 

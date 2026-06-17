@@ -311,6 +311,34 @@ const STDLIB_NOISE = new Set([
   'len','range','str','int','float','list','dict','set','tuple','enumerate','zip','map','filter','sorted','reversed','sum','min','max','abs','round','print','isinstance','hasattr','getattr','setattr',
 ]);
 
+// Callees that are pure noise in a traced FLOW: SQL keywords that the
+// regex call-indexer matches inside SQL string literals (`COUNT(`, `SUM(`,
+// `bm25(` …), JS/control-flow words that slip past CALL_KEYWORDS, and bare
+// HTTP verbs (`get(`, `post(`, `json(`) that are never the real callee you
+// want to follow. Matched case-insensitively in walkTransitive and dropped
+// outright — not even recorded as terminal leaves — so flows stay legible.
+// This is intentionally broader than CALL_KEYWORDS (which only gates indexing
+// of code_calls); some of these legitimately appear in code_calls (e.g. `set`,
+// `get` as method names) but are never useful as flow nodes.
+const NOISE_CALLEES = new Set([
+  // SQL keywords / aggregate fns that appear inside query string literals
+  'select', 'from', 'where', 'count', 'sum', 'avg', 'min', 'max', 'group',
+  'order', 'limit', 'join', 'on', 'as', 'bm25', 'coalesce', 'distinct',
+  'values', 'insert', 'update', 'delete', 'set', 'into', 'case', 'when',
+  'then', 'end', 'null', 'and', 'or', 'not', 'exists', 'like', 'desc', 'asc',
+  // JS / control-flow noise
+  'if', 'for', 'while', 'switch', 'catch', 'map', 'filter', 'foreach',
+  'require', 'console', 'json', 'object', 'array', 'string', 'number',
+  'promise', 'math',
+  // bare HTTP verbs (route-registration call sites, not real callees)
+  'get', 'post', 'put', 'patch', 'use', 'status', 'send', 'header',
+].map(s => s.toLowerCase()));
+
+/** True when a bare callee name is flow-noise (case-insensitive). */
+function isNoiseCallee(name) {
+  return NOISE_CALLEES.has(String(name || '').toLowerCase());
+}
+
 function indexFile(db, filePath, project) {
   if (!shouldIndex(filePath)) return { skipped: true };
 
@@ -509,6 +537,232 @@ function getCallees(db, callerFile, callerName) {
   `).all(callerFile, callerName);
 }
 
+// ── flow primitives ────────────────────────────────────────────────────────
+// Foundation for the flow catalog: trace end-to-end process paths over the
+// (approximate) call graph. Resolution is BARE-NAME only — code_calls stores
+// the tail identifier of a call, so "db.recordEdit()" lands as 'recordEdit'.
+// Every result here is therefore an approximation; callers must flag confidence
+// and never present these flows as ground truth.
+
+/**
+ * Imports declared by a file (upstream edge of the graph). Thin wrapper over
+ * code_imports so flow tooling reuses it rather than issuing raw SQL.
+ *
+ * @returns {Array<{target, raw, line, lang}>}
+ */
+function getImports(db, file, project) {
+  db.initialize(null, null);
+  const wsep = file.replace(/\//g, '\\');
+  const fsep = file.replace(/\\/g, '/');
+  const sql = `
+    SELECT target, raw, line, lang
+      FROM code_imports
+     WHERE (file = ? OR file = ?)
+       ${project ? 'AND project = ?' : ''}
+     ORDER BY line
+  `;
+  const params = project ? [wsep, fsep, project] : [wsep, fsep];
+  return db.raw().prepare(sql).all(...params);
+}
+
+/**
+ * Directory-based module label for a file. Heuristic: the top-level folder
+ * under a recognized source root (src/<module>/… → '<module>'); otherwise the
+ * immediate parent directory name. Pure string fn — no DB, no project lookup
+ * beyond the supplied name. `project` is accepted for symmetry / future use.
+ *
+ * Examples:
+ *   src/billing/charge.ts          → 'billing'
+ *   .claude/helpers/db.cjs         → 'helpers'
+ *   scripts/cli.mjs                → 'scripts'
+ *   foo.ts                         → ''  (no parent dir)
+ */
+function inferModule(filePath, project) { // eslint-disable-line no-unused-vars
+  if (!filePath) return '';
+  const norm = String(filePath).replace(/\\/g, '/').replace(/^\.\//, '');
+  const parts = norm.split('/').filter(Boolean);
+  if (parts.length <= 1) return ''; // bare file, no directory
+  // Drop the filename; we label by directory structure.
+  const dirs = parts.slice(0, -1);
+  // Recognized source roots: the module is the folder *under* the root.
+  const ROOTS = new Set(['src', 'lib', 'app', 'scripts', 'tests', 'test', '.claude', 'helpers']);
+  for (let i = 0; i < dirs.length - 1; i++) {
+    if (ROOTS.has(dirs[i].toLowerCase())) return dirs[i + 1];
+  }
+  // No root marker — the top-level dir is the best module label, unless it is
+  // itself a known root with nothing under it, in which case use it directly.
+  return dirs[dirs.length - 1];
+}
+
+/**
+ * Resolve a bare callee name to the symbol that most likely defines it.
+ *
+ * RESOLUTION STRATEGY (approximate by design):
+ *   1. Scope to project.
+ *   2. Prefer a definition in the SAME directory/module as the caller.
+ *   3. If still ambiguous (>1 candidate), pick the first and flag ambiguous.
+ *   4. Unresolved (external/stdlib/no symbol) → null (caller records a leaf).
+ *
+ * @returns {{file, name, kind, ambiguous}|null}
+ */
+function _resolveCallee(db, name, callerFile, project) {
+  const conn = db.raw();
+  const sql = `
+    SELECT file, kind, name FROM code_symbols
+     WHERE name = ?
+       AND kind IN ('function','method','class')
+       ${project ? 'AND project = ?' : ''}
+     ORDER BY file, line
+  `;
+  const params = project ? [name, project] : [name];
+  const rows = conn.prepare(sql).all(...params);
+  if (rows.length === 0) return null;
+  if (rows.length === 1) return { file: rows[0].file, name, kind: rows[0].kind, ambiguous: false };
+
+  // Multiple definitions — prefer same directory as the caller.
+  const callerDir = String(callerFile || '').replace(/\\/g, '/').split('/').slice(0, -1).join('/');
+  const sameDir = rows.filter(r => {
+    const d = String(r.file).replace(/\\/g, '/').split('/').slice(0, -1).join('/');
+    return d === callerDir;
+  });
+  if (sameDir.length === 1) {
+    return { file: sameDir[0].file, name, kind: sameDir[0].kind, ambiguous: false };
+  }
+  // Still >1 (collision across files, or several in the same dir): take the
+  // first deterministically and flag it so downstream confidence drops.
+  const pick = (sameDir.length ? sameDir : rows)[0];
+  return { file: pick.file, name, kind: pick.kind, ambiguous: true };
+}
+
+/**
+ * Bounded transitive walk over the call graph, in either direction.
+ *
+ * @param {object} db
+ * @param {{file, name}} start  Entry symbol (its defining file + name).
+ * @param {object} opts
+ *   direction 'callees' (default) | 'callers'
+ *   depth     max hops from the start (default 4)
+ *   maxNodes  hard cap; hitting it sets truncated=true (default 150)
+ *   project   project scope (recommended)
+ * @returns {{nodes, edges, truncated, cycles}}
+ *   node = {id:`${file}::${name}`, label, kind, file, terminal, ambiguous}
+ *   edge = {source, target, kind:'calls'}
+ */
+function walkTransitive(db, start, opts = {}) {
+  db.initialize(null, null);
+  const direction = opts.direction === 'callers' ? 'callers' : 'callees';
+  const depth = Number.isFinite(opts.depth) ? opts.depth : 4;
+  const maxNodes = Number.isFinite(opts.maxNodes) ? opts.maxNodes : 150;
+  const project = opts.project || null;
+
+  const nodeId = (file, name) => `${file}::${name}`;
+  const nodes = new Map();   // id -> node
+  const edges = new Map();   // `${src}->${tgt}` -> edge
+  const cycles = [];
+  let truncated = false;
+
+  function ensureNode(file, name, kind, { terminal = false, ambiguous = false } = {}) {
+    const id = nodeId(file, name);
+    const existing = nodes.get(id);
+    if (existing) {
+      // Upgrade flags if a later visit learns more (e.g. ambiguity). Terminal
+      // is sticky-true: a node only stays terminal if it was always a leaf.
+      if (ambiguous) existing.ambiguous = true;
+      return existing;
+    }
+    if (nodes.size >= maxNodes) { truncated = true; return null; }
+    const node = { id, label: name, kind: kind || null, file, terminal, ambiguous };
+    nodes.set(id, node);
+    return node;
+  }
+
+  function addEdge(srcId, tgtId) {
+    const key = `${srcId}->${tgtId}`;
+    if (!edges.has(key)) edges.set(key, { source: srcId, target: tgtId, kind: 'calls' });
+  }
+
+  if (!start || !start.file || !start.name) return { nodes: [], edges: [], truncated: false, cycles: [] };
+
+  const startNode = ensureNode(start.file, start.name, start.kind || null, {});
+  if (!startNode) return { nodes: [], edges: [], truncated: true, cycles: [] };
+
+  // BFS so the depth cap and node cap behave predictably. visited tracks the
+  // call-stack lineage per id so a re-encounter is a genuine cycle, recorded
+  // once, then NOT recursed (prevents infinite loops on full-circle flows).
+  const visited = new Set([startNode.id]);
+  const queue = [{ file: start.file, name: start.name, d: 0 }];
+
+  while (queue.length) {
+    if (nodes.size >= maxNodes) { truncated = true; break; }
+    const cur = queue.shift();
+    const curId = nodeId(cur.file, cur.name);
+    if (cur.d >= depth) {
+      // Reached the depth cap. If this node actually has outgoing edges we are
+      // not expanding, the graph is incomplete → truncated.
+      const hasMore = direction === 'callees'
+        ? getCallees(db, cur.file, cur.name).length > 0
+        : getCallers(db, cur.name, project).length > 0;
+      if (hasMore) truncated = true;
+      continue;
+    }
+
+    if (direction === 'callees') {
+      const callees = getCallees(db, cur.file, cur.name);
+      for (const c of callees) {
+        // Drop flow-noise callees entirely — SQL keywords matched inside query
+        // string literals, control-flow words, bare HTTP verbs. Never recorded,
+        // not even as terminal leaves; this is what declutters every flow.
+        if (isNoiseCallee(c.callee_name)) continue;
+        const resolved = _resolveCallee(db, c.callee_name, cur.file, project);
+        if (!resolved) {
+          // External / stdlib / unindexed — record as a terminal leaf so the
+          // flow shows where it exits the indexed graph, then stop.
+          const leaf = ensureNode(cur.file, c.callee_name, 'external', { terminal: true });
+          if (!leaf) { truncated = true; break; }
+          // Leaf id collides with caller's file but distinct name → fine.
+          addEdge(curId, leaf.id);
+          continue;
+        }
+        const child = ensureNode(resolved.file, resolved.name, resolved.kind, { ambiguous: resolved.ambiguous });
+        if (!child) { truncated = true; break; }
+        addEdge(curId, child.id);
+        if (visited.has(child.id)) {
+          // Full circle — record the cycle edge (already added) but do not
+          // recurse again.
+          cycles.push({ from: curId, to: child.id });
+          continue;
+        }
+        visited.add(child.id);
+        queue.push({ file: resolved.file, name: resolved.name, d: cur.d + 1 });
+      }
+    } else {
+      const callers = getCallers(db, cur.name, project);
+      for (const c of callers) {
+        // Caller symbol is identified by its own (file, name).
+        const child = ensureNode(c.caller_file, c.caller_name, null, {});
+        if (!child) { truncated = true; break; }
+        addEdge(child.id, curId);
+        if (visited.has(child.id)) {
+          cycles.push({ from: child.id, to: curId });
+          continue;
+        }
+        visited.add(child.id);
+        queue.push({ file: c.caller_file, name: c.caller_name, d: cur.d + 1 });
+      }
+    }
+  }
+
+  // If anything remains queued when we stopped on the node cap, it's truncated.
+  if (queue.length && nodes.size >= maxNodes) truncated = true;
+
+  return {
+    nodes: [...nodes.values()],
+    edges: [...edges.values()],
+    truncated,
+    cycles,
+  };
+}
+
 // ── query helpers ─────────────────────────────────────────────────────────
 
 function getSymbols(db, filePath) {
@@ -691,4 +945,10 @@ module.exports = {
   getCallers,
   getCallees,
   getSymbolBody,
+  // flow primitives
+  getImports,
+  walkTransitive,
+  inferModule,
+  NOISE_CALLEES,
+  isNoiseCallee,
 };

@@ -701,6 +701,70 @@ const SCHEMA_SQL = `
   CREATE INDEX IF NOT EXISTS idx_code_calls_callee  ON code_calls(callee_name);
   CREATE INDEX IF NOT EXISTS idx_code_calls_caller  ON code_calls(caller_file, caller_name);
   CREATE INDEX IF NOT EXISTS idx_code_calls_project ON code_calls(project);
+
+  -- Flow catalog: end-to-end process paths ("full circles") traced over the
+  -- (approximate) call graph from an entry point. flows holds the header +
+  -- curation; flow_nodes/flow_edges hold the traced graph. Auto-discovered
+  -- flows can be hand-annotated (source='manual') without losing the curation
+  -- on re-discovery — see db.upsertFlowGraph. Flows are APPROXIMATE by design
+  -- (bare-name call resolution); truncated marks an incomplete trace.
+  CREATE TABLE IF NOT EXISTS flows (
+    id          TEXT PRIMARY KEY,
+    project     TEXT,
+    name        TEXT NOT NULL,
+    description TEXT,
+    user_notes  TEXT,
+    entry_point TEXT,
+    source      TEXT NOT NULL DEFAULT 'auto',
+    status      TEXT NOT NULL DEFAULT 'active',
+    fingerprint TEXT,
+    truncated   INTEGER DEFAULT 0,
+    confidence  REAL DEFAULT NULL,
+    created_at  TEXT,
+    updated_at  TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS flow_nodes (
+    flow_id   TEXT,
+    node_id   TEXT,
+    label     TEXT,
+    kind      TEXT,
+    file      TEXT,
+    terminal  INTEGER DEFAULT 0,
+    ambiguous INTEGER DEFAULT 0,
+    PRIMARY KEY (flow_id, node_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS flow_edges (
+    flow_id TEXT,
+    source  TEXT,
+    target  TEXT,
+    kind    TEXT,
+    PRIMARY KEY (flow_id, source, target)
+  );
+
+  -- User-declared entry points: the RECALL FLOOR for the flow catalog. Auto-
+  -- detection (detectEntryPoints) is high-confidence-only and therefore PARTIAL
+  -- — it misses HTTP routes in monolithic files and C#/attribute routes. This
+  -- table is how a user explicitly names an entry point so discovery traces it
+  -- every run regardless of what auto-detection finds. Flows traced from these
+  -- are stored with source='declared' and are EXEMPT from the stale-auto prune,
+  -- making them persistent. id is a stable hash of project+file+symbol so
+  -- re-declaring the same entry is idempotent (no duplicate row).
+  CREATE TABLE IF NOT EXISTS declared_entries (
+    id         TEXT PRIMARY KEY,
+    project    TEXT NOT NULL,
+    file       TEXT NOT NULL,
+    symbol     TEXT NOT NULL,
+    name       TEXT,
+    created_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_declared_entries_project ON declared_entries(project);
+
+  CREATE INDEX IF NOT EXISTS idx_flows_project       ON flows(project);
+  CREATE INDEX IF NOT EXISTS idx_flows_fingerprint   ON flows(fingerprint);
+  CREATE INDEX IF NOT EXISTS idx_flow_nodes_flow     ON flow_nodes(flow_id);
+  CREATE INDEX IF NOT EXISTS idx_flow_edges_flow     ON flow_edges(flow_id);
   CREATE INDEX IF NOT EXISTS idx_memory_stale_flagged ON memory_stale(flagged_at);
 
   -- Performance indexes — queried on every hook fire
@@ -1307,6 +1371,10 @@ function initialize(metricsRoot, dbFile) {
     // skill_injection_decisions row that was active when the sub-agent ran,
     // so verdict outcomes can be attributed back to the routing decision.
     'ALTER TABLE agent_verdicts ADD COLUMN decision_id INTEGER',
+    // v6: confidence on flows — fraction of a traced flow's nodes that resolve
+    // to a real project symbol (0..1). The discovery quality gate writes it;
+    // existing rows backfill to NULL (treated as "unscored" until re-discovery).
+    'ALTER TABLE flows ADD COLUMN confidence REAL DEFAULT NULL',
   ]) {
     try { _db.exec(migration); } catch (err) {
       if (!err.message.includes('duplicate column')) {
@@ -3694,6 +3762,273 @@ function getMissionControl() {
   return { generatedAt: new Date(now).toISOString(), entries, counts };
 }
 
+// ── flow catalog accessors ─────────────────────────────────────────────────
+// Read/write the flow catalog (flows + flow_nodes + flow_edges). CLI, server,
+// and the agent skill reuse these rather than reaching into raw SQL, so the
+// "preserve manual curation on re-discovery" rule lives in exactly one place.
+
+/**
+ * List cataloged flows, optionally scoped to a project. Each row includes a
+ * node_count so callers can summarize without fetching the full graph.
+ */
+function listFlows(project) {
+  if (!_db) throw new Error('db.listFlows: call initialize() first');
+  const where = project ? 'WHERE f.project = ?' : '';
+  const args  = project ? [project] : [];
+  return _db.prepare(`
+    SELECT f.id, f.project, f.name, f.description, f.user_notes, f.entry_point,
+           f.source, f.status, f.fingerprint, f.truncated, f.confidence, f.created_at, f.updated_at,
+           (SELECT COUNT(*) FROM flow_nodes n WHERE n.flow_id = f.id) AS node_count
+      FROM flows f
+      ${where}
+     ORDER BY f.project, f.name
+  `).all(...args);
+}
+
+/**
+ * Full flow by id: header + nodes + edges. Returns null if no such flow.
+ * @returns {{flow, nodes, edges}|null}
+ */
+function getFlow(id) {
+  if (!_db) throw new Error('db.getFlow: call initialize() first');
+  const flow = _db.prepare('SELECT * FROM flows WHERE id = ?').get(id);
+  if (!flow) return null;
+  const nodes = _db.prepare(
+    'SELECT node_id, label, kind, file, terminal, ambiguous FROM flow_nodes WHERE flow_id = ? ORDER BY node_id'
+  ).all(id);
+  const edges = _db.prepare(
+    'SELECT source, target, kind FROM flow_edges WHERE flow_id = ? ORDER BY source, target'
+  ).all(id);
+  return { flow, nodes, edges };
+}
+
+/**
+ * Write a flow header + replace its node/edge graph in one transaction.
+ *
+ * CURATION GUARD: if a flow with the same id already exists AND was hand-curated
+ * (source='manual'), its name/description/user_notes/source are preserved — only
+ * the auto-traced graph (nodes/edges/fingerprint/truncated/entry_point) is
+ * refreshed. This lets discovery re-run nightly without clobbering human edits.
+ *
+ * Self-contained transaction (raw inserts only) — must NOT call other db fns
+ * that issue their own BEGIN, or the nested-transaction would throw.
+ *
+ * @param {object} flow  {id, project, name, description?, user_notes?, entry_point?, source?, status?, fingerprint?, truncated?}
+ * @param {Array}  nodes [{id|node_id, label, kind, file, terminal, ambiguous}]
+ * @param {Array}  edges [{source, target, kind}]
+ * @returns {{id, created, preservedCuration}}
+ */
+function upsertFlowGraph(flow, nodes = [], edges = []) {
+  if (!_db) throw new Error('db.upsertFlowGraph: call initialize() first');
+  if (!flow || !flow.id || !flow.name) throw new Error('upsertFlowGraph: flow.id and flow.name required');
+
+  const now = new Date().toISOString();
+  const existing = _db.prepare('SELECT id, source, name, description, user_notes, created_at FROM flows WHERE id = ?').get(flow.id);
+  const preserveCuration = !!(existing && existing.source === 'manual');
+
+  _db.exec('BEGIN');
+  try {
+    if (existing) {
+      if (preserveCuration) {
+        // Refresh only the auto-traced fields; keep human curation intact.
+        // confidence is derived (not curated), so it refreshes here too.
+        _db.prepare(`
+          UPDATE flows SET
+            project = ?, entry_point = ?, status = ?, fingerprint = ?, truncated = ?, confidence = ?, updated_at = ?
+          WHERE id = ?
+        `).run(
+          flow.project ?? null,
+          flow.entry_point ?? null,
+          flow.status ?? 'active',
+          flow.fingerprint ?? null,
+          flow.truncated ? 1 : 0,
+          flow.confidence ?? null,
+          now,
+          flow.id
+        );
+      } else {
+        _db.prepare(`
+          UPDATE flows SET
+            project = ?, name = ?, description = ?, user_notes = ?, entry_point = ?,
+            source = ?, status = ?, fingerprint = ?, truncated = ?, confidence = ?, updated_at = ?
+          WHERE id = ?
+        `).run(
+          flow.project ?? null,
+          flow.name,
+          flow.description ?? null,
+          flow.user_notes ?? null,
+          flow.entry_point ?? null,
+          flow.source ?? 'auto',
+          flow.status ?? 'active',
+          flow.fingerprint ?? null,
+          flow.truncated ? 1 : 0,
+          flow.confidence ?? null,
+          now,
+          flow.id
+        );
+      }
+    } else {
+      _db.prepare(`
+        INSERT INTO flows
+          (id, project, name, description, user_notes, entry_point, source, status, fingerprint, truncated, confidence, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        flow.id,
+        flow.project ?? null,
+        flow.name,
+        flow.description ?? null,
+        flow.user_notes ?? null,
+        flow.entry_point ?? null,
+        flow.source ?? 'auto',
+        flow.status ?? 'active',
+        flow.fingerprint ?? null,
+        flow.truncated ? 1 : 0,
+        flow.confidence ?? null,
+        now,
+        now
+      );
+    }
+
+    // Replace the traced graph wholesale — nodes/edges are derived, never curated.
+    _db.prepare('DELETE FROM flow_nodes WHERE flow_id = ?').run(flow.id);
+    _db.prepare('DELETE FROM flow_edges WHERE flow_id = ?').run(flow.id);
+
+    const insNode = _db.prepare(`
+      INSERT OR REPLACE INTO flow_nodes (flow_id, node_id, label, kind, file, terminal, ambiguous)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const n of nodes) {
+      const nid = n.node_id ?? n.id;
+      if (!nid) continue;
+      insNode.run(flow.id, nid, n.label ?? null, n.kind ?? null, n.file ?? null, n.terminal ? 1 : 0, n.ambiguous ? 1 : 0);
+    }
+
+    const insEdge = _db.prepare(`
+      INSERT OR REPLACE INTO flow_edges (flow_id, source, target, kind)
+      VALUES (?, ?, ?, ?)
+    `);
+    for (const e of edges) {
+      if (!e.source || !e.target) continue;
+      insEdge.run(flow.id, e.source, e.target, e.kind ?? 'calls');
+    }
+
+    _db.exec('COMMIT');
+  } catch (err) {
+    _db.exec('ROLLBACK');
+    throw err;
+  }
+
+  return { id: flow.id, created: !existing, preservedCuration: preserveCuration };
+}
+
+/**
+ * Hand-annotate a flow: set human-curated fields and mark it source='manual'
+ * so future auto-discovery preserves them. Only provided fields are changed.
+ * @returns {boolean} true if a row was updated.
+ */
+function updateFlowAnnotation(id, { name, description, user_notes } = {}) {
+  if (!_db) throw new Error('db.updateFlowAnnotation: call initialize() first');
+  const existing = _db.prepare('SELECT id FROM flows WHERE id = ?').get(id);
+  if (!existing) return false;
+
+  // Build the SET clause from only the provided fields, then always stamp
+  // source='manual' + updated_at so curation survives future auto-discovery.
+  const sets = [];
+  const args = [];
+  if (name !== undefined)        { sets.push('name = ?');        args.push(name); }
+  if (description !== undefined) { sets.push('description = ?'); args.push(description); }
+  if (user_notes !== undefined)  { sets.push('user_notes = ?');  args.push(user_notes); }
+  sets.push("source = 'manual'");
+  sets.push('updated_at = ?');
+  args.push(new Date().toISOString());
+  args.push(id);
+
+  _db.prepare(`UPDATE flows SET ${sets.join(', ')} WHERE id = ?`).run(...args);
+  return true;
+}
+
+/**
+ * Delete a flow and its graph (nodes + edges) in one transaction. Used by
+ * discovery to prune stale AUTO flows that are no longer discovered (e.g. a
+ * garbage mega-flow that the quality gate now rejects). Callers must guard
+ * source='manual' themselves — this is an unconditional delete by id.
+ * @returns {boolean} true if a row was deleted.
+ */
+function deleteFlow(id) {
+  if (!_db) throw new Error('db.deleteFlow: call initialize() first');
+  const existing = _db.prepare('SELECT id FROM flows WHERE id = ?').get(id);
+  if (!existing) return false;
+  _db.exec('BEGIN');
+  try {
+    _db.prepare('DELETE FROM flow_edges WHERE flow_id = ?').run(id);
+    _db.prepare('DELETE FROM flow_nodes WHERE flow_id = ?').run(id);
+    _db.prepare('DELETE FROM flows WHERE id = ?').run(id);
+    _db.exec('COMMIT');
+  } catch (err) {
+    _db.exec('ROLLBACK');
+    throw err;
+  }
+  return true;
+}
+
+// ── declared entry points (the flow-catalog RECALL FLOOR) ───────────────────
+// User-declared entries are how a human names a flow entry point that auto-
+// detection misses (HTTP routes in monolithic files, C# attribute routes).
+// discoverFlows() loads these per project and traces them every run; the
+// resulting flows carry source='declared' and are exempt from the stale-auto
+// prune (see flow-catalog.cjs), so a declaration persists across re-discovery.
+
+/** Stable id for a declared entry: sha1 over project+file+symbol → re-declaring is idempotent. */
+function declaredEntryId(project, file, symbol) {
+  const raw = `${project || ''}::${file}::${symbol}`;
+  return 'de_' + createHash('sha1').update(raw).digest('hex').slice(0, 16);
+}
+
+/**
+ * Register (or re-register) a user-declared flow entry point. Idempotent on
+ * (project, file, symbol) — re-declaring the same entry updates the optional
+ * name and keeps the original created_at rather than inserting a duplicate.
+ * @param {{project, file, symbol, name?}} entry
+ * @returns {{id, created}}
+ */
+function addDeclaredEntry({ project, file, symbol, name } = {}) {
+  if (!_db) throw new Error('db.addDeclaredEntry: call initialize() first');
+  if (!project || !file || !symbol) {
+    throw new Error('addDeclaredEntry: project, file, and symbol are required');
+  }
+  const id = declaredEntryId(project, file, symbol);
+  const existing = _db.prepare('SELECT id, created_at FROM declared_entries WHERE id = ?').get(id);
+  const now = new Date().toISOString();
+  if (existing) {
+    // Re-declaration: refresh the optional display name, preserve created_at.
+    _db.prepare('UPDATE declared_entries SET name = ? WHERE id = ?').run(name ?? null, id);
+    return { id, created: false };
+  }
+  _db.prepare(
+    'INSERT INTO declared_entries (id, project, file, symbol, name, created_at) VALUES (?,?,?,?,?,?)'
+  ).run(id, project, file, symbol, name ?? null, now);
+  return { id, created: true };
+}
+
+/** List user-declared entry points, optionally scoped to a project. */
+function listDeclaredEntries(project) {
+  if (!_db) throw new Error('db.listDeclaredEntries: call initialize() first');
+  const where = project ? 'WHERE project = ?' : '';
+  const args  = project ? [project] : [];
+  return _db.prepare(
+    `SELECT id, project, file, symbol, name, created_at FROM declared_entries ${where} ORDER BY project, file, symbol`
+  ).all(...args);
+}
+
+/** Delete a declared entry by id. @returns {boolean} true if a row was removed. */
+function deleteDeclaredEntry(id) {
+  if (!_db) throw new Error('db.deleteDeclaredEntry: call initialize() first');
+  const existing = _db.prepare('SELECT id FROM declared_entries WHERE id = ?').get(id);
+  if (!existing) return false;
+  _db.prepare('DELETE FROM declared_entries WHERE id = ?').run(id);
+  return true;
+}
+
 // ── exports ───────────────────────────────────────────────────────────────
 function raw() { return _db; }
 
@@ -3717,6 +4052,17 @@ module.exports = {
   getBrainNote,
   getEventsSince,
   getMissionControl,
+  // flow catalog
+  listFlows,
+  getFlow,
+  upsertFlowGraph,
+  updateFlowAnnotation,
+  deleteFlow,
+  // declared entry points (flow recall floor)
+  addDeclaredEntry,
+  listDeclaredEntries,
+  deleteDeclaredEntry,
+  declaredEntryId,
   // brain vitals trend snapshots
   recordBrainSnapshot,
   getBrainSnapshots,

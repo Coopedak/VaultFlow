@@ -1128,6 +1128,140 @@ app.get('/api/brain/snapshots', (req, res) => {
   } catch (err) { apiErr(res, err); }
 });
 
+// ── flows: catalog (read) + annotation (the dashboard's first write path) ──
+// Flows are APPROXIMATE (bare-name call graph). Reads use db.listFlows/getFlow
+// over the module-level read-write handle opened by ensureDb() in the /api
+// middleware — getFlow returns the PRE-STORED graph (no on-demand re-walk).
+
+// GET /api/flows[?project=] — list cataloged flows (header + node_count).
+app.get('/api/flows', (req, res) => {
+  try {
+    res.json({ flows: db.listFlows(req.query.project || null), approximate: true });
+  } catch (err) { apiErr(res, err); }
+});
+
+// GET /api/flows/declared[?project=] — list user-declared entry points (recall
+// floor). MUST be registered before GET /api/flows/:id or ":id" captures
+// "declared".
+app.get('/api/flows/declared', (req, res) => {
+  try {
+    res.json({ declared: db.listDeclaredEntries(req.query.project || null) });
+  } catch (err) { apiErr(res, err); }
+});
+
+// POST /api/flows/declare — declare an entry point auto-detection misses (HTTP
+// routes in monolithic files, C# attribute routes), then trace it. Body:
+// { file, symbol, name?, project? }. Registers the declaration (the RECALL
+// FLOOR, re-traced every nightly run) and stores the traced flow with
+// source='declared' (prune-exempt). Uses the read-write handle (ensureDb()/
+// db.raw()), like POST /api/flows/:id. MUST be registered before POST
+// /api/flows/:id or ":id" captures "declare".
+app.post('/api/flows/declare', (req, res) => {
+  try {
+    const body = req.body || {};
+    const file = body.file;
+    const symbol = body.symbol;
+    if (typeof file !== 'string' || !file.trim()) {
+      return res.status(400).json({ error: 'file is required (string)' });
+    }
+    if (typeof symbol !== 'string' || !symbol.trim()) {
+      return res.status(400).json({ error: 'symbol is required (string)' });
+    }
+    if (body.name !== undefined && body.name !== null && typeof body.name !== 'string') {
+      return res.status(400).json({ error: 'name must be a string or null' });
+    }
+    if (body.project !== undefined && body.project !== null && typeof body.project !== 'string') {
+      return res.status(400).json({ error: 'project must be a string or null' });
+    }
+    const project = (body.project && body.project.trim()) || path.basename(process.cwd());
+    const fc = require('../flow-catalog.cjs');
+
+    const reg = db.addDeclaredEntry({
+      project, file: file.trim(), symbol: symbol.trim(),
+      name: (body.name && body.name.trim()) || null,
+    });
+    // discoverFlows auto-loads declared entries from the DB and traces them.
+    fc.discoverFlows(db, project, {});
+    const flowId = fc.flowIdFor(project, { file: file.trim(), name: symbol.trim() });
+    const full = db.getFlow(flowId);
+    res.json({ ok: true, declared: reg, flow: full ? full.flow : null, approximate: true });
+  } catch (err) { apiErr(res, err); }
+});
+
+// GET /api/flows/:id — one flow's header + stored nodes + edges. 404 if absent.
+app.get('/api/flows/:id', (req, res) => {
+  try {
+    const full = db.getFlow(req.params.id);
+    if (!full) return res.status(404).json({ error: 'flow not found' });
+    res.json({ ...full, approximate: true });
+  } catch (err) { apiErr(res, err); }
+});
+
+// GET /api/flows/:id/impact — convenience: change-impact for the flow's entry
+// point (so the UI can show "what touching this flow's entry reaches").
+app.get('/api/flows/:id/impact', (req, res) => {
+  try {
+    const full = db.getFlow(req.params.id);
+    if (!full) return res.status(404).json({ error: 'flow not found' });
+    const fi = require('../flow-impact.cjs');
+    // entry_point is stored as "file::symbol"; split on the LAST '::' so paths
+    // containing '::' (none on Windows, but be safe) don't mis-split.
+    const ep = String(full.flow.entry_point || '');
+    const idx = ep.lastIndexOf('::');
+    const file = idx >= 0 ? ep.slice(0, idx) : (ep || null);
+    const symbol = idx >= 0 ? ep.slice(idx + 2) : null;
+    res.json(fi.analyzeImpact(db, { file, symbol, project: full.flow.project || null }));
+  } catch (err) { apiErr(res, err); }
+});
+
+// POST /api/flows/:id — ANNOTATION WRITE (the dashboard's first write endpoint).
+// Body: { name?, description?, user_notes?, status? }. Routes through
+// db.updateFlowAnnotation (sets source='manual' + updated_at, preserving the
+// auto-traced graph). Only the annotation fields are accepted — no arbitrary
+// column writes. Uses the read-write handle (ensureDb()/db.raw()), NOT the
+// read-only withRawDb. Localhost-only by deployment.
+const FLOW_ANNOTATION_FIELDS = ['name', 'description', 'user_notes', 'status'];
+const FLOW_STATUSES = new Set(['active', 'archived', 'deprecated']);
+
+app.post('/api/flows/:id', (req, res) => {
+  try {
+    const body = req.body || {};
+    // Reject any field outside the allowlist — no column injection.
+    const unknown = Object.keys(body).filter(k => !FLOW_ANNOTATION_FIELDS.includes(k));
+    if (unknown.length) {
+      return res.status(400).json({ error: `unsupported field(s): ${unknown.join(', ')}` });
+    }
+    // Each provided field must be a string (or null to clear). status is enum-checked.
+    const patch = {};
+    for (const f of ['name', 'description', 'user_notes']) {
+      if (body[f] === undefined) continue;
+      if (body[f] !== null && typeof body[f] !== 'string') {
+        return res.status(400).json({ error: `${f} must be a string or null` });
+      }
+      patch[f] = body[f];
+    }
+    if (Object.keys(patch).length === 0 && body.status === undefined) {
+      return res.status(400).json({ error: 'no annotation fields supplied' });
+    }
+
+    const updated = db.updateFlowAnnotation(req.params.id, patch);
+    if (!updated) return res.status(404).json({ error: 'flow not found' });
+
+    // status is not part of updateFlowAnnotation (which only handles the curated
+    // text fields). Apply it separately, guarded by the enum, on the same handle.
+    if (body.status !== undefined) {
+      if (!FLOW_STATUSES.has(body.status)) {
+        return res.status(400).json({ error: `status must be one of: ${[...FLOW_STATUSES].join(', ')}` });
+      }
+      db.raw().prepare("UPDATE flows SET status = ?, source = 'manual', updated_at = ? WHERE id = ?")
+        .run(body.status, new Date().toISOString(), req.params.id);
+    }
+
+    const full = db.getFlow(req.params.id);
+    res.json({ ok: true, flow: full ? full.flow : null });
+  } catch (err) { apiErr(res, err); }
+});
+
 // ── GET /api/model/recommendations ────────────────────────────────────────
 
 app.get('/api/model/recommendations', (_req, res) => {

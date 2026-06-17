@@ -17,6 +17,7 @@
  *   6. Purge known-noise pattern rows
  *   7. Refresh project stack detection across C:/GIT/*
  *   8. Refresh code-graph for projects touched in the last 24h
+ *   8f. Re-discover flows for those refreshed projects (prune stale, keep manual)
  *   9. Flush SQLite → Parquet for archival
  *
  * Usage:
@@ -157,6 +158,10 @@ results.stacks = await step('detect-stacks', async () => {
   return { projects: projects.length, stacks: detected };
 });
 
+// Projects re-indexed by the code-graph step this run — captured so the
+// flow re-discovery step (8f) traces flows for exactly the refreshed projects.
+let refreshedProjects = [];
+
 // 8. refresh code graph for projects with edits in the last 24h
 results.graph = await step('refresh-code-graph', async () => {
   if (DRY_RUN || SKIP_GRAPH) return { skipped: true };
@@ -166,6 +171,7 @@ results.graph = await step('refresh-code-graph', async () => {
     `SELECT DISTINCT project FROM edit_events WHERE timestamp > datetime('now','-24 hours') AND project IS NOT NULL`
   ).all().map(r => r.project);
   if (!projects.length) return { skipped: 'no-recent-projects' };
+  refreshedProjects = projects;
   const ROOT = process.env.VAULTFLOW_GIT_ROOT || 'C:/GIT';
   let indexed = 0;
   function* walk(dir, depth = 0) {
@@ -207,6 +213,28 @@ results.codeGraphPurge = await step('purge-code-graph', () => {
     catch (err) { r.vacuum_error = err.message; }
   }
   return r;
+});
+
+// 8f. re-discover flows for the projects whose code graph was just refreshed.
+//     Runs AFTER the graph refresh + purge so flows trace the current graph.
+//     discoverFlows already prunes stale auto-flows and preserves source='manual'
+//     curation, so this is safe to re-run nightly. Flows are APPROXIMATE.
+results.flows = await step('discover-flows', () => {
+  if (DRY_RUN || SKIP_GRAPH) return { skipped: true };
+  if (!refreshedProjects.length) return { skipped: 'no-refreshed-projects' };
+  const fc = require('./flow-catalog.cjs');
+  const perProject = [];
+  let created = 0, updated = 0, pruned = 0;
+  for (const proj of refreshedProjects) {
+    try {
+      const s = fc.discoverFlows(db, proj, {});
+      created += s.flowsCreated; updated += s.flowsUpdated; pruned += s.flowsPruned;
+      perProject.push({ project: proj, created: s.flowsCreated, updated: s.flowsUpdated, pruned: s.flowsPruned });
+    } catch (err) {
+      perProject.push({ project: proj, error: err.message });
+    }
+  }
+  return { projects: refreshedProjects.length, created, updated, pruned, perProject };
 });
 
 // 8b. detect stale memory entries (source files that vanished)

@@ -18,7 +18,7 @@
 import { createRequire }  from 'node:module';
 import { readFileSync, existsSync } from 'node:fs';
 import path               from 'node:path';
-import { fileURLToPath }  from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { glob }           from 'glob';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -49,6 +49,54 @@ function parseFrontmatter(raw) {
     description: typeof parsed.description === 'string' ? parsed.description.trim() : '',
     name:        typeof parsed.name        === 'string' ? parsed.name.trim()        : '',
   };
+}
+
+/**
+ * True when a frontmatter description is a stub the search can't match on:
+ * empty, too short to carry signal (<30 chars), or the auto-generated
+ * "Agent skill for X - invoke with $" placeholder. Stub descriptions give
+ * searchVaultAgents nothing useful to match, so callers fall back to body text.
+ */
+function isStubDescription(desc) {
+  const d = String(desc || '').trim();
+  if (d.length < 30) return true;
+  return /^Agent skill for .* - invoke with \$/.test(d);
+}
+
+/**
+ * Pull the first non-frontmatter paragraph (up to ~200 chars) from a skill
+ * markdown body. Used as a description fallback when the frontmatter
+ * `description` is a stub. Tolerant: returns '' if there's no readable body.
+ */
+function firstBodyParagraph(raw) {
+  if (!raw) return '';
+  let body = raw;
+  if (raw.startsWith('---')) {
+    const end = raw.indexOf('\n---', 3);
+    if (end !== -1) {
+      // Skip past the closing '---' line itself.
+      const after = raw.indexOf('\n', end + 1);
+      body = after !== -1 ? raw.slice(after + 1) : '';
+    }
+  }
+  // First non-empty block: collapse to the first run of non-blank lines, strip
+  // leading markdown headings/markers, and cap length.
+  const para = body
+    .split(/\n\s*\n/)
+    .map(p => p.trim())
+    .find(p => p.length > 0) || '';
+  return para.replace(/^#+\s*/, '').replace(/\s+/g, ' ').trim().slice(0, 200);
+}
+
+/**
+ * Resolve the best description for a skill: keep the frontmatter description
+ * unless it's a stub, in which case fall back to the first body paragraph.
+ * Always returns whatever non-empty text it can; never throws.
+ */
+function resolveSkillDescription(frontmatterDesc, raw) {
+  if (!isStubDescription(frontmatterDesc)) return frontmatterDesc;
+  const body = firstBodyParagraph(raw);
+  return body || frontmatterDesc || '';
 }
 
 // ── config ────────────────────────────────────────────────────────────────
@@ -446,7 +494,9 @@ async function backfillAgents(cfg, dryRun) {
       }
       if (raw) {
         const fm = parseFrontmatter(raw);
-        descText = fm.description.slice(0, 500);
+        // Stub descriptions (empty / too short / auto-generated) give the FTS
+        // search nothing to match on — fall back to the skill's body text.
+        descText = resolveSkillDescription(fm.description, raw).slice(0, 500);
       }
 
       if (!skillName) continue;
@@ -497,7 +547,8 @@ async function backfillAgents(cfg, dryRun) {
       try {
         const raw = readFileSync(agentFile, 'utf8');
         const fm  = parseFrontmatter(raw);
-        descText  = fm.description.slice(0, 500);
+        // Stub-description fallback to body text — same reasoning as user skills.
+        descText  = resolveSkillDescription(fm.description, raw).slice(0, 500);
       } catch (_) {}
 
       if (!dryRun) {
@@ -704,4 +755,9 @@ async function main() {
   }
 }
 
-main();
+// Run only when invoked directly as a script — NOT when imported (the module's
+// docblock advertises `import { runBackfill }`). Importing previously triggered
+// a full backfill against the real DB as a side effect.
+if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
+  main();
+}

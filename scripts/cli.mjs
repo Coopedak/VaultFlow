@@ -55,9 +55,12 @@ function printHelp() {
     `  mcp-server        Start the MCP server\n` +
     `\nQuery (headless brain access):\n` +
     `  search <query>    Search memory/symbols/commits (add --json)\n` +
+    `  find-skill <task> Find existing skills before authoring a new one (add --json)\n` +
     `  context [project] Show the context vaultflow would inject\n` +
     `  graph [--center]  Print the brain graph (add --json)\n` +
     `  mission           Mission Control ledger (add --json)\n` +
+    `  flows <sub>       Flow catalog: discover|list [project] | declare <file> <symbol> | declared [project] (add --json)\n` +
+    `  impact <target>   Change-impact report for a file or symbol (add --project, --json)\n` +
     `  doctor            Run the health audit\n`
   );
 }
@@ -98,7 +101,7 @@ if (command === 'tui:dev') {
   forwardedArgs = ['--status', ...forwardedArgs];
 }
 
-const QUERY_COMMANDS = new Set(['search', 'context', 'graph', 'mission', 'doctor']);
+const QUERY_COMMANDS = new Set(['search', 'find-skill', 'context', 'graph', 'mission', 'doctor', 'flows', 'impact']);
 
 if (QUERY_COMMANDS.has(command)) {
   // Pass the full args (incl. subcommand) so cli-query.mjs sees argv[0]=subcommand.

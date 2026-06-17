@@ -170,6 +170,23 @@ const TOOLS = [
     },
   },
   {
+    name: 'search_skills',
+    description:
+      'Search existing skills before authoring a NEW skill. ALWAYS call this ' +
+      'before creating a new skill — reuse or modify an existing one rather than ' +
+      'building from scratch. Skills are the skill-equivalent of vault tools: ' +
+      'agents, pipelines, and procedures registered in vault_agents. Returns ' +
+      'ranked matches with an advisory REUSE / MODIFY / BUILD-NEW-OK verdict.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'What the new skill would do (task, capability, or description fragment)' },
+        limit: { type: 'number', description: 'Max results (default 10)' },
+      },
+      required: ['query'],
+    },
+  },
+  {
     name: 'blast_radius',
     description:
       'Find every file that imports a target file. Use this BEFORE editing any ' +
@@ -275,6 +292,25 @@ const TOOLS = [
         project: { type: 'string', description: 'Optional project filter' },
       },
       required: ['name'],
+    },
+  },
+  {
+    name: 'impact',
+    description:
+      'Change-impact report for a file or symbol: DOWNSTREAM consumers a change ' +
+      'could break, UPSTREAM dependencies a root cause could come from, and which ' +
+      'cataloged FLOWS the change reaches (classified affected / handoff / verify, ' +
+      'with the human-curated user_notes surfaced). Use BEFORE editing to see what ' +
+      'breaks, or in debug mode to point root-cause investigation upstream. ' +
+      'APPROXIMATE — bare-name call graph; curated flows/user_notes are more trustworthy.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        file:    { type: 'string', description: 'Path to the changed file (file-level impact)' },
+        symbol:  { type: 'string', description: 'Symbol name (function/class) — finer-grained impact' },
+        project: { type: 'string', description: 'Optional project filter (auto-scoped from the symbol/file)' },
+        mode:    { type: 'string', enum: ['impact', 'debug'], description: "'impact' (default) or 'debug' (emphasize root-cause direction)" },
+      },
     },
   },
 ];
@@ -439,6 +475,35 @@ async function callTool(name, args) {
       };
     }
 
+    case 'search_skills': {
+      const skillReuse = require('./skill-reuse.cjs');
+      const query = String(args.query || '').trim();
+      if (!query) return { content: [{ type: 'text', text: 'Missing required arg: query' }] };
+      const limit = Math.min(Math.max(1, Math.floor(args.limit || 10)), 25);
+
+      const rows   = db.searchVaultAgents(query, limit) || [];
+      const scored = skillReuse.scoreSkillRows(query, rows);
+
+      // BM25 ranks; overlap only buckets. Render in BM25 order with the verdict.
+      const lines = scored.map(r =>
+        `[${r.verdict}] ${r.name} (${r.source})${r.description ? ` — ${String(r.description).slice(0, 200)}` : ''}`
+      );
+
+      const noStrongMatch = scored.length === 0 || scored.every(r => r.verdict === 'BUILD-NEW-OK');
+      const thin = scored.length > 0 && scored.length < 3;
+
+      const header = scored.length
+        ? `**Existing skills for "${query}"** (${scored.length}, verdict is advisory — BM25-ranked):`
+        : `No existing skills matched "${query}".`;
+
+      const footer = [];
+      if (thin) footer.push('_Note: few results — the registry may be thin for this query._');
+      if (noStrongMatch) footer.push('No strong match — OK to build new.');
+
+      const text = [header, ...lines, ...(footer.length ? ['', ...footer] : [])].join('\n');
+      return { content: [{ type: 'text', text }] };
+    }
+
     case 'blast_radius': {
       const codeGraph = require('./code-graph.cjs');
       const file = String(args.file || '');
@@ -527,6 +592,14 @@ async function callTool(name, args) {
           _render: `- **${t.name}** — ${t.description || ''}`,
         })));
       } catch (_) {}
+      try {
+        const skills = db.searchVaultAgents ? (db.searchVaultAgents(q, limit) || []) : [];
+        sourceLists.push(skills.map(r => ({
+          _source: 'skill',
+          _docId: `skill:${r.agent_id}`,
+          _render: `- **${r.name}** — ${r.description || ''}`,
+        })));
+      } catch (_) {}
 
       // 6th source: semantic symbol search. Cosine over symbol_embeddings —
       // finds code whose intent matches the query even without keyword overlap.
@@ -606,6 +679,22 @@ async function callTool(name, args) {
       const lines = rows.slice(0, 50).map(r => `- ${r.caller_file}:${r.line} — in \`${r.caller_name}\` [${r.lang}]`);
       const more = rows.length > 50 ? `\n…and ${rows.length - 50} more` : '';
       return { content: [{ type: 'text', text: `**Callers of "${name}"** (${rows.length}):\n\n${lines.join('\n')}${more}` }] };
+    }
+
+    case 'impact': {
+      const fi = require('./flow-impact.cjs');
+      const file = args.file ? String(args.file) : null;
+      const symbol = args.symbol ? String(args.symbol) : null;
+      if (!file && !symbol) {
+        return { content: [{ type: 'text', text: 'Missing required arg: provide file and/or symbol.' }] };
+      }
+      const rep = fi.analyzeImpact(db, {
+        file,
+        symbol,
+        project: args.project || null,
+        mode: args.mode === 'debug' ? 'debug' : 'impact',
+      });
+      return { content: [{ type: 'text', text: fi.renderImpact(rep) }] };
     }
 
     default:
