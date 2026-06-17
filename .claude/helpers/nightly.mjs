@@ -223,6 +223,11 @@ results.commits = await step('index-git-commits', () => {
   return ci.indexAllProjects(db, ROOT);
 });
 
+// 8d2. import Claude Desktop / claude.ai chat exports from the watched folder.
+//      Idempotent: re-importing the same export is a no-op unless a chat changed.
+results.claudeChats = await step('import-claude-chats', async () =>
+  DRY_RUN ? { skipped: true } : (await import('./import-claude-chats.mjs')).importChatsNightly());
+
 // 8e. embeddings backfill — incremental, only embeds new memory entries.
 // Skipped if transformers package isn't installed (npm install @xenova/transformers).
 results.embeddings = await step('embeddings-backfill', async () => {

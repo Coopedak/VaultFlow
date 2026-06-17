@@ -137,6 +137,19 @@ const SCHEMA_SQL = `
     promoted    INTEGER DEFAULT 0
   );
 
+  -- Importer bookkeeping for Claude Desktop / claude.ai chat exports.
+  -- Keyed by the conversation's stable uuid so re-importing the same export
+  -- (e.g. nightly) is a no-op unless updated_at changed. See
+  -- import-claude-chats.mjs — this is the change-detection store that prevents
+  -- prompt/transcript duplication across runs.
+  CREATE TABLE IF NOT EXISTS imported_chats (
+    conversation_uuid TEXT    PRIMARY KEY,
+    updated_at        TEXT,
+    source_file       TEXT,
+    message_count     INTEGER DEFAULT 0,
+    imported_at       TEXT
+  );
+
   -- Memory entries: parsed blocks from MEMORY.md and vault files.
   -- Populated by auto-memory-hook.mjs at session start.
   CREATE TABLE IF NOT EXISTS memory_entries (
@@ -3439,7 +3452,7 @@ function getBrainNote(id) {
         note.outlinks.push({ id: `session:${r.id}`, title: `${key} ${String(r.started_at).slice(0, 10)}` });
     } else if (type === 'session') {
       const ss = one(`SELECT session_id,project,duration_ms,top_files,patterns,summary_at FROM session_summaries WHERE session_id = ? LIMIT 1`, key);
-      const s  = one(`SELECT id,project,started_at,COALESCE(edits,0) edits FROM sessions WHERE id = ? LIMIT 1`, key);
+      const s  = one(`SELECT id,project,started_at,cli,COALESCE(edits,0) edits FROM sessions WHERE id = ? LIMIT 1`, key);
       const proj = (ss && ss.project) || (s && s.project) || '?';
       note.title = `Session · ${proj}`;
       if (ss) {
@@ -3454,6 +3467,18 @@ function getBrainNote(id) {
       if (proj && proj !== '?') note.outlinks.push({ id: `project:${proj}`, title: proj });
       for (const r of q(`SELECT DISTINCT file_path FROM edit_events WHERE session_id = ? LIMIT 30`, key))
         note.outlinks.push({ id: `file:${r.file_path}`, title: base(r.file_path) });
+      // Imported Claude Desktop / claude.ai chats are sessions with cli='claude-desktop'.
+      // They have no edit_events; their content lives in a memory_entries transcript.
+      // Surface the real chat title and link the node to that transcript so the
+      // Brain reader can open it. Additive only — normal CLI sessions are untouched.
+      if (s && s.cli === 'claude-desktop') {
+        const convSource = `claude-desktop:conv:${key}`;
+        const conv = one(`SELECT title FROM memory_entries WHERE source = ? LIMIT 1`, convSource);
+        if (conv && conv.title) note.title = conv.title;
+        // Only link to the transcript when the memory entry actually exists;
+        // pushing without a guard produces a dead link in the Brain reader.
+        if (conv) note.outlinks.push({ id: `memory:${convSource}`, title: 'Transcript' });
+      }
     } else if (type === 'commit') {
       const row = one(`SELECT sha,project,author,committed_at,subject,body FROM git_commits WHERE sha = ? OR sha LIKE ? LIMIT 1`, key, `${key}%`);
       note.title = row ? row.subject : key;

@@ -18,6 +18,7 @@ const COMMANDS = {
   watcher:         ['.claude', 'helpers', 'watcher.mjs'],
   dict:            ['.claude', 'helpers', 'dict.mjs'],
   'dict:import':   ['.claude', 'helpers', 'dict.mjs'],
+  'import-chats':  ['.claude', 'helpers', 'import-claude-chats.mjs'],
   'gen-context':   ['.claude', 'helpers', 'gen-context.mjs'],
   'install-hooks': ['.claude', 'helpers', 'install-git-hooks.mjs'],
   'model-status':  ['.claude', 'helpers', 'model-router.cjs'],
@@ -46,6 +47,7 @@ function printHelp() {
     `  audit             Run the health audit\n` +
     `  lint              Run the lint checks\n` +
     `  dict              Run dictionary commands\n` +
+    `  import-chats      Import Claude Desktop / claude.ai chat exports\n` +
     `  gen-context       Generate project context files\n` +
     `  install-hooks     Install git hooks into a project\n` +
     `  model-status      Show model routing status\n` +

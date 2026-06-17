@@ -36,6 +36,11 @@ paths:
   # Domain knowledge directory — auto-imported into dictionary
   vault_domain_dir: "C:/Users/YOU/vault/domain"
 
+  # Watched folder for Claude Desktop / claude.ai chat exports. Drop Anthropic's
+  # account data export here (a conversations.json, or an unzipped export folder
+  # containing one); the nightly run imports new/changed chats automatically.
+  claude_export_dir: "C:/Users/YOU/Downloads/claude-exports"
+
   # ruflo .agents/ directory (Codex CLI skills)
   agents_dir: "C:/GIT/vaultflow/.agents"
 

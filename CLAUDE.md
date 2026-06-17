@@ -54,6 +54,12 @@ npm run dict:import            # import from vault/domain/
 node .claude/helpers/dict.mjs --search "thermal spray"
 node .claude/helpers/dict.mjs --add "term" "category" "definition"
 
+# Import Claude Desktop / claude.ai chats
+npm run import-chats                      # import from paths.claude_export_dir
+npm run import-chats [path]               # import from explicit dir or conversations.json file
+npm run import-chats [path] --dry-run     # parse + count, write nothing
+npm run import-chats [path] --json        # print summary as JSON
+
 # Gen context files (copilot-instructions, AGENTS.md, cursor rules)
 npm run gen-context [project-path]
 
@@ -79,6 +85,7 @@ vaultflow doctor                         # health audit
 4. **Parquet flush** — `edit_events` + `sessions` via `flushToParquet()`; `tool_calls` + `prompts` via `flushTelemetryToParquet()`. Both called in `flush-parquet.mjs main()`.
 5. **BM25 rank direction** — `bm25()` returns negative values. `ORDER BY rank ASC` = most relevant first.
 6. **native modules** — `better-sqlite3` requires `npm install --ignore-scripts` to avoid node-gyp failures on Windows. The `.node` binding is pre-built.
+7. **Claude Desktop chats** — imported chats reuse the `sessions` table (not a separate table); distinguished by `cli='claude-desktop'`. The `imported_chats` idempotency table dedupes on conversation uuid + updated_at. See ADR-001 for rationale.
 
 ## File Map
 
@@ -106,6 +113,7 @@ vaultflow doctor                         # health audit
   copilot-resume.cjs         — prints a brief session resume block to stderr
   auto-memory-hook.mjs       — vault/domain/ import → FTS memory
   dict.mjs                   — dictionary import/search/CLI
+  import-claude-chats.mjs    — Anthropic official export (conversations.json) → sessions/prompts/memory
   backfill.mjs               — vault index → DB backfill
   watcher.mjs                — chokidar daemon (Copilot/Codex/background agent tracking)
   ensure-watcher.mjs         — idempotent watcher daemon launcher
@@ -166,6 +174,28 @@ Background agents (Codex, Cursor, Copilot) can read this file to:
 The watcher daemon (auto-started on SessionStart) catches filesystem edits from
 any tool that doesn't fire Claude Code hooks, so all file activity is recorded
 regardless of which agent made the edit.
+
+## Import Your Claude Desktop Chats
+
+vaultflow can import conversations from Claude Desktop or claude.ai into your Brain. Chats become searchable sessions linked to projects and appear in the dashboard.
+
+**Setup (one time):**
+1. Go to claude.ai → Settings → Privacy → Export data → Download your conversations as `conversations.json`
+2. Create a folder at the path specified in `paths.claude_export_dir` (default: `~/Downloads/claude-exports`)
+3. Drop the `conversations.json` file (or an unzipped export folder) into that folder
+
+**Import:**
+- Manual: `npm run import-chats` (imports from the watched folder)
+- Manual with a specific file: `npm run import-chats C:/path/to/conversations.json`
+- Automatic: the nightly job (3AM Windows task) auto-detects new/changed exports and imports them
+
+**What happens:**
+- Each conversation becomes a searchable session node in the Brain graph (distinguished by `cli='claude-desktop'`)
+- Each human message becomes a full-text searchable prompt row
+- The full transcript becomes a searchable memory entry (FTS + embeddings)
+- Conversations are linked to their project if projects.json is present in the export
+
+Run `npm run import-chats --dry-run` to see what would be imported without writing to the database.
 
 ## Knowledge Hierarchy
 

@@ -41,6 +41,8 @@
     "watcher:stop": "node .claude/helpers/watcher.mjs --stop",
     "dict": "node .claude/helpers/dict.mjs",
     "dict:import": "node .claude/helpers/dict.mjs --import",
+    "import-chats": "node .claude/helpers/import-claude-chats.mjs",
+    "import-chats:dry-run": "node .claude/helpers/import-claude-chats.mjs --dry-run",
     "gen-context": "node .claude/helpers/gen-context.mjs",
     "install-hooks": "node .claude/helpers/install-git-hooks.mjs",
     "install-shell-tracker": "node scripts/install-shell-tracker.mjs",
