@@ -138,18 +138,33 @@ console.log('8. Purging .wal / .duckdb.wal rows from edit_events …');
 const walDel = raw.prepare(`DELETE FROM edit_events WHERE file_path LIKE '%.duckdb.wal' OR file_path LIKE '%.wal'`).run();
 console.log(`   deleted ${walDel.changes} edit_events rows (.wal / .duckdb.wal)`);
 
-// ── 9. Delete orphan vault_agents row agent_id='SKILL' ──────────────────────
+// ── 9. Purge E:/GIT/vaultflow rows from code_symbols + code_imports ──────────
+// E:\GIT\vaultflow is a second snapshot copy that shares the same DB. The guard
+// in code-graph.cjs now excludes it going forward; this removes historical rows.
+// Uses LOWER(file) LIKE 'e:%git%vaultflow%' for case-agnostic path matching.
+console.log('9. Purging E:/GIT/vaultflow rows from code_symbols and code_imports …');
+const eSymDel = raw.prepare(`DELETE FROM code_symbols WHERE LOWER(file) LIKE 'e:%git%vaultflow%'`).run();
+const eImpDel = raw.prepare(`DELETE FROM code_imports WHERE LOWER(file) LIKE 'e:%git%vaultflow%'`).run();
+console.log(`   deleted ${eSymDel.changes} code_symbols rows, ${eImpDel.changes} code_imports rows`);
+
+// ── 10. Purge E:/GIT/vaultflow rows from edit_events ─────────────────────────
+// edit_events uses file_path column (vs file in code_symbols/code_imports).
+console.log('10. Purging E:/GIT/vaultflow rows from edit_events …');
+const eEvtDel = raw.prepare(`DELETE FROM edit_events WHERE LOWER(file_path) LIKE 'e:%git%vaultflow%'`).run();
+console.log(`   deleted ${eEvtDel.changes} edit_events rows`);
+
+// ── 11. Delete orphan vault_agents row agent_id='SKILL' ─────────────────────
 // When the user-skill directory was renamed from 'SKILL' to 'process-manager',
 // upsertVaultAgent (INSERT … ON CONFLICT(agent_id) DO UPDATE) correctly updated
 // the 'process-manager' row but left behind the stale 'SKILL' row with
 // source='user-skill'. The orphan causes find-skill / search_skills to surface
 // "SKILL" instead of "process-manager" for relevant queries. Idempotent:
 // re-running deletes 0 rows once the orphan is gone.
-console.log('9. Deleting orphan vault_agents row (agent_id=\'SKILL\') …');
+console.log('11. Deleting orphan vault_agents row (agent_id=\'SKILL\') …');
 const orphanDel = raw.prepare(`DELETE FROM vault_agents WHERE agent_id='SKILL' AND source='user-skill'`).run();
 console.log(`   deleted ${orphanDel.changes} orphan vault_agents row(s)`);
 
 console.log('\nDone.');
 console.log(`  total changes: model=${changes + mpChanges}, project=${sessFixed + editFixed}, prompts dropped=${promptsDropped}`);
-console.log(`  code_symbols purged=${symDel.changes}, code_imports purged=${impDel.changes}, edit_events D: purged=${evtDel.changes}, edit_events .wal purged=${walDel.changes}`);
+console.log(`  code_symbols purged D:=${symDel.changes} E:=${eSymDel.changes}, code_imports purged D:=${impDel.changes} E:=${eImpDel.changes}, edit_events D: purged=${evtDel.changes} E: purged=${eEvtDel.changes}, edit_events .wal purged=${walDel.changes}`);
 console.log(`  vault_agents orphans deleted=${orphanDel.changes}`);
