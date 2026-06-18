@@ -29,9 +29,10 @@ paths:
 
   # Path prefixes to exclude from code-graph indexing (forward slashes, case-insensitive).
   # Add snapshot/mirror copies of repos here so their symbols don't pollute impact analysis.
-  # Example: D:/vaultflow is an in-sync snapshot of C:/GIT/vaultflow — exclude it.
+  # Example: D:/vaultflow and E:/GIT/vaultflow are snapshots of C:/GIT/vaultflow — exclude them.
   exclude_index_prefixes:
     - "D:/vaultflow"
+    - "E:/GIT/vaultflow"
 
   # Vault tool registry
   vault_tools_index: "C:/Users/YOU/vault/tools/index.md"

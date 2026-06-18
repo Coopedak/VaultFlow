@@ -293,11 +293,11 @@ function run(input) {
         const fsLocal = require('fs');
         const cfgPath = require('../../config/resolve.cjs');
         const cfg     = fsLocal.existsSync(cfgPath) ? yaml.load(fsLocal.readFileSync(cfgPath, 'utf8')) : {};
-        _excludePrefixes = ((cfg.paths && cfg.paths.exclude_index_prefixes) || ['d:/vaultflow'])
+        _excludePrefixes = ((cfg.paths && cfg.paths.exclude_index_prefixes) || ['d:/vaultflow', 'e:/git/vaultflow'])
           .map(p => String(p).replace(/\\/g, '/').toLowerCase());
       } catch (_) {
-        // If config fails to load, fall back to the hardcoded default.
-        _excludePrefixes = ['d:/vaultflow'];
+        // If config fails to load, fall back to the hardcoded defaults.
+        _excludePrefixes = ['d:/vaultflow', 'e:/git/vaultflow'];
       }
       return _excludePrefixes;
     }

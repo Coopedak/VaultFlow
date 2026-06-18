@@ -35,8 +35,8 @@ function getExcludePrefixes() {
       .filter(Boolean)
       .map(p => String(p).replace(/\\/g, '/').toLowerCase());
   } catch (_) {
-    // If config can't be loaded, default to blocking the known snapshot path.
-    _excludePrefixes = ['d:/vaultflow'];
+    // If config can't be loaded, default to blocking the known snapshot paths.
+    _excludePrefixes = ['d:/vaultflow', 'e:/git/vaultflow'];
   }
   return _excludePrefixes;
 }
