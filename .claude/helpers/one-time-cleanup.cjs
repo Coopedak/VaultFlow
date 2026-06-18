@@ -106,12 +106,50 @@ let promptsDropped = 0;
 if (ids.length) {
   const placeholders = ids.map(() => '?').join(',');
   raw.prepare(
-    `DELETE FROM retrieval_docs WHERE source_type='prompt' AND source_id IN (${placeholders.replace(/\?/g, '?')})`
+    `DELETE FROM retrieval_docs WHERE source_type='prompt' AND source_id IN (${placeholders})`
   ).run(...ids.map(String));
   raw.prepare(`DELETE FROM prompts WHERE id IN (${placeholders})`).run(...ids);
   promptsDropped = ids.length;
 }
 console.log(`   dropped ${promptsDropped} empty prompts`);
 
+// ── 6. Purge D:/vaultflow rows from code_symbols + code_imports ─────────────
+// These leaked in because code-graph.cjs had no exclude_index_prefixes guard.
+// The guard is now in place; this step removes the historical contamination.
+// NOTE: the leading 'D:%vaultflow%' clause already covers all D:\vaultflow rows
+// (LIKE uses % as wildcard and the pattern is case-insensitive in SQLite).
+// The former OR branch used a JS string literal 'D:\vaultflow%' where \v is a
+// vertical-tab character — it matched nothing and has been removed.
+console.log('6. Purging D:/vaultflow rows from code_symbols and code_imports …');
+const symDel = raw.prepare(`DELETE FROM code_symbols WHERE file LIKE 'D:%vaultflow%'`).run();
+const impDel = raw.prepare(`DELETE FROM code_imports WHERE file LIKE 'D:%vaultflow%'`).run();
+console.log(`   deleted ${symDel.changes} code_symbols rows, ${impDel.changes} code_imports rows`);
+
+// ── 7. Purge D:/vaultflow rows from edit_events ──────────────────────────────
+// edit_events doesn't go through purgeCodeGraph(), so needs its own DELETE.
+console.log('7. Purging D:/vaultflow rows from edit_events …');
+const evtDel = raw.prepare(`DELETE FROM edit_events WHERE LOWER(file_path) LIKE 'd:%vaultflow%'`).run();
+console.log(`   deleted ${evtDel.changes} edit_events rows`);
+
+// ── 8. Purge .wal / .duckdb.wal rows from edit_events ───────────────────────
+// 40,039 WAL-journal rows polluted edit_events and the Brain graph hub-files
+// list. The watcher and post-edit guards are now in place; remove historical rows.
+console.log('8. Purging .wal / .duckdb.wal rows from edit_events …');
+const walDel = raw.prepare(`DELETE FROM edit_events WHERE file_path LIKE '%.duckdb.wal' OR file_path LIKE '%.wal'`).run();
+console.log(`   deleted ${walDel.changes} edit_events rows (.wal / .duckdb.wal)`);
+
+// ── 9. Delete orphan vault_agents row agent_id='SKILL' ──────────────────────
+// When the user-skill directory was renamed from 'SKILL' to 'process-manager',
+// upsertVaultAgent (INSERT … ON CONFLICT(agent_id) DO UPDATE) correctly updated
+// the 'process-manager' row but left behind the stale 'SKILL' row with
+// source='user-skill'. The orphan causes find-skill / search_skills to surface
+// "SKILL" instead of "process-manager" for relevant queries. Idempotent:
+// re-running deletes 0 rows once the orphan is gone.
+console.log('9. Deleting orphan vault_agents row (agent_id=\'SKILL\') …');
+const orphanDel = raw.prepare(`DELETE FROM vault_agents WHERE agent_id='SKILL' AND source='user-skill'`).run();
+console.log(`   deleted ${orphanDel.changes} orphan vault_agents row(s)`);
+
 console.log('\nDone.');
 console.log(`  total changes: model=${changes + mpChanges}, project=${sessFixed + editFixed}, prompts dropped=${promptsDropped}`);
+console.log(`  code_symbols purged=${symDel.changes}, code_imports purged=${impDel.changes}, edit_events D: purged=${evtDel.changes}, edit_events .wal purged=${walDel.changes}`);
+console.log(`  vault_agents orphans deleted=${orphanDel.changes}`);

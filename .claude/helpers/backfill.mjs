@@ -471,6 +471,10 @@ async function backfillAgents(cfg, dryRun) {
     const require = createRequire(import.meta.url);
     const fs = require('fs');
     let userCount = 0;
+    // Track every agent_id registered this run so orphans (skills that were
+    // renamed or deleted) can be pruned from vault_agents after the loop.
+    const registeredUserSkillIds = new Set();
+
     for (const entry of fs.readdirSync(userSkillsDir, { withFileTypes: true })) {
       let skillName = null;
       let descText  = '';
@@ -500,6 +504,7 @@ async function backfillAgents(cfg, dryRun) {
       }
 
       if (!skillName) continue;
+      registeredUserSkillIds.add(skillName);
       if (!dryRun) {
         try {
           // Pass descText as BOTH description and trigger_pattern. Skills don't
@@ -516,6 +521,33 @@ async function backfillAgents(cfg, dryRun) {
       }
     }
     console.log(`[backfill] User skills registered: ${userCount}${dryRun ? ' (dry-run)' : ''}`);
+
+    // ── Orphan prune: remove user-skill rows whose agent_id no longer maps to
+    // any skill on disk (e.g. a renamed or deleted skill directory). SAFETY
+    // GUARD: only prune when the scan found a healthy number of skills.
+    // A failed or partial scan (empty dir, permission error) must NOT nuke the
+    // table, so we abort the prune entirely when fewer than the minimum were seen.
+    const MIN_USER_SKILLS_FOR_PRUNE = 5; // never prune on a failed/partial scan
+    if (!dryRun && registeredUserSkillIds.size >= MIN_USER_SKILLS_FOR_PRUNE) {
+      const raw = db.raw();
+      const existing = raw.prepare(
+        `SELECT agent_id FROM vault_agents WHERE source='user-skill'`
+      ).all().map(r => r.agent_id);
+      const orphans = existing.filter(id => !registeredUserSkillIds.has(id));
+      if (orphans.length > 0) {
+        const placeholders = orphans.map(() => '?').join(', ');
+        raw.prepare(
+          `DELETE FROM vault_agents WHERE source='user-skill' AND agent_id IN (${placeholders})`
+        ).run(...orphans);
+        console.log(`[backfill] User-skill orphans pruned: ${orphans.length} (${orphans.join(', ')})`);
+      } else {
+        console.log(`[backfill] User-skill orphans pruned: 0`);
+      }
+    } else if (!dryRun) {
+      process.stderr.write(
+        `[backfill] Orphan prune skipped — scan returned only ${registeredUserSkillIds.size} skills (< ${MIN_USER_SKILLS_FOR_PRUNE}). Partial scan guard triggered.\n`
+      );
+    }
   }
 
   // ── Project agents from C:/GIT/*/.claude/agents/*.md ─────────────────

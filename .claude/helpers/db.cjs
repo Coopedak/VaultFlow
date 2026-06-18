@@ -3413,8 +3413,8 @@ function getBrainGraph(opts) {
     if (addNode(`session:${r.id}`, 'session', `${r.project || '?'} ${String(r.started_at).slice(0,10)}`, r.edits))
       if (r.project) { addNode(`project:${r.project}`, 'project', r.project, 1); addEdge(`session:${r.id}`, `project:${r.project}`, 'belongs', 1); }
   }
-  // hub files by edit frequency
-  for (const r of q(`SELECT file_path, project, COUNT(*) n FROM edit_events GROUP BY file_path ORDER BY n DESC LIMIT 15`)) {
+  // hub files by edit frequency — exclude WAL/SHM journals that pollute the graph
+  for (const r of q(`SELECT file_path, project, COUNT(*) n FROM edit_events WHERE file_path NOT LIKE '%.wal' AND file_path NOT LIKE '%.duckdb.wal' AND file_path NOT LIKE '%.db-wal' AND file_path NOT LIKE '%.db-shm' GROUP BY file_path ORDER BY n DESC LIMIT 15`)) {
     const base = String(r.file_path).split(/[/\\]/).pop();
     if (addNode(`file:${r.file_path}`, 'file', base, r.n) && r.project) {
       addNode(`project:${r.project}`, 'project', r.project, 1);
@@ -3526,7 +3526,14 @@ function getBrainNote(id) {
       if (ss) {
         const mins = ss.duration_ms ? Math.round(ss.duration_ms / 60000) : 0;
         note.meta.push({ k: 'project', v: proj }, { k: 'duration', v: `${mins}m` }, { k: 'when', v: ss.summary_at || (s && s.started_at) || '—' });
-        const files = String(ss.top_files || '').split(/[,;]+/).map(x => x.trim()).filter(Boolean);
+        // top_files is stored as JSON.stringify([...]) by writeSessionSummary.
+        // Parse it properly; fall back to comma/semicolon split for any legacy plain strings.
+        let files = [];
+        try { files = JSON.parse(ss.top_files || '[]'); } catch (_) {
+          files = String(ss.top_files || '').split(/[,;]+/).map(x => x.trim()).filter(Boolean);
+        }
+        // Strip any stray JSON punctuation that could appear in legacy plain-string values.
+        files = files.map(f => String(f).replace(/^["'\[]+|["'\]]+$/g, '').trim()).filter(Boolean);
         note.body = (ss.patterns ? `Patterns: ${ss.patterns}\n\n` : '') + (files.length ? `Files touched:\n${files.map(f => `- ${f}`).join('\n')}` : 'No summary recorded.');
       } else if (s) {
         note.meta.push({ k: 'project', v: proj }, { k: 'edits', v: s.edits }, { k: 'when', v: s.started_at });

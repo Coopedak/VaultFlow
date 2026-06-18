@@ -18,6 +18,29 @@
 const fs   = require('fs');
 const path = require('path');
 
+// ── excluded path prefixes (loaded once from config) ─────────────────────
+// Prevents snapshot copies (D:/vaultflow) from polluting the code graph.
+// Falls back to a hardcoded default so the guard works even without config.
+let _excludePrefixes = null; // null = not yet loaded
+
+function getExcludePrefixes() {
+  if (_excludePrefixes !== null) return _excludePrefixes;
+  try {
+    const yaml      = require('js-yaml');
+    const cfgPath   = require('../../config/resolve.cjs');
+    const cfg       = fs.existsSync(cfgPath) ? yaml.load(fs.readFileSync(cfgPath, 'utf8')) : {};
+    const raw       = (cfg.paths && cfg.paths.exclude_index_prefixes) || [];
+    // Normalize to forward-slash, lowercase for case-insensitive compare.
+    _excludePrefixes = (Array.isArray(raw) ? raw : [raw])
+      .filter(Boolean)
+      .map(p => String(p).replace(/\\/g, '/').toLowerCase());
+  } catch (_) {
+    // If config can't be loaded, default to blocking the known snapshot path.
+    _excludePrefixes = ['d:/vaultflow'];
+  }
+  return _excludePrefixes;
+}
+
 const SOURCE_EXTS = new Set([
   '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs',
   '.cs',
@@ -38,6 +61,10 @@ function shouldIndex(filePath) {
   if (!filePath) return false;
   const norm = filePath.replace(/\\/g, '/');
   const low  = norm.toLowerCase();
+  // Excluded path prefixes — snapshot copies, external mirrors, etc.
+  for (const prefix of getExcludePrefixes()) {
+    if (low.startsWith(prefix)) return false;
+  }
   if (norm.includes('/node_modules/')) return false;
   if (norm.includes('/.git/')) return false;
   if (norm.includes('/dist/') || norm.includes('/build/') || norm.includes('/bin/') || norm.includes('/obj/')) return false;
