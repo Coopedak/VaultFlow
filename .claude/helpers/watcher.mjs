@@ -134,6 +134,8 @@ const IGNORE_PATTERNS = [
   /\.db$/,
   /\.db-shm$/,
   /\.db-wal$/,
+  /\.duckdb\.wal$/,
+  /\.wal$/,
   /\.pid$/,
   /\.log$/,
   /\.png$/,
