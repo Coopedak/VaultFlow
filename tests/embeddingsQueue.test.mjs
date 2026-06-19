@@ -98,9 +98,15 @@ test('orphan purge deletes embeddings whose source row is gone, keeps live ones'
 
 // ── unembedded-symbol selection (drives backfillUnembeddedSymbols) ────────────
 
-test('unembedded-symbol selection: hashed-but-unembedded only; skips covered + null-hash', () => {
+test('unembedded-symbol selection: hashed-but-unembedded only; skips covered + null-hash', (t) => {
   freshDb();
   const conn = db.raw();
+  // Portable across the portable-brain snapshot copies: older copies (e.g. D:)
+  // predate the symbol-embedding subsystem. Skip rather than fail where the
+  // symbol_embeddings table / code_symbols.content_hash column is absent.
+  const hasTable = conn.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='symbol_embeddings'").get();
+  const hasHash = conn.prepare('PRAGMA table_info(code_symbols)').all().some(c => c.name === 'content_hash');
+  if (!hasTable || !hasHash) { t.skip('symbol-embedding subsystem not present in this copy'); return; }
   const insSym = conn.prepare(`INSERT INTO code_symbols (file,project,lang,kind,name,line,indexed_at,content_hash) VALUES (?,?,?,?,?,?,?,?)`);
   insSym.run('/a.js', 'p', 'js', 'function', 'covered', 1, 't', 'h1');  // already embedded
   insSym.run('/a.js', 'p', 'js', 'function', 'missing', 2, 't', 'h2');  // hashed, unembedded -> selected
