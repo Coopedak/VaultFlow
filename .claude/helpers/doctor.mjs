@@ -98,23 +98,39 @@ try {
   }
 } catch (e) { fail('nightly_heartbeat', 'err', e.message); }
 
-// 8. Embedding coverage
+// 8. Embedding coverage of LIVE entries + orphan-bloat detection.
+//    A raw emb/total ratio can exceed 100% when source rows are deleted but
+//    their vectors linger (stale-memory cleanup, chat re-import churn). Counting
+//    those as "coverage" hid a 29k-orphan / 4.8x-bloat problem as a green check.
 try {
-  const total = conn.prepare('SELECT COUNT(*) AS n FROM memory_entries').get().n;
-  const emb   = conn.prepare('SELECT COUNT(*) AS n FROM memory_embeddings').get().n;
-  const pct = total > 0 ? Math.round(100 * emb / total) : 0;
-  if (pct >= 95) ok('embedding_coverage', `${pct}%`, `${emb}/${total}`);
-  else if (pct >= 50) warn('embedding_coverage', `${pct}%`, `${emb}/${total} — run \`npm run embeddings:backfill\``);
-  else if (total === 0) ok('embedding_coverage', 'n/a', 'no memory entries yet');
-  else warn('embedding_coverage', `${pct}%`, `${emb}/${total} — likely transformers not installed`);
+  const total   = conn.prepare('SELECT COUNT(*) AS n FROM memory_entries').get().n;
+  const emb     = conn.prepare('SELECT COUNT(*) AS n FROM memory_embeddings').get().n;
+  const orphans = conn.prepare('SELECT COUNT(*) AS n FROM memory_embeddings me LEFT JOIN memory_entries m ON m.id = me.memory_id WHERE m.id IS NULL').get().n;
+  const live = emb - orphans;
+  const pct  = total > 0 ? Math.round(100 * live / total) : 0;
+  if (total === 0) ok('embedding_coverage', 'n/a', 'no memory entries yet');
+  else if (orphans > 1000 && orphans >= total) fail('embedding_coverage', `${orphans} orphans`, `${live}/${total} live — nightly purge-orphan-embeddings will clear`);
+  else if (orphans > 500) warn('embedding_coverage', `${pct}% +${orphans} orphans`, `${live}/${total} live — nightly purge-orphan-embeddings will clear`);
+  else if (pct >= 95) ok('embedding_coverage', `${pct}%`, `${live}/${total}`);
+  else if (pct >= 50) warn('embedding_coverage', `${pct}%`, `${live}/${total} — run \`npm run embeddings:backfill\``);
+  else warn('embedding_coverage', `${pct}%`, `${live}/${total} — likely transformers not installed`);
 } catch (e) { warn('embedding_coverage', 'err', e.message); }
 
-// 9. Embed queue backlog
+// 9. Embed queue backlog — age-aware. Count alone is noisy: a healthy queue
+//    fills during the day (code-graph + recorders enqueue) and drains every
+//    session-start/watcher tick (memory+prompt) and nightly (symbol). Only a
+//    queue whose OLDEST row survived a full nightly cycle (>26h) signals a stuck
+//    drainer; a large but fresh backlog is normal and will drain.
 try {
   const n = conn.prepare('SELECT COUNT(*) AS n FROM embed_queue').get().n;
   if (n === 0) ok('embed_queue', '0', 'no pending');
-  else if (n < 100) warn('embed_queue', String(n), 'will drain next session-start / watcher tick');
-  else fail('embed_queue', String(n), 'backlog growing — check watcher');
+  else {
+    const oldest = conn.prepare('SELECT MIN(queued_at) AS t FROM embed_queue').get().t;
+    const ageH = oldest ? (Date.now() - new Date(oldest).getTime()) / 3_600_000 : 0;
+    if (ageH > 26) fail('embed_queue', `${n} (oldest ${ageH.toFixed(0)}h)`, 'survived a nightly cycle — drainer stuck, check watcher');
+    else if (n >= 100) warn('embed_queue', String(n), `draining (oldest ${ageH.toFixed(1)}h)`);
+    else ok('embed_queue', String(n), `draining (oldest ${ageH.toFixed(1)}h)`);
+  }
 } catch (e) { warn('embed_queue', 'err', e.message); }
 
 // 10. Code graph size

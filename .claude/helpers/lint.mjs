@@ -127,18 +127,19 @@ function checkUnusedVaultTools(conn) {
 }
 
 function checkStaleMemory(conn) {
+  // memory_entries has no timestamp column, so "not updated in N days" can't be
+  // computed there — the old query errored and the catch silently misreported it
+  // as "table not present". The real stale signal is memory_stale, populated
+  // nightly by detectStaleMemory (entries whose source file vanished).
   let n = 0;
   try {
-    n = conn.prepare(`
-      SELECT COUNT(*) AS n FROM memory_entries
-      WHERE  updated_at < datetime('now', '-90 days')
-    `).get().n;
+    n = conn.prepare(`SELECT COUNT(*) AS n FROM memory_stale`).get().n;
   } catch (_) {
-    report(INFO, 'stale-memory', 'memory_entries table not present yet');
+    report(INFO, 'stale-memory', 'memory_stale table not present yet');
     return;
   }
   const icon = n < 50 ? PASS : WARN;
-  report(icon, 'stale-memory', `${n} memory entries not updated in 90+ days`);
+  report(icon, 'stale-memory', `${n} memory entries flagged stale (source vanished)`);
 }
 
 function checkStuckPipeline() {

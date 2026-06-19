@@ -4372,9 +4372,24 @@ function detectStaleVaultTools() {
   return { flagged, examined: rows.length, cleared };
 }
 
-function popEmbedQueue(limit = 200) {
+function popEmbedQueue(limit = 200, kinds = null) {
   if (!_db) throw new Error('db.popEmbedQueue: call initialize() first');
-  const rows = _db.prepare(`SELECT id, kind, target_id FROM embed_queue ORDER BY id LIMIT ?`).all(limit);
+  // Kind-aware pop. WHY: the queue has two independent consumers —
+  // processEmbedQueue (memory+prompt; fires every session-start + watcher tick)
+  // and processSymbolEmbedQueue (symbol; nightly only). popEmbedQueue deletes
+  // on pop, so an UNFILTERED pop lets the frequent memory/prompt drainer claim
+  // and discard symbol rows before the nightly drainer ever sees them — which
+  // froze symbol-embedding coverage at ~4%. Filtering by kind keeps each
+  // consumer in its own lane. `kinds = null` preserves the legacy all-kinds pop.
+  let rows;
+  if (Array.isArray(kinds) && kinds.length) {
+    const placeholders = kinds.map(() => '?').join(',');
+    rows = _db.prepare(
+      `SELECT id, kind, target_id FROM embed_queue WHERE kind IN (${placeholders}) ORDER BY id LIMIT ?`
+    ).all(...kinds, limit);
+  } else {
+    rows = _db.prepare(`SELECT id, kind, target_id FROM embed_queue ORDER BY id LIMIT ?`).all(limit);
+  }
   if (!rows.length) return [];
   const del = _db.prepare(`DELETE FROM embed_queue WHERE id = ?`);
   for (const r of rows) del.run(r.id);

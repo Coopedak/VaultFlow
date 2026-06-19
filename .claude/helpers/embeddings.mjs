@@ -132,7 +132,10 @@ export async function processEmbedQueue({ batchSize = 200 } = {}) {
   db.initialize(null, null);
   const conn = db.raw();
 
-  const rows = db.popEmbedQueue(batchSize);
+  // Claim ONLY memory + prompt rows — symbol rows belong to the nightly
+  // processSymbolEmbedQueue drainer. popEmbedQueue deletes on pop, so popping
+  // symbol rows here would discard them unembedded (the `else continue` below).
+  const rows = db.popEmbedQueue(batchSize, ['memory', 'prompt']);
   if (!rows.length) return { processed: 0 };
 
   const upsertMem = conn.prepare(`
@@ -189,8 +192,10 @@ export async function processSymbolEmbedQueue({ batchSize = 100 } = {}) {
   db.initialize(null, null);
   const conn = db.raw();
 
-  // Pull symbol-kind queue entries; popEmbedQueue handles delete-on-pop.
-  const rows = db.popEmbedQueue(batchSize).filter(r => r.kind === 'symbol');
+  // Pull ONLY symbol-kind queue entries; popEmbedQueue handles delete-on-pop.
+  // Passing the kind filter (rather than popping all + .filter) means we never
+  // claim-and-discard memory/prompt rows that processEmbedQueue owns.
+  const rows = db.popEmbedQueue(batchSize, ['symbol']);
   if (!rows.length) return { processed: 0 };
 
   // For each queue row (target_id = code_symbols.rowid), read symbol body
@@ -225,6 +230,52 @@ export async function processSymbolEmbedQueue({ batchSize = 100 } = {}) {
     }
   }
   return { processed, failed, batch: rows.length };
+}
+
+/**
+ * Backfill loop: embed code symbols that already have a content_hash but no
+ * symbol_embeddings row yet. WHY: code-graph only enqueues symbols whose hash
+ * CHANGED, so symbols indexed before they were ever edited never got enqueued —
+ * which left semanticSymbolSearch stuck at ~4% coverage. This climbs coverage a
+ * bounded batch per night without re-indexing files. Enqueue + drain happen in
+ * one pass so the code_symbols.rowid we enqueue stays valid (rowids change when
+ * a file is re-indexed). Relies on popEmbedQueue being kind-filtered so the
+ * memory/prompt drainer can't claim-and-discard these symbol rows mid-pass.
+ *
+ * @param {object} opts
+ * @param {number} opts.maxSymbols  Cap enqueued per call (default 3000 — ~100s nightly)
+ * @param {number} opts.embedBatch  Symbols embedded per drain iteration (default 500)
+ */
+export async function backfillUnembeddedSymbols({ maxSymbols = 3000, embedBatch = 500 } = {}) {
+  const db = require('./db.cjs');
+  db.initialize(null, null);
+  const conn = db.raw();
+
+  const missing = conn.prepare(`
+    SELECT cs.rowid AS rid
+      FROM code_symbols cs
+      LEFT JOIN symbol_embeddings se
+        ON se.file = cs.file AND se.symbol_name = cs.name AND se.symbol_kind = cs.kind
+     WHERE se.file IS NULL
+       AND cs.content_hash IS NOT NULL
+     LIMIT ?
+  `).all(maxSymbols);
+  if (!missing.length) return { enqueued: 0, processed: 0, failed: 0, skipped: 'fully-covered' };
+
+  const enq = conn.prepare(`INSERT OR IGNORE INTO embed_queue (kind, target_id, queued_at) VALUES ('symbol', ?, ?)`);
+  const now = new Date().toISOString();
+  let enqueued = 0;
+  for (const m of missing) { try { enq.run(m.rid, now); enqueued++; } catch (_) {} }
+
+  let processed = 0, failed = 0;
+  while (true) {
+    const r = await processSymbolEmbedQueue({ batchSize: embedBatch });
+    processed += r.processed || 0;
+    failed += r.failed || 0;
+    if (!r.processed && !r.failed) break;
+    if ((r.batch || 0) < embedBatch) break;
+  }
+  return { enqueued, processed, failed };
 }
 
 /**

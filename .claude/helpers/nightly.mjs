@@ -283,6 +283,45 @@ results.symbolEmbeds = await step('symbol-embeddings-drain', async () => {
   }
 });
 
+// 8e2b. symbol-embedding backfill — embed symbols that have a content_hash but
+//       were never enqueued. code-graph only enqueues CHANGED symbols, so
+//       historical symbols sat unembedded and semanticSymbolSearch was stuck at
+//       ~4% coverage. Bounded per night (carries over until fully covered) so
+//       the nightly run stays short. Depends on the kind-filtered popEmbedQueue.
+results.symbolBackfill = await step('symbol-embedding-backfill', async () => {
+  if (DRY_RUN) return { skipped: true };
+  try {
+    const m = await import('./embeddings.mjs');
+    return await m.backfillUnembeddedSymbols({ maxSymbols: 3000, embedBatch: 500 });
+  } catch (err) {
+    return { skipped: err.message.includes('@xenova') ? 'transformers-not-installed' : err.message };
+  }
+});
+
+// 8e3. embedding hygiene — delete orphaned vectors whose source row was
+//      removed (stale-memory cleanup, chat re-import churn, prompt pruning).
+//      Without this the *_embeddings tables grow unbounded: memory_embeddings
+//      had 29k orphans (4.8x the live entry count), bloating the DB file and
+//      making the coverage stat meaningless. A full VACUUM is the only way to
+//      shrink the file (auto_vacuum is OFF); gate it on real reclaimable space
+//      so we never rewrite a 700MB DB on a no-op night.
+results.embedHygiene = await step('purge-orphan-embeddings', () => {
+  if (DRY_RUN) return { skipped: true };
+  const conn = db.raw();
+  const mem = conn.prepare(`DELETE FROM memory_embeddings WHERE memory_id NOT IN (SELECT id FROM memory_entries)`).run().changes || 0;
+  const prm = conn.prepare(`DELETE FROM prompt_embeddings WHERE prompt_id NOT IN (SELECT id FROM prompts)`).run().changes || 0;
+  const out = { memory_orphans: mem, prompt_orphans: prm };
+  let freelist = 0;
+  try { freelist = conn.prepare('PRAGMA freelist_count').get().freelist_count || 0; } catch (_) {}
+  out.freelist_pages = freelist;
+  // ~10k pages * 4KB ≈ 40MB reclaimable — worth a rewrite, cheap enough nightly.
+  if (mem + prm > 0 || freelist > 10000) {
+    try { conn.exec('VACUUM'); out.vacuumed = true; }
+    catch (err) { out.vacuum_error = err.message; }
+  }
+  return out;
+});
+
 // 8f. vault-librarian sync — reconcile dictionary, vault_tools, vault_agents
 results.librarian = await step('vault-librarian-sync', async () => {
   if (DRY_RUN) return { skipped: true };
@@ -416,12 +455,21 @@ results.routingAudit = await step('routing-coverage-audit', () => {
   // recent prompts (excluding tiny/empty ones)
   let prompts;
   try {
+    // Exclude agent-internal prompts (subagent task/system prompts, health
+    // pings). They aren't user routing decisions, but they BM25-match an agent
+    // strongly and never "fire" it within 5 min — which pinned miss_rate at
+    // ~1.0 and made the metric useless. Filtering them lets the rate measure
+    // genuine user-prompt routing coverage.
     prompts = conn.prepare(`
       SELECT id, prompt_text, timestamp
       FROM prompts
       WHERE timestamp > datetime('now', '-24 hours')
         AND prompt_text IS NOT NULL
         AND LENGTH(prompt_text) >= 20
+        AND prompt_text NOT LIKE 'You are %'
+        AND prompt_text NOT LIKE 'Reply with exactly%'
+        AND prompt_text NOT LIKE 'Your job is %'
+        AND prompt_text NOT LIKE '<%'
       ORDER BY timestamp DESC
       LIMIT 200
     `).all();

@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    # node:sqlite (the hot store) is a Windows-developed, built-in module; run the
+    # suite on the same OS it ships on.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # The test suite uses the built-in node:sqlite module; @duckdb/node-api is
+      # lazy-loaded and node-pty is TUI-only — neither is needed here. --ignore-scripts
+      # skips the native postinstall builds (slow/flaky on Windows), per CLAUDE.md.
+      - name: Install dependencies
+        run: npm install --ignore-scripts
+
+      - name: Run tests
+        run: npm test
