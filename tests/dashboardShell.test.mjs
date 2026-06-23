@@ -32,6 +32,18 @@ test('vendored chart + cytoscape assets are served', async () => {
   } finally { srv.close(); }
 });
 
+test('command-center.js and charts.js are served with non-trivial body', async () => {
+  const { srv, base } = await boot();
+  try {
+    for (const f of ['/js/command-center.js', '/js/charts.js']) {
+      const r = await fetch(base + f);
+      assert.equal(r.status, 200, `${f} should be 200`);
+      const body = await r.text();
+      assert.ok(body.length > 500, `${f} should have non-trivial body`);
+    }
+  } finally { srv.close(); }
+});
+
 test('/v2 shell serves the grouped sidebar and module entry', async () => {
   const { srv, base } = await boot();
   try {
