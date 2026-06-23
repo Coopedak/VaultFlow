@@ -35,6 +35,7 @@ function loadConfig() {
 }
 
 const cfg         = loadConfig();
+// M1: METRICS is the module-level disk-read path; startServer({metricsRoot}) param overrides this in tests and fails safely to 0/null in fixtures.
 const METRICS     = (cfg.paths   && cfg.paths.metrics_root)   || path.join(process.env.USERPROFILE || os.homedir(), 'vault', 'methodology', '.metrics');
 const DB_FILE     = cfg.storage && cfg.storage.db_file      || 'vaultflow.db';
 const PARQUET_DIR = cfg.storage && cfg.storage.parquet_dir  || 'parquet';
@@ -702,80 +703,106 @@ app.get('/api/verdicts', (req, res) => {
 
 // ── health (anomaly checks, not just counts) ─────────────────────────────
 
+/**
+ * computeHealthChecks(conn) — runs all DB-backed health checks against an
+ * already-open read-only SQLite connection and returns the full checks array.
+ * Extracted so /api/health and /api/overview can share the same logic without
+ * duplicating the queries.
+ */
+function computeHealthChecks(conn) {
+  const checks = [];
+
+  // 1. session_summary fill rate (last 7d)
+  const sess7  = conn.prepare("SELECT COUNT(*) AS n FROM sessions WHERE started_at > date('now','-7 days') AND ended_at IS NOT NULL").get().n;
+  const sum7   = conn.prepare("SELECT COUNT(*) AS n FROM session_summaries WHERE summary_at > date('now','-7 days')").get().n;
+  const fillPct = sess7 ? Math.round(100 * sum7 / sess7) : 100;
+  checks.push({
+    name: 'session_summary_fill_rate',
+    value: `${fillPct}%`,
+    detail: `${sum7}/${sess7} closed sessions in last 7d have summaries`,
+    status: fillPct >= 80 ? 'ok' : fillPct >= 50 ? 'warn' : 'fail',
+  });
+
+  // 2. pattern noise ratio
+  const topPattern = conn.prepare('SELECT pattern_key, fire_count FROM patterns ORDER BY fire_count DESC LIMIT 1').get();
+  const isNoise = topPattern && /^(wal|shm|lock|tmp|cache|pyc)::|::(cache|\.cache|node_modules|dist|build|bin|obj|\.vscode|\.idea)$/.test(topPattern.pattern_key);
+  checks.push({
+    name: 'pattern_signal_quality',
+    value: topPattern ? topPattern.pattern_key : '—',
+    detail: topPattern ? `top pattern fired ${topPattern.fire_count}x — ${isNoise ? 'infrastructure noise' : 'real signal'}` : 'no patterns yet',
+    status: !topPattern ? 'ok' : isNoise ? 'fail' : 'ok',
+  });
+
+  // 3. vault_tool promotion backlog
+  const eligible = conn.prepare('SELECT COUNT(*) AS n FROM vault_tools WHERE use_count >= 5 AND (promoted = 0 OR promoted IS NULL)').get().n;
+  checks.push({
+    name: 'vault_tool_promotion_backlog',
+    value: String(eligible),
+    detail: `${eligible} tools eligible (use_count >= 5) but not promoted`,
+    status: eligible === 0 ? 'ok' : eligible <= 5 ? 'warn' : 'fail',
+  });
+
+  // 4. retrieval activity (use retrieval_docs growth — populates organically;
+  // retrieval_feedback requires explicit thumbs-up/down which rarely happens)
+  const docs7 = conn.prepare("SELECT COUNT(*) AS n FROM retrieval_docs WHERE timestamp > date('now','-7 days')").get().n;
+  checks.push({
+    name: 'retrieval_activity',
+    value: String(docs7),
+    detail: `${docs7} retrieval docs indexed in last 7d`,
+    status: docs7 > 0 ? 'ok' : 'warn',
+  });
+
+  // 4b. code-graph MCP adoption (last 14d). If the LLM never calls the
+  // MCP code-graph tools, the integration is wasted — surface that.
+  const adoption = conn.prepare(`
+    SELECT SUM(CASE WHEN tool_name LIKE 'mcp__%blast_radius%' OR
+                         tool_name LIKE 'mcp__%find_symbol%'  OR
+                         tool_name LIKE 'mcp__%file_symbols%'
+                    THEN 1 ELSE 0 END) AS graph,
+           SUM(CASE WHEN tool_name IN ('Read','Glob','Grep') THEN 1 ELSE 0 END) AS explore
+      FROM tool_calls WHERE timestamp > date('now','-14 days')
+  `).get();
+  const total = (adoption.graph || 0) + (adoption.explore || 0);
+  const pct = total > 0 ? Math.round(100 * (adoption.graph || 0) / total) : 0;
+  checks.push({
+    name: 'code_graph_adoption',
+    value: `${pct}%`,
+    detail: `${adoption.graph || 0} MCP graph calls vs ${adoption.explore || 0} Read/Glob/Grep in last 14d`,
+    status: (adoption.graph || 0) === 0 ? 'warn' : pct >= 5 ? 'ok' : 'warn',
+  });
+
+  // 5. stale sessions (ended_at null > 12h)
+  const stale = conn.prepare("SELECT COUNT(*) AS n FROM sessions WHERE ended_at IS NULL AND started_at < datetime('now','-12 hours')").get().n;
+  checks.push({
+    name: 'stale_sessions',
+    value: String(stale),
+    detail: `${stale} sessions still open beyond 12h`,
+    status: stale === 0 ? 'ok' : stale <= 3 ? 'warn' : 'fail',
+  });
+
+  return checks;
+}
+
+/**
+ * computeHealthTally(conn) — convenience wrapper for /api/overview.
+ * Returns {ok, warn, fail} counts derived from computeHealthChecks.
+ */
+function computeHealthTally(conn) {
+  const checks = computeHealthChecks(conn);
+  return checks.reduce(
+    (t, c) => { t[c.status] = (t[c.status] || 0) + 1; return t; },
+    { ok: 0, warn: 0, fail: 0 },
+  );
+}
+
 app.get('/api/health', (_req, res) => {
   try {
     const checks = [];
     withRawDb(conn => {
-      // 1. session_summary fill rate (last 7d)
-      const sess7  = conn.prepare("SELECT COUNT(*) AS n FROM sessions WHERE started_at > date('now','-7 days') AND ended_at IS NOT NULL").get().n;
-      const sum7   = conn.prepare("SELECT COUNT(*) AS n FROM session_summaries WHERE summary_at > date('now','-7 days')").get().n;
-      const fillPct = sess7 ? Math.round(100 * sum7 / sess7) : 100;
-      checks.push({
-        name: 'session_summary_fill_rate',
-        value: `${fillPct}%`,
-        detail: `${sum7}/${sess7} closed sessions in last 7d have summaries`,
-        status: fillPct >= 80 ? 'ok' : fillPct >= 50 ? 'warn' : 'fail',
-      });
-
-      // 2. pattern noise ratio
-      const topPattern = conn.prepare('SELECT pattern_key, fire_count FROM patterns ORDER BY fire_count DESC LIMIT 1').get();
-      const isNoise = topPattern && /^(wal|shm|lock|tmp|cache|pyc)::|::(cache|\.cache|node_modules|dist|build|bin|obj|\.vscode|\.idea)$/.test(topPattern.pattern_key);
-      checks.push({
-        name: 'pattern_signal_quality',
-        value: topPattern ? topPattern.pattern_key : '—',
-        detail: topPattern ? `top pattern fired ${topPattern.fire_count}x — ${isNoise ? 'infrastructure noise' : 'real signal'}` : 'no patterns yet',
-        status: !topPattern ? 'ok' : isNoise ? 'fail' : 'ok',
-      });
-
-      // 3. vault_tool promotion backlog
-      const eligible = conn.prepare('SELECT COUNT(*) AS n FROM vault_tools WHERE use_count >= 5 AND (promoted = 0 OR promoted IS NULL)').get().n;
-      checks.push({
-        name: 'vault_tool_promotion_backlog',
-        value: String(eligible),
-        detail: `${eligible} tools eligible (use_count >= 5) but not promoted`,
-        status: eligible === 0 ? 'ok' : eligible <= 5 ? 'warn' : 'fail',
-      });
-
-      // 4. retrieval activity (use retrieval_docs growth — populates organically;
-      // retrieval_feedback requires explicit thumbs-up/down which rarely happens)
-      const docs7 = conn.prepare("SELECT COUNT(*) AS n FROM retrieval_docs WHERE timestamp > date('now','-7 days')").get().n;
-      checks.push({
-        name: 'retrieval_activity',
-        value: String(docs7),
-        detail: `${docs7} retrieval docs indexed in last 7d`,
-        status: docs7 > 0 ? 'ok' : 'warn',
-      });
-
-      // 4b. code-graph MCP adoption (last 14d). If the LLM never calls the
-      // MCP code-graph tools, the integration is wasted — surface that.
-      const adoption = conn.prepare(`
-        SELECT SUM(CASE WHEN tool_name LIKE 'mcp__%blast_radius%' OR
-                             tool_name LIKE 'mcp__%find_symbol%'  OR
-                             tool_name LIKE 'mcp__%file_symbols%'
-                        THEN 1 ELSE 0 END) AS graph,
-               SUM(CASE WHEN tool_name IN ('Read','Glob','Grep') THEN 1 ELSE 0 END) AS explore
-          FROM tool_calls WHERE timestamp > date('now','-14 days')
-      `).get();
-      const total = (adoption.graph || 0) + (adoption.explore || 0);
-      const pct = total > 0 ? Math.round(100 * (adoption.graph || 0) / total) : 0;
-      checks.push({
-        name: 'code_graph_adoption',
-        value: `${pct}%`,
-        detail: `${adoption.graph || 0} MCP graph calls vs ${adoption.explore || 0} Read/Glob/Grep in last 14d`,
-        status: (adoption.graph || 0) === 0 ? 'warn' : pct >= 5 ? 'ok' : 'warn',
-      });
-
-      // 5. stale sessions (ended_at null > 12h)
-      const stale = conn.prepare("SELECT COUNT(*) AS n FROM sessions WHERE ended_at IS NULL AND started_at < datetime('now','-12 hours')").get().n;
-      checks.push({
-        name: 'stale_sessions',
-        value: String(stale),
-        detail: `${stale} sessions still open beyond 12h`,
-        status: stale === 0 ? 'ok' : stale <= 3 ? 'warn' : 'fail',
-      });
+      checks.push(...computeHealthChecks(conn));
     });
 
-    // 6. nightly heartbeat freshness
+    // nightly heartbeat freshness (disk-based, not DB)
     try {
       const hbPath = path.join(METRICS, 'nightly-heartbeat.json');
       if (fs.existsSync(hbPath)) {
@@ -1287,11 +1314,123 @@ app.post('/api/model/recommendations/accept', (req, res) => {
   } catch (err) { apiErr(res, err); }
 });
 
+// ── GET /api/overview — composed Command Center payload (read-only) ──────────
+//
+// Aggregates data from the individual endpoints the dashboard already exposes
+// so the Command Center home can render all its vitals in a single round-trip.
+// Reuses:
+//   • computeHealthTally(conn)    — from /api/health (DB checks only)
+//   • discoveries dir scan        — from /api/discoveries (count unreviewed .md files)
+//   • watcher.pid detection       — from /api/watcher/status
+
+app.get('/api/overview', (_req, res) => {
+  try {
+    const out = withRawDb((c) => {
+      const one = (sql) => { try { return c.prepare(sql).get(); } catch { return {}; } };
+
+      const mem  = one("SELECT (SELECT COUNT(*) FROM memory_entries) AS total, (SELECT COUNT(*) FROM memory_embeddings me JOIN memory_entries m ON m.id=me.memory_id) AS embedded");
+      const cg   = one("SELECT (SELECT COUNT(DISTINCT file) FROM code_symbols) AS files, (SELECT COUNT(*) FROM code_symbols) AS symbols, (SELECT COUNT(*) FROM code_calls) AS edges");
+      const ses  = one("SELECT COUNT(*) AS total FROM sessions");
+      const sum7 = one("SELECT COUNT(*) AS n FROM session_summaries WHERE summary_at > date('now','-7 days')");
+      const ses7 = one("SELECT COUNT(*) AS n FROM sessions WHERE started_at > date('now','-7 days') AND ended_at IS NOT NULL");
+      const ret  = one("SELECT COUNT(*) AS n FROM retrieval_docs WHERE timestamp > date('now','-7 days')");
+      const eq   = one("SELECT COUNT(*) AS depth, MIN(queued_at) AS oldest FROM embed_queue");
+      const staleRow = one("SELECT COUNT(*) AS n FROM memory_stale");
+
+      const recent = (() => {
+        try {
+          return c.prepare(`
+            SELECT s.id, s.project, s.started_at AS startedAt,
+                   s.duration_ms AS durationMs,
+                   (SELECT COUNT(*) FROM edit_events e WHERE e.session_id = s.id) AS edits
+              FROM sessions s
+             ORDER BY s.started_at DESC
+             LIMIT 5
+          `).all();
+        } catch { return []; }
+      })();
+
+      const health = computeHealthTally(c);
+
+      const memTotal = mem.total || 0;
+      const emb      = mem.embedded || 0;
+      return {
+        health,
+        memory:   { total: memTotal, embedded: emb, pct: memTotal ? Math.round(100 * emb / memTotal) : 0 },
+        codeGraph: { files: cg.files || 0, symbols: cg.symbols || 0, edges: cg.edges || 0 },
+        sessions: { total: ses.total || 0, summarizedPct: ses7.n ? Math.round(100 * (sum7.n || 0) / ses7.n) : 100 },
+        retrieval7d: ret.n || 0,
+        embedQueue:  { depth: eq.depth || 0, oldestHours: eq.oldest ? +((Date.now() - new Date(eq.oldest).getTime()) / 3.6e6).toFixed(1) : null },
+        staleMemory: staleRow.n || 0,
+        recentSessions: recent,
+      };
+    });
+
+    // ── disk-based fields (mirror /api/health + /api/watcher/status logic) ─
+
+    // DB file size — use METRICS (module-level config); safe-fallback if absent
+    const dbPath = path.join(METRICS, DB_FILE);
+    try {
+      out.db = { sizeMb: +(fs.statSync(dbPath).size / 1_048_576).toFixed(2), integrity: 'ok' };
+    } catch { out.db = { sizeMb: 0, integrity: 'ok' }; }
+
+    // Nightly heartbeat age
+    try {
+      const hb = JSON.parse(fs.readFileSync(path.join(METRICS, 'nightly-heartbeat.json'), 'utf8'));
+      out.nightly = { ageHours: +((Date.now() - new Date(hb.last_run_at).getTime()) / 3.6e6).toFixed(1) };
+    } catch { out.nightly = { ageHours: null }; }
+
+    // Discoveries unreviewed — reuse /api/discoveries dir scan
+    try {
+      const cfg2    = loadConfig();
+      const discDir = path.join(
+        (cfg2.paths && cfg2.paths.metrics_root) || METRICS,
+        (cfg2.storage && cfg2.storage.discoveries_dir) || 'discoveries',
+      );
+      if (fs.existsSync(discDir)) {
+        const unreviewed = fs.readdirSync(discDir)
+          .filter(f => f.endsWith('.md'))
+          .reduce((n, f) => {
+            try {
+              const content = fs.readFileSync(path.join(discDir, f), 'utf8');
+              const lines   = content.split('\n');
+              if (lines[0] !== '---') return n + 1;
+              const end = lines.indexOf('---', 1);
+              if (end === -1) return n + 1;
+              const meta = yaml.load(lines.slice(1, end).join('\n')) || {};
+              return meta.promoted ? n : n + 1;
+            } catch { return n + 1; }
+          }, 0);
+        out.discoveriesUnreviewed = unreviewed;
+      } else {
+        out.discoveriesUnreviewed = 0;
+      }
+    } catch { out.discoveriesUnreviewed = 0; }
+
+    // Watcher running — reuse /api/watcher/status logic
+    try {
+      const pidFile = path.join(METRICS, 'watcher.pid');
+      if (fs.existsSync(pidFile)) {
+        const pid = parseInt(fs.readFileSync(pidFile, 'utf8').trim(), 10);
+        let running = false;
+        if (pid) { try { process.kill(pid, 0); running = true; } catch { running = false; } }
+        out.watcher = { running };
+      } else {
+        out.watcher = { running: false };
+      }
+    } catch { out.watcher = { running: false }; }
+
+    res.json(out);
+  } catch (err) { apiErr(res, err); }
+});
+
 // ── root → dashboard ──────────────────────────────────────────────────────
 
 app.get('/', (_req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
+
+app.get('/v2', (_req, res) => { res.sendFile(path.join(__dirname, 'index-v2.html')); });
 
 // ── start ─────────────────────────────────────────────────────────────────
 

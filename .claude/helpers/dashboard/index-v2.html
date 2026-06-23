@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>vaultflow — Synapse</title>
+  <link rel="stylesheet" href="/css/synapse.css">
+</head>
+<body>
+<div class="app">
+  <!-- ░░ sidebar ░░ -->
+  <aside class="side">
+    <div class="brand">
+      <div class="mark">v</div>
+      <div class="name">vaultflow<small>synapse</small></div>
+    </div>
+
+    <div class="nav-group">Overview</div>
+    <a class="nav-item active" href="#/command-center" data-view="command-center"><span class="ico">◎</span><span class="lbl">Command Center</span></a>
+
+    <div class="nav-group">Activity</div>
+    <a class="nav-item" href="#/activity" data-view="activity"><span class="ico">▤</span><span class="lbl">Sessions</span></a>
+    <a class="nav-item" href="#/activity" data-view="activity"><span class="ico">✎</span><span class="lbl">Edits</span></a>
+    <a class="nav-item" href="#/activity" data-view="activity"><span class="ico">⌘</span><span class="lbl">Tool Calls</span></a>
+    <a class="nav-item" href="#/activity" data-view="activity"><span class="ico">›_</span><span class="lbl">Prompts</span></a>
+
+    <div class="nav-group">Brain</div>
+    <a class="nav-item" href="#/brain" data-view="brain"><span class="ico">🧠</span><span class="lbl">Graph</span></a>
+    <a class="nav-item" href="#/brain" data-view="brain"><span class="ico">◈</span><span class="lbl">Memory</span></a>
+    <a class="nav-item" href="#/brain" data-view="brain"><span class="ico">≡</span><span class="lbl">Dictionary</span></a>
+    <a class="nav-item" href="#/brain" data-view="brain"><span class="ico">✦</span><span class="lbl">Discoveries</span></a>
+
+    <div class="nav-group">Code</div>
+    <a class="nav-item" href="#/code" data-view="code"><span class="ico">⊹</span><span class="lbl">Code Graph</span></a>
+    <a class="nav-item" href="#/code" data-view="code"><span class="ico">⇄</span><span class="lbl">Flows</span></a>
+    <a class="nav-item" href="#/code" data-view="code"><span class="ico">▦</span><span class="lbl">Stacks</span></a>
+
+    <div class="nav-group">Learning</div>
+    <a class="nav-item" href="#/learning" data-view="learning"><span class="ico">⟲</span><span class="lbl">Patterns</span></a>
+    <a class="nav-item" href="#/learning" data-view="learning"><span class="ico">◬</span><span class="lbl">Agents</span></a>
+
+    <div class="nav-group">System</div>
+    <a class="nav-item" href="#/system" data-view="system"><span class="ico">♥</span><span class="lbl">Health</span></a>
+    <a class="nav-item" href="#/system" data-view="system"><span class="ico">⚙</span><span class="lbl">Control</span></a>
+  </aside>
+
+  <!-- ░░ main ░░ -->
+  <main class="main"><div id="view"></div></main>
+</div>
+
+<script type="module" src="/js/core.js"></script>
+<script type="module" src="/js/command-center.js"></script>
+</body>
+</html>

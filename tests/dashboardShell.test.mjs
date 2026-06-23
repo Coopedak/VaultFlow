@@ -1,0 +1,59 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { startServer } from '../.claude/helpers/dashboard/server.mjs';
+
+async function boot() {
+  const srv = startServer({ port: 0 });
+  await new Promise(r => srv.on('listening', r));
+  const port = srv.address().port;
+  return { srv, base: `http://127.0.0.1:${port}` };
+}
+
+test('synapse.css is served with the committed tokens', async () => {
+  const { srv, base } = await boot();
+  try {
+    const r = await fetch(base + '/css/synapse.css');
+    assert.equal(r.status, 200);
+    const css = await r.text();
+    assert.match(css, /--ground:\s*#0B0E1A/i);
+    assert.match(css, /--accent:\s*#34E1FF/i);
+  } finally { srv.close(); }
+});
+
+test('vendored chart + cytoscape assets are served', async () => {
+  const { srv, base } = await boot();
+  try {
+    for (const f of ['/vendor/chart.umd.min.js', '/vendor/cytoscape.min.js']) {
+      const r = await fetch(base + f);
+      assert.equal(r.status, 200, `${f} should be 200`);
+      const body = await r.text();
+      assert.ok(body.length > 1000, `${f} should have real content`);
+    }
+  } finally { srv.close(); }
+});
+
+test('command-center.js and charts.js are served with non-trivial body', async () => {
+  const { srv, base } = await boot();
+  try {
+    for (const f of ['/js/command-center.js', '/js/charts.js']) {
+      const r = await fetch(base + f);
+      assert.equal(r.status, 200, `${f} should be 200`);
+      const body = await r.text();
+      assert.ok(body.length > 500, `${f} should have non-trivial body`);
+    }
+  } finally { srv.close(); }
+});
+
+test('/v2 shell serves the grouped sidebar and module entry', async () => {
+  const { srv, base } = await boot();
+  try {
+    const r = await fetch(base + '/v2');
+    assert.equal(r.status, 200);
+    const html = await r.text();
+    for (const g of ['Command Center','Activity','Brain','Code','Learning','System'])
+      assert.ok(html.includes(g), `sidebar missing group: ${g}`);
+    assert.match(html, /<link[^>]+css\/synapse\.css/);
+    assert.match(html, /<script[^>]+type="module"[^>]+js\/core\.js/);
+    assert.match(html, /id="view"/);
+  } finally { srv.close(); }
+});
