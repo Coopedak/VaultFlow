@@ -9,6 +9,17 @@ async function boot() {
   return { srv, base: `http://127.0.0.1:${port}` };
 }
 
+test('synapse.css is served with the committed tokens', async () => {
+  const { srv, base } = await boot();
+  try {
+    const r = await fetch(base + '/css/synapse.css');
+    assert.equal(r.status, 200);
+    const css = await r.text();
+    assert.match(css, /--ground:\s*#0B0E1A/i);
+    assert.match(css, /--accent:\s*#34E1FF/i);
+  } finally { srv.close(); }
+});
+
 test('vendored chart + cytoscape assets are served', async () => {
   const { srv, base } = await boot();
   try {
