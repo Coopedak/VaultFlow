@@ -194,7 +194,7 @@ function render(o) {
       <div class="tile">
         <div class="t-label">${led('ok')}Sessions</div>
         <div class="t-val">${sesTot}</div>
-        <div class="t-sub">${sesPct}% summarized · all time</div>
+        <div class="t-sub">${sesPct}% summarized · last 7d</div>
         ${flatSpark('#34E1FF')}
       </div>
       <div class="tile">
