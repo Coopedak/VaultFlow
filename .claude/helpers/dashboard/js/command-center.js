@@ -182,7 +182,7 @@ function render(o) {
       <div class="tile">
         <div class="t-label">${led(memLed)}Memory</div>
         <div class="t-val">${F.fmtNum(o.memory?.total ?? 0)}</div>
-        <div class="t-sub">${memPct}% embedded · ${F.fmtNum(o.memory?.total - o.memory?.embedded || 0)} pending</div>
+        <div class="t-sub">${memPct}% embedded · ${F.fmtNum((o.memory?.total ?? 0) - (o.memory?.embedded ?? 0))} pending</div>
         ${flatSpark('#34E1FF')}
       </div>
       <div class="tile">
@@ -345,22 +345,35 @@ function startPulse(canvas) {
     frame();
   }
 
-  window.addEventListener('resize', () => {
+  // Named resize handler for proper cleanup
+  function onResize() {
     size();
     build();
     if (reduce) frame(); // redraw static frame at new size
-  });
+  }
+
+  window.addEventListener('resize', onResize);
 
   init();
 
-  // Return stop handle so the view can clean up if needed.
-  return () => { if (rafId) cancelAnimationFrame(rafId); };
+  // Return cleanup function that cancels rAF and removes resize listener
+  return () => {
+    if (rafId) cancelAnimationFrame(rafId);
+    window.removeEventListener('resize', onResize);
+  };
 }
 
 // ── view registration ─────────────────────────────────────────────────────
 
+let _ccCleanup = null;
+
 registerView('command-center', async (el) => {
   const o = await api('/api/overview');
   el.innerHTML = render(o);
-  startPulse(el.querySelector('#pulse'));
+  if (_ccCleanup) {
+    _ccCleanup();
+    _ccCleanup = null;
+  }
+  const canvas = el.querySelector('#pulse');
+  if (canvas) _ccCleanup = startPulse(canvas);
 });
