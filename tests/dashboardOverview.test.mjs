@@ -48,7 +48,7 @@ test('GET /api/overview returns the documented shape', async () => {
     assert.equal(typeof o.sessions.total,         'number');
     assert.equal(typeof o.sessions.summarizedPct, 'number');
     assert.equal(typeof o.retrieval7d, 'number');
-    assert.ok('ageHours' in o.nightly);
+    assert.ok(o.nightly.ageHours === null || typeof o.nightly.ageHours === 'number');
     assert.equal(typeof o.embedQueue.depth, 'number');
     assert.equal(typeof o.db.sizeMb,     'number');
     assert.equal(typeof o.db.integrity,  'string');
@@ -56,5 +56,9 @@ test('GET /api/overview returns the documented shape', async () => {
     assert.equal(typeof o.staleMemory,           'number');
     assert.equal(typeof o.watcher.running, 'boolean');
     assert.ok(Array.isArray(o.recentSessions));
+    // I1: Verify seeded rows flow through queries
+    assert.ok(o.sessions.total >= 1, 'seeded session must appear in total');
+    assert.ok(o.memory.total   >= 1, 'seeded memory_entry must appear in total');
+    assert.ok(Array.isArray(o.recentSessions) && o.recentSessions.length >= 1, 'seeded session must appear in recentSessions');
   } finally { srv.close(); }
 });

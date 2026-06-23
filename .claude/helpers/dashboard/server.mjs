@@ -35,6 +35,7 @@ function loadConfig() {
 }
 
 const cfg         = loadConfig();
+// M1: METRICS is the module-level disk-read path; startServer({metricsRoot}) param overrides this in tests and fails safely to 0/null in fixtures.
 const METRICS     = (cfg.paths   && cfg.paths.metrics_root)   || path.join(process.env.USERPROFILE || os.homedir(), 'vault', 'methodology', '.metrics');
 const DB_FILE     = cfg.storage && cfg.storage.db_file      || 'vaultflow.db';
 const PARQUET_DIR = cfg.storage && cfg.storage.parquet_dir  || 'parquet';
