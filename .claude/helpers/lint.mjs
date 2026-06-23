@@ -17,6 +17,7 @@
  */
 
 import { createRequire } from 'node:module';
+import { pathToFileURL } from 'node:url';
 import path              from 'node:path';
 import fs                from 'node:fs';
 import os                from 'node:os';
@@ -60,6 +61,39 @@ let hasFail = false;
 function report(icon, label, detail) {
   const pad = label.padEnd(28);
   console.log(`  ${icon}  ${pad}${detail || ''}`);
+}
+
+const ICON = { PASS, WARN, INFO, FAIL };
+
+// ── pure classifiers (exported, unit-tested) ────────────────────────────────
+// Each maps an already-computed number to a { level, detail } verdict. No DB,
+// no IO — the WARN/PASS boundaries that can silently regress live here, locked
+// by tests/lintClassifiers.test.mjs.
+
+function classifyUnusedTools(n) {
+  return { level: n < 10 ? 'PASS' : 'INFO', detail: `${n} tool(s) with use_count = 0` };
+}
+
+function classifyStaleMemory(n) {
+  return { level: n < 50 ? 'PASS' : 'WARN', detail: `${n} memory entries flagged stale (source vanished)` };
+}
+
+function classifyStuckPipeline(ageMs) {
+  const ageH = (ageMs / 3_600_000).toFixed(1);
+  return ageMs > 2 * 3_600_000
+    ? { level: 'WARN', detail: `pending-review.json is ${ageH}h old — pipeline may be stuck` }
+    : { level: 'PASS', detail: `flag exists but only ${ageH}h old` };
+}
+
+function classifyDbSize(bytes) {
+  const mb  = (bytes / 1_048_576).toFixed(2);
+  const big = bytes > 500 * 1_048_576;
+  // `npm run flush` archives to Parquet but does NOT shrink the SQLite file —
+  // only VACUUM reclaims freed pages (auto_vacuum is OFF). nightly.mjs runs a
+  // gated VACUUM when there is meaningful reclaimable space, so a large file is
+  // usually live data, not bloat. Point at the real lever, not flush.
+  const detail = `${mb} MB${big ? ' — nightly VACUUMs reclaimable space; flush only archives' : ''}`;
+  return { level: big ? 'WARN' : 'PASS', detail };
 }
 
 // ── checks ────────────────────────────────────────────────────────────────
@@ -122,8 +156,8 @@ function checkUnusedVaultTools(conn) {
     report(INFO, 'unused-vault-tools', 'vault_tools table not present yet');
     return;
   }
-  const icon = n < 10 ? PASS : INFO;
-  report(icon, 'unused-vault-tools', `${n} tool(s) with use_count = 0`);
+  const r = classifyUnusedTools(n);
+  report(ICON[r.level], 'unused-vault-tools', r.detail);
 }
 
 function checkStaleMemory(conn) {
@@ -138,8 +172,8 @@ function checkStaleMemory(conn) {
     report(INFO, 'stale-memory', 'memory_stale table not present yet');
     return;
   }
-  const icon = n < 50 ? PASS : WARN;
-  report(icon, 'stale-memory', `${n} memory entries flagged stale (source vanished)`);
+  const r = classifyStaleMemory(n);
+  report(ICON[r.level], 'stale-memory', r.detail);
 }
 
 function checkStuckPipeline() {
@@ -151,12 +185,8 @@ function checkStuckPipeline() {
   try {
     const stat  = fs.statSync(flagPath);
     const ageMs = Date.now() - stat.mtimeMs;
-    const ageH  = (ageMs / 3_600_000).toFixed(1);
-    if (ageMs > 2 * 3_600_000) {
-      report(WARN, 'stuck-pipeline', `pending-review.json is ${ageH}h old — pipeline may be stuck`);
-    } else {
-      report(PASS, 'stuck-pipeline', `flag exists but only ${ageH}h old`);
-    }
+    const r = classifyStuckPipeline(ageMs);
+    report(ICON[r.level], 'stuck-pipeline', r.detail);
   } catch (e) {
     report(FAIL, 'stuck-pipeline', e.message);
     hasFail = true;
@@ -166,10 +196,8 @@ function checkStuckPipeline() {
 function checkDbSize() {
   try {
     const { size } = fs.statSync(DB_PATH);
-    const mb       = (size / 1_048_576).toFixed(2);
-    const icon     = size > 500 * 1_048_576 ? WARN : PASS;
-    const suffix   = size > 500 * 1_048_576 ? ' — consider: npm run flush' : '';
-    report(icon, 'db-size', `${mb} MB${suffix}`);
+    const r = classifyDbSize(size);
+    report(ICON[r.level], 'db-size', r.detail);
   } catch (e) {
     report(FAIL, 'db-size', e.message);
     hasFail = true;
@@ -177,32 +205,44 @@ function checkDbSize() {
 }
 
 // ── main ──────────────────────────────────────────────────────────────────
+// Only run the linter (and exit) when executed directly. Importing this module
+// — e.g. a unit test pulling in the classifiers — must not open the DB or exit.
+const isMain = import.meta.url === pathToFileURL(process.argv[1] || '').href;
 
-console.log(`\nvaultflow lint${DO_FIX ? ' --fix' : ''}`);
-console.log('─'.repeat(44));
+if (isMain) {
+  console.log(`\nvaultflow lint${DO_FIX ? ' --fix' : ''}`);
+  console.log('─'.repeat(44));
 
-if (!fs.existsSync(DB_PATH)) {
-  console.log(`  ${WARN}  DB not found at ${DB_PATH} — nothing to lint`);
-  process.exit(0);
+  if (!fs.existsSync(DB_PATH)) {
+    console.log(`  ${WARN}  DB not found at ${DB_PATH} — nothing to lint`);
+    process.exit(0);
+  }
+
+  const conn = openDb();
+
+  try {
+    checkOrphanedSessions(conn);
+    checkDeadPatterns(conn);
+    checkUnusedVaultTools(conn);
+    checkStaleMemory(conn);
+    checkStuckPipeline();      // file-based, no conn needed
+    checkDbSize();             // file-based, no conn needed
+  } finally {
+    try { conn.close(); } catch (_) {}
+  }
+
+  console.log('─'.repeat(44));
+  if (hasFail) {
+    console.log('Result: FAIL\n');
+    process.exit(1);
+  } else {
+    console.log('Result: OK\n');
+  }
 }
 
-const conn = openDb();
-
-try {
-  checkOrphanedSessions(conn);
-  checkDeadPatterns(conn);
-  checkUnusedVaultTools(conn);
-  checkStaleMemory(conn);
-  checkStuckPipeline();      // file-based, no conn needed
-  checkDbSize();             // file-based, no conn needed
-} finally {
-  try { conn.close(); } catch (_) {}
-}
-
-console.log('─'.repeat(44));
-if (hasFail) {
-  console.log('Result: FAIL\n');
-  process.exit(1);
-} else {
-  console.log('Result: OK\n');
-}
+export {
+  classifyUnusedTools,
+  classifyStaleMemory,
+  classifyStuckPipeline,
+  classifyDbSize,
+};
