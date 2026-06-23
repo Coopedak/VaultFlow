@@ -31,3 +31,17 @@ test('vendored chart + cytoscape assets are served', async () => {
     }
   } finally { srv.close(); }
 });
+
+test('/v2 shell serves the grouped sidebar and module entry', async () => {
+  const { srv, base } = await boot();
+  try {
+    const r = await fetch(base + '/v2');
+    assert.equal(r.status, 200);
+    const html = await r.text();
+    for (const g of ['Command Center','Activity','Brain','Code','Learning','System'])
+      assert.ok(html.includes(g), `sidebar missing group: ${g}`);
+    assert.match(html, /<link[^>]+css\/synapse\.css/);
+    assert.match(html, /<script[^>]+type="module"[^>]+js\/core\.js/);
+    assert.match(html, /id="view"/);
+  } finally { srv.close(); }
+});

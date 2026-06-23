@@ -1430,6 +1430,8 @@ app.get('/', (_req, res) => {
   res.sendFile(path.join(__dirname, 'index.html'));
 });
 
+app.get('/v2', (_req, res) => { res.sendFile(path.join(__dirname, 'index-v2.html')); });
+
 // ── start ─────────────────────────────────────────────────────────────────
 
 // Boot the server on a (possibly ephemeral) port and return the http.Server so
