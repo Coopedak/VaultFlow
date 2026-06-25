@@ -18,7 +18,8 @@ function freshDb() {
     INSERT INTO memory_entries (source, title, body, tags) VALUES
       ('a.md', 'Alpha', 'Alpha links to [[Beta]] and [[Ghost]].', 't'),
       ('a.md', 'Beta',  'Beta body. <script>x</script> in text.',  't'),
-      ('a.md', 'C/D Title', 'Has a slashy title.', 't');
+      ('a.md', 'C/D Title', 'Has a slashy title.', 't'),
+      ('a.md', 'Danger <img src=x onerror=alert(1)>', 'XSS title body.', 't');
   `);
   return root;
 }
@@ -28,12 +29,12 @@ test('exportQuartz writes index, a page per note, and assets', () => {
   freshDb();
   const out = outTmp();
   const r = exportQuartz({ outDir: out });
-  assert.equal(r.pages, 3);
+  assert.equal(r.pages, 4);
   assert.ok(fs.existsSync(path.join(out, 'index.html')));
   assert.ok(fs.existsSync(path.join(out, 'assets', 'markdown-it.min.js')));
   assert.ok(fs.existsSync(path.join(out, 'assets', 'quartz.css')));
   const htmls = fs.readdirSync(out).filter(f => f.endsWith('.html'));
-  assert.equal(htmls.length, 4); // index + 3 notes
+  assert.equal(htmls.length, 5); // index + 4 notes
 });
 
 test('internal wikilinks resolve to existing relative .html files; dangling do not', () => {
@@ -62,14 +63,30 @@ test('note titles are HTML-escaped in the static page', () => {
   freshDb();
   const out = outTmp();
   exportQuartz({ outDir: out });
-  // Beta has a script tag in its BODY (rendered client-side, not asserted here);
-  // assert the page TITLE/headings never inject raw HTML — check a title with special chars.
-  const slashy = fs.readdirSync(out).filter(f => f.endsWith('.html')).map(f => fs.readFileSync(path.join(out, f), 'utf8'))
-    .find(h => h.includes('C/D Title'));
-  assert.ok(slashy, 'slashy-title page rendered');
+  const allHtmls = fs.readdirSync(out).filter(f => f.endsWith('.html')).map(f => ({
+    name: f, html: fs.readFileSync(path.join(out, f), 'utf8'),
+  }));
+
+  // Slashy title renders without breaking markup.
+  assert.ok(allHtmls.find(({ html }) => html.includes('C/D Title')), 'slashy-title page rendered');
+
   // index lists titles escaped — no raw <script> from any title
-  const idx = fs.readFileSync(path.join(out, 'index.html'), 'utf8');
+  const idx = allHtmls.find(({ name }) => name === 'index.html').html;
   assert.ok(!/<script>x<\/script>/.test(idx.replace(/<script[\s\S]*?<\/script>/g, ''))); // no stray injected script outside script blocks
+
+  // Angle-bracket title is HTML-escaped: raw `<img` must not appear outside script blocks
+  // in either the note's own page or in the index listing.
+  const dangerPage = allHtmls.find(({ html }) => html.includes('&lt;img'));
+  assert.ok(dangerPage, 'XSS title rendered as escaped HTML entity on its note page');
+  // The escaped form must be present in the <h1> and <title> regions (not raw).
+  assert.ok(dangerPage.html.includes('&lt;img src=x onerror=alert(1)&gt;'), 'full escaped title present in note page');
+  // Raw angle-bracket injection must not appear in the note page (outside script blocks).
+  const notePageNoScripts = dangerPage.html.replace(/<script[\s\S]*?<\/script>/g, '');
+  assert.ok(!/<img src=x onerror=/.test(notePageNoScripts), 'raw XSS title not present in note page markup');
+  // Index page must also escape the title.
+  assert.ok(idx.includes('&lt;img src=x onerror=alert(1)&gt;'), 'XSS title escaped in index listing');
+  const idxNoScripts = idx.replace(/<script[\s\S]*?<\/script>/g, '');
+  assert.ok(!/<img src=x onerror=/.test(idxNoScripts), 'raw XSS title not present in index markup');
 });
 
 test('slugs are deterministic and collision-safe', () => {

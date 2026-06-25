@@ -115,7 +115,7 @@ export function indexHtml(items) {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Atlas — Index</title><link rel="stylesheet" href="assets/quartz.css"></head>
-<body><main class="note"><h1>Atlas — ${items.length} notes</h1>
+<body><main class="note"><h1>Atlas — ${items.length /* trusted integer, esc() not needed */} notes</h1>
 <div class="index-list">${rows}</div></main></body></html>`;
 }
 
