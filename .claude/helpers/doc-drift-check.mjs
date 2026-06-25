@@ -180,8 +180,11 @@ export function check(repoRoot = DEFAULT_REPO_ROOT) {
       }
       if (!inHelpers) continue;
       // File listing line: leading whitespace, then a basename.ext as the
-      // first non-space token. Word boundary keeps `.json` from matching `.js`.
-      const m = line.match(/^[ \t]+([a-z0-9][a-z0-9_-]*\.(?:cjs|mjs|js))\b/i);
+      // first non-space token. Dots are allowed inside the name so multi-dot
+      // vendored libs match (e.g. `chart.umd.min.js`, `markdown-it.min.js`).
+      // The trailing `\b` after the final extension keeps `.json` from matching
+      // `.js` (the `js` in `.json` is followed by a word char, so no boundary).
+      const m = line.match(/^[ \t]+([a-z0-9][a-z0-9_.-]*\.(?:cjs|mjs|js))\b/i);
       if (m) mentioned.add(m[1].toLowerCase());
     }
 
