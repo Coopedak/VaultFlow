@@ -54,29 +54,55 @@ h1{margin:.2em 0 .6em}article :is(pre,code){background:var(--panel);border-radiu
 // ── Page generators ───────────────────────────────────────────────────────
 
 /**
+ * Preprocess a note body: replace [[wikilink]] tokens with markdown links or
+ * plain text (dangling), using the resolved href map built in Node.
+ *
+ * WHY in Node, not in the emitted client script: template literals collapse
+ * backslash escape sequences, so a regex like /\[\[…\]\]/ written inside a
+ * template string emits as /[[…]]/ in the HTML — an invalid regex that throws
+ * at runtime and leaves #vf-body empty. Doing the substitution here keeps all
+ * link logic testable and eliminates the fragile string-in-string escaping.
+ *
+ * @param {string} body — raw note body (may contain [[name]] tokens)
+ * @param {Array<{name:string, id:number, dangling:boolean}>} links
+ * @param {Map<number,string>} hrefById — id → './slug.html'
+ * @returns {string} body with [[name]] replaced
+ */
+export function preprocessBody(body, links, hrefById) {
+  // Build name→href for resolved (non-dangling) links only.
+  const hrefByName = new Map();
+  for (const l of (links || [])) {
+    if (!l.dangling && hrefById.has(l.id)) {
+      hrefByName.set(l.name.toLowerCase(), hrefById.get(l.id));
+    }
+  }
+  return String(body || '').replace(/\[\[([^\]]+)\]\]/g, (_, raw) => {
+    const name = raw.trim();
+    const href = hrefByName.get(name.toLowerCase());
+    return href ? `[${name}](${href})` : name; // dangling → plain text
+  });
+}
+
+/**
  * Generate one note page.
  *
- * WHY for the vf-data script block: wikilink hrefs are precomputed in Node
- * (testable, deterministic) and embedded as JSON. The inline script only
- * substitutes [[name]] → relative link before handing off to markdown-it.
- * This keeps XSS surface contained: body renders via markdownit({html:false}),
- * JSON data escapes `<` to `<` so an embedded `</script>` in body can't
- * break out of the data block.
+ * WHY for the vf-data script block: the body is preprocessed in Node
+ * (wikilinks already resolved to relative .html or stripped), so the client
+ * script only renders markdown — no regex, no substitution, no escape hazard.
+ * JSON data escapes `<` so an embedded `</script>` in note body can't break
+ * out of the data block.
  *
  * @param {object} note — getNote() result
  * @param {Map<number,string>} hrefById — id → './slug.html'
  * @returns {string} full HTML page
  */
 export function notePageHtml(note, hrefById) {
-  const links = (note.links || []).map(l => ({
-    name: l.name, dangling: !!l.dangling,
-    href: (!l.dangling && hrefById.has(l.id)) ? hrefById.get(l.id) : null,
-  }));
+  const processedBody = preprocessBody(note.body, note.links, hrefById);
   const backlinks = (note.backlinks || [])
     .filter(b => hrefById.has(b.id))
     .map(b => `<a href="${esc(hrefById.get(b.id))}">${esc(b.title)}</a>`).join('') || '<span class="src">None</span>';
   // Escape `<` in JSON so an embedded `</script>` in note body can't break the data block.
-  const data = JSON.stringify({ body: note.body || '', links }).replace(/</g, '\\u003c');
+  const data = JSON.stringify({ body: processedBody }).replace(/</g, '\\u003c');
   return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(note.title)} — Atlas</title>
@@ -93,12 +119,7 @@ export function notePageHtml(note, hrefById) {
 (function(){
   var data = JSON.parse(document.getElementById('vf-data').textContent);
   var md = window.markdownit({ html:false, linkify:true, breaks:false });
-  var map = new Map(data.links.filter(function(l){return l.href;}).map(function(l){return [l.name.toLowerCase(), l.href];}));
-  var pre = String(data.body).replace(/\[\[([^\]]+)\]\]/g, function(_, raw){
-    var n = raw.trim(); var h = map.get(n.toLowerCase());
-    return h ? '['+n+']('+h+')' : n;
-  });
-  document.getElementById('vf-body').innerHTML = md.render(pre);
+  document.getElementById('vf-body').innerHTML = md.render(String(data.body));
 })();
 </script></body></html>`;
 }

@@ -41,7 +41,10 @@ test('internal wikilinks resolve to existing relative .html files; dangling do n
   freshDb();
   const out = outTmp();
   exportQuartz({ outDir: out });
-  // Find Alpha's page and read its embedded link data.
+  // Find Alpha's page and inspect the preprocessed body embedded in vf-data.
+  // WHY: wikilink substitution now happens in Node (preprocessBody), so the
+  // embedded body must contain a markdown link for resolved targets and plain
+  // text for dangling ones — no [[…]] tokens or client-side regex needed.
   const files = fs.readdirSync(out).filter(f => f.endsWith('.html') && f !== 'index.html');
   let alpha = null;
   for (const f of files) {
@@ -52,11 +55,14 @@ test('internal wikilinks resolve to existing relative .html files; dangling do n
   const m = alpha.match(/<script id="vf-data" type="application\/json">([\s\S]*?)<\/script>/);
   assert.ok(m, 'embedded data block present');
   const data = JSON.parse(m[1]);
-  const beta = data.links.find(l => l.name.toLowerCase() === 'beta');
-  const ghost = data.links.find(l => l.name === 'Ghost');
-  assert.ok(beta.href && beta.href.endsWith('.html'));
-  assert.ok(fs.existsSync(path.join(out, beta.href.replace(/^\.\//, '')))); // target file exists
-  assert.equal(ghost.href, null); // dangling → no href
+  // Resolved link: [[Beta]] → [Beta](./beta.html) in the preprocessed body.
+  assert.ok(/\[Beta\]\(\.\/[^)]+\.html\)/.test(data.body), 'resolved [[Beta]] wikilink in preprocessed body');
+  // Verify the target .html file actually exists.
+  const betaHref = data.body.match(/\[Beta\]\((\.\/[^)]+\.html)\)/)[1];
+  assert.ok(fs.existsSync(path.join(out, betaHref.replace(/^\.\//, ''))), 'Beta page file exists');
+  // Dangling link: [[Ghost]] → plain text "Ghost" (no link markup, no [[…]]).
+  assert.ok(!data.body.includes('[[Ghost]]'), 'dangling [[Ghost]] removed from body');
+  assert.ok(!data.body.includes('](./ghost'), 'no spurious link for dangling Ghost');
 });
 
 test('note titles are HTML-escaped in the static page', () => {
