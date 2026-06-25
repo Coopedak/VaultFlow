@@ -1,7 +1,7 @@
 // .claude/helpers/flows-draw.mjs
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
@@ -18,6 +18,10 @@ function slug(s) {
 export function drawAllFlows({ outputDir = path.join(REPO_ROOT, 'docs', 'flows'), project = null } = {}) {
   db.initialize();
   const flows = db.listFlows(project);
+  // Per-project-dir dedup: track used basenames so slug collisions get -2, -3, …
+  // suffixes. Iteration follows db.listFlows order (stable), so a given flow maps
+  // to the same filename on every run — idempotency holds.
+  const usedNames = new Map(); // dirPath -> Set<basename-without-ext>
   let generated = 0, errors = 0;
   for (const f of flows) {
     try {
@@ -26,16 +30,26 @@ export function drawAllFlows({ outputDir = path.join(REPO_ROOT, 'docs', 'flows')
       const json = JSON.stringify(toExcalidraw(full), null, 2);
       const dir = path.join(outputDir, slug(f.project || 'unknown'));
       fs.mkdirSync(dir, { recursive: true });
-      const file = path.join(dir, slug(f.name) + '.excalidraw');
+      // Resolve a collision-free basename for this dir.
+      if (!usedNames.has(dir)) usedNames.set(dir, new Set());
+      const used = usedNames.get(dir);
+      let base = slug(f.name);
+      if (used.has(base)) {
+        let n = 2;
+        while (used.has(`${base}-${n}`)) n++;
+        base = `${base}-${n}`;
+      }
+      used.add(base);
+      const file = path.join(dir, base + '.excalidraw');
       let prev = null;
       try { prev = fs.readFileSync(file, 'utf8'); } catch { /* new file */ }
       if (prev !== json) { fs.writeFileSync(file, json); generated++; }
-    } catch { errors++; }
+    } catch (err) { errors++; process.stderr.write(`[flows:draw] error on flow ${f.id}: ${err.message}\n`); }
   }
   return { generated, errors, total: flows.length };
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && process.argv[1] === fileURLToPath(import.meta.url)) {
   const r = drawAllFlows();
   console.log(`flows:draw — ${r.generated} written / ${r.total} flows, ${r.errors} error(s)`);
 }
