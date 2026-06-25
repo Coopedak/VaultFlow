@@ -13,7 +13,7 @@ tech stack detection, tool call deduplication, and a Parquet cold archive.
 | Runtime | Node.js 22+ (CJS hooks + ESM helpers) |
 | Hot store | SQLite via node:sqlite built-in (FTS5 + WAL) |
 | Cold archive | Apache Parquet via @duckdb/node-api (Lambda architecture) |
-| Dashboard | Express 4 + Chart.js SPA (57 endpoints) |
+| Dashboard | Express 4 + Chart.js SPA (61 endpoints) |
 | AI agents | Codex CLI via `.agents/config.toml` (15 enabled) |
 | Package manager | npm |
 
@@ -148,11 +148,19 @@ vaultflow doctor                         # health audit
   mcp-server.cjs             — vaultflow MCP (Model Context Protocol) server
   dashboard/
     server.mjs               — Express API server + serves the live SPA (incl. /api/notes for Atlas)
-    index.html               — SPA shell (Brain tab + operational tabs)
-    app.js                   — Chart.js + Cytoscape dashboard logic
+    index.html               — v1 SPA shell (Brain tab + operational tabs)
+    app.js                   — v1 Chart.js + Cytoscape dashboard logic
     index-v2.html            — Synapse v2 shell (modular js/ views, served at /v2)
-    js/atlas.js              — Atlas view: Quartz-style brain notes (markdown + backlinks + local graph + search)
-    vendor/markdown-it.min.js — vendored markdown renderer (MIT), used by the Atlas view
+    js/
+      core.js                — v2 SPA core: hash router, view registry, api() fetch, mount
+      command-center.js      — v2 Command Center home view
+      charts.js              — v2 Chart.js theme defaults + sparkline/line factories
+      format.js              — v2 formatting helpers
+      atlas.js               — Atlas view: Quartz-style brain notes (markdown + backlinks + local graph + search)
+    vendor/
+      chart.umd.min.js       — vendored Chart.js (UMD)
+      cytoscape.min.js       — vendored Cytoscape
+      markdown-it.min.js     — vendored markdown renderer (MIT), used by the Atlas view
 
 config/
   resolve.cjs             — config resolution (local → yaml → example)
