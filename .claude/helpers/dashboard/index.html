@@ -631,7 +631,11 @@
     <div class="flow-vault">
       <div id="flow-list"><div class="flow-list-empty">Loading flows…</div></div>
       <div class="flow-right">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <button id="flow-view-toggle" class="ctrl-btn" style="font-size:12px;padding:4px 10px">Excalidraw preview</button>
+        </div>
         <div id="flow-graph"></div>
+        <div id="flow-excalidraw" style="display:none;height:420px;border:1px solid var(--border);border-radius:8px;overflow:auto"></div>
         <div class="flow-legend">
           <span class="lg"><span class="sw term"></span> terminal node — exits indexed graph (may continue via DB/event)</span>
           <span class="lg"><span class="sw amb"></span> ambiguous node — name resolved to multiple targets</span>
