@@ -1306,6 +1306,33 @@ function flowElements(full) {
   return [...nodes, ...edges];
 }
 
+// Read-only SVG render of an Excalidraw doc (rectangles, text, arrows). No editor,
+// no external lib — the doc's deterministic x/y/width/height are drawn directly.
+function renderExcalidrawSvg(container, doc) {
+  const els = (doc.elements || []).filter(e => !e.isDeleted);
+  if (!els.length) { container.innerHTML = '<div class="muted">No diagram</div>'; return; }
+  const minX = Math.min(...els.map(e => e.x));
+  const minY = Math.min(...els.map(e => e.y));
+  const maxX = Math.max(...els.map(e => e.x + (e.width || 0)));
+  const maxY = Math.max(...els.map(e => e.y + (e.height || 0)));
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const parts = [];
+  for (const e of els) {
+    if (e.type === 'rectangle') {
+      parts.push(`<rect x="${e.x}" y="${e.y}" width="${e.width}" height="${e.height}" rx="8" fill="${esc(e.backgroundColor)}" stroke="${esc(e.strokeColor)}" stroke-width="1.5"/>`);
+    } else if (e.type === 'text') {
+      parts.push(`<text x="${e.x + e.width / 2}" y="${e.y + e.height / 2}" text-anchor="middle" dominant-baseline="middle" font-family="monospace" font-size="${e.fontSize}" fill="${esc(e.strokeColor)}">${esc(e.text)}</text>`);
+    } else if (e.type === 'arrow' && e.points && e.points.length >= 2) {
+      const [p0, p1] = [e.points[0], e.points[e.points.length - 1]];
+      parts.push(`<line x1="${e.x + p0[0]}" y1="${e.y + p0[1]}" x2="${e.x + p1[0]}" y2="${e.y + p1[1]}" stroke="${esc(e.strokeColor)}" stroke-width="1.5" marker-end="url(#vf-arrow)"/>`);
+    }
+  }
+  container.innerHTML =
+    `<svg viewBox="${minX - 20} ${minY - 20} ${maxX - minX + 40} ${maxY - minY + 40}" width="100%" height="100%" style="background:#fff">` +
+    `<defs><marker id="vf-arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6 Z" fill="#1e1e1e"/></marker></defs>` +
+    parts.join('') + `</svg>`;
+}
+
 function renderFlowGraph(full) {
   if (flowCy) { flowCy.destroy(); flowCy = null; }
   flowCy = cytoscape({
@@ -1410,9 +1437,35 @@ async function openFlow(id) {
     note.innerHTML = `<div class="fn-note-empty" style="color:var(--red)">Could not load flow: ${escapeHtml(e.message)}</div>`;
     return;
   }
+  // Reset to Cytoscape view when opening a new flow (clear any prior SVG preview).
+  document.getElementById('flow-graph').style.display = '';
+  document.getElementById('flow-excalidraw').style.display = 'none';
   renderFlowGraph(full);
   renderFlowNote(full.flow);
 }
+
+// Toggle between Cytoscape flowchart and read-only Excalidraw SVG preview.
+// Fetches /api/flows/:id/excalidraw on first open; subsequent toggles swap
+// without re-fetching (the SVG stays in #flow-excalidraw until next openFlow).
+document.getElementById('flow-view-toggle').addEventListener('click', async () => {
+  const graph = document.getElementById('flow-graph');
+  const ex = document.getElementById('flow-excalidraw');
+  const showingEx = ex.style.display !== 'none';
+  if (showingEx) {
+    ex.style.display = 'none';
+    graph.style.display = '';
+    return;
+  }
+  if (!flowCurrentId) return;
+  try {
+    const doc = await api(`/api/flows/${encodeURIComponent(flowCurrentId)}/excalidraw`);
+    renderExcalidrawSvg(ex, doc);
+  } catch (e) {
+    ex.innerHTML = `<div class="fn-note-empty" style="color:var(--red);padding:16px">Could not load preview: ${escapeHtml(e.message)}</div>`;
+  }
+  graph.style.display = 'none';
+  ex.style.display = '';
+});
 
 // Annotate panel: editable name / description / user_notes / status + Save.
 // Saving POSTs the changed fields and flips the flow to source='manual'.

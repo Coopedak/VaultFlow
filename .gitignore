@@ -53,3 +53,6 @@ AUDIT-FIX-PLAN.md
 .claude/scheduled_tasks.lock
 .claude/settings.local.json
 .debug-hook.log
+
+# generated flow diagrams (regenerable via npm run flows:draw)
+docs/flows/

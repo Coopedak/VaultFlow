@@ -47,6 +47,7 @@ const HOST        = cfg.dashboard && cfg.dashboard.host     || 'localhost';
 const db = require('../db.cjs');
 const modelRouter = require('../model-router.cjs');
 const brainNotes = require('../brain-notes.cjs');
+const flowExcalidraw = require('../flow-excalidraw.cjs');
 
 function ensureDb() {
   db.initialize(METRICS, DB_FILE);
@@ -1259,6 +1260,18 @@ app.get('/api/flows/:id/impact', (req, res) => {
     const file = idx >= 0 ? ep.slice(0, idx) : (ep || null);
     const symbol = idx >= 0 ? ep.slice(idx + 2) : null;
     res.json(fi.analyzeImpact(db, { file, symbol, project: full.flow.project || null }));
+  } catch (err) { apiErr(res, err); }
+});
+
+// GET /api/flows/:id/excalidraw — on-the-fly Excalidraw doc for the Flows preview.
+// Converts the stored flow graph (nodes + edges from db.getFlow) into a
+// deterministic Excalidraw document via flow-excalidraw.toExcalidraw — same
+// output as flows:draw, but served live without touching the filesystem.
+app.get('/api/flows/:id/excalidraw', (req, res) => {
+  try {
+    const full = db.getFlow(req.params.id);
+    if (!full) return res.status(404).json({ error: 'flow not found' });
+    res.json(flowExcalidraw.toExcalidraw(full));
   } catch (err) { apiErr(res, err); }
 });
 

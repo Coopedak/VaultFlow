@@ -669,6 +669,14 @@ results.cleanup = await step('repo-cleanup', async () => {
   };
 });
 
+// 9b. write .excalidraw diagrams for all cataloged flows
+results.flowsDraw = await step('flows:draw', async () => {
+  if (DRY_RUN) return { skipped: true };
+  const { drawAllFlows } = await import(pathToFileURL(path.resolve(__dirname, 'flows-draw.mjs')).href);
+  const r = drawAllFlows();
+  return { generated: r.generated, errors: r.errors, total: r.total };
+});
+
 // 9. flush to Parquet
 results.parquet = await step('flush-parquet', async () => {
   if (DRY_RUN || SKIP_PARQUET) return { skipped: true };
