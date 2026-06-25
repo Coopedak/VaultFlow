@@ -43,6 +43,7 @@
     "watcher:stop": "node .claude/helpers/watcher.mjs --stop",
     "dict": "node .claude/helpers/dict.mjs",
     "dict:import": "node .claude/helpers/dict.mjs --import",
+    "flows:draw": "node .claude/helpers/flows-draw.mjs",
     "import-chats": "node .claude/helpers/import-claude-chats.mjs",
     "import-chats:dry-run": "node .claude/helpers/import-claude-chats.mjs --dry-run",
     "gen-context": "node .claude/helpers/gen-context.mjs",
