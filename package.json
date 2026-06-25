@@ -57,7 +57,8 @@
     "tui": "node tui/index.mjs",
     "tui:dev": "node --enable-source-maps tui/index.mjs",
     "tui:browse": "node .claude/helpers/sync-csm-names.mjs && csm",
-    "tui:sync": "node .claude/helpers/sync-csm-names.mjs"
+    "tui:sync": "node .claude/helpers/sync-csm-names.mjs",
+    "export:quartz": "node .claude/helpers/export-quartz.mjs"
   },
   "dependencies": {
     "@duckdb/node-api": "^1.5.2-r.1",
