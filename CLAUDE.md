@@ -101,6 +101,7 @@ vaultflow doctor                         # health audit
 .claude/helpers/
   db.cjs                     — SQLite + DuckDB/Parquet core (28 exports)
   code-graph.cjs             — lightweight per-file symbol + import indexer
+  brain-notes.cjs            — Atlas note core: memory_entries + [[wikilinks]] → notes / backlinks / local graph
   embeddings.mjs             — local semantic embeddings for memory_entries
   commit-indexer.cjs         — index git commit messages into FTS5 across projects
   hook-handler.cjs           — main event dispatcher (all hook events)
@@ -146,9 +147,12 @@ vaultflow doctor                         # health audit
   project-audit.mjs          — inventory C:\GIT projects + correlate vaultflow history
   mcp-server.cjs             — vaultflow MCP (Model Context Protocol) server
   dashboard/
-    server.mjs               — Express API server + serves the live SPA (the one dashboard)
+    server.mjs               — Express API server + serves the live SPA (incl. /api/notes for Atlas)
     index.html               — SPA shell (Brain tab + operational tabs)
     app.js                   — Chart.js + Cytoscape dashboard logic
+    index-v2.html            — Synapse v2 shell (modular js/ views, served at /v2)
+    js/atlas.js              — Atlas view: Quartz-style brain notes (markdown + backlinks + local graph + search)
+    vendor/markdown-it.min.js — vendored markdown renderer (MIT), used by the Atlas view
 
 config/
   resolve.cjs             — config resolution (local → yaml → example)
