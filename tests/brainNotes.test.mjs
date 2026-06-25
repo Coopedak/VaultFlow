@@ -79,3 +79,21 @@ test('getNote includes links and backlinks', () => {
   const beta = notes.getNote(idOf('Beta'));
   assert.deepEqual(beta.backlinks.map(r => r.title).sort(), ['Alpha', 'Gamma']);
 });
+
+// ── Task 3: getLocalGraph ─────────────────────────────────────────────────
+
+test('getLocalGraph returns the note plus linked + backlinking neighbors', () => {
+  freshDb();
+  const g = notes.getLocalGraph(idOf('Beta'));
+  const ids = g.nodes.map(n => n.label).sort();
+  assert.deepEqual(ids, ['Alpha', 'Beta', 'Gamma']);     // Beta + its two backlinkers
+  const center = g.nodes.find(n => n.center);
+  assert.equal(center.label, 'Beta');
+  assert.ok(g.edges.length >= 2);
+  for (const e of g.edges) { assert.equal(typeof e.source, 'string'); assert.equal(typeof e.target, 'string'); }
+});
+
+test('getLocalGraph on a missing id returns empty graph', () => {
+  freshDb();
+  assert.deepEqual(notes.getLocalGraph(999999), { nodes: [], edges: [] });
+});

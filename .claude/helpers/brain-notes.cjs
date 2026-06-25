@@ -108,4 +108,53 @@ function getBacklinks(id) {
     .map(r => ({ id: r.id, source: r.source, title: r.title }));
 }
 
-module.exports = { listNotes, getNote, extractWikilinkTitles, resolveLinks, getBacklinks };
+// ── Task 3: getLocalGraph ─────────────────────────────────────────────────
+
+/**
+ * Build a Cytoscape-ready local graph: the note itself plus all directly
+ * linked and backlinking neighbors, with directed edges.
+ *
+ * Node ids are stringified memory_entry ids so Cytoscape accepts them.
+ *
+ * @param {number} id  center note id
+ * @returns {{ nodes: Array<{id:string, label:string, center:boolean}>, edges: Array<{source:string, target:string}> }}
+ */
+function getLocalGraph(id) {
+  ensure();
+  const note = db.raw().prepare(
+    `SELECT id, title, body FROM memory_entries WHERE id = ?`
+  ).get(Number(id));
+  if (!note) return { nodes: [], edges: [] };
+
+  const nodes = new Map();
+  const edges = [];
+
+  nodes.set(note.id, { id: String(note.id), label: note.title, center: true });
+
+  // Outgoing links: this note → neighbor
+  for (const l of resolveLinks(note.body)) {
+    if (l.id != null) {
+      if (!nodes.has(l.id)) nodes.set(l.id, { id: String(l.id), label: l.name, center: false });
+      edges.push({ source: String(note.id), target: String(l.id) });
+    }
+  }
+
+  // Incoming links: neighbor → this note
+  for (const b of getBacklinks(note.id)) {
+    if (!nodes.has(b.id)) nodes.set(b.id, { id: String(b.id), label: b.title, center: false });
+    edges.push({ source: String(b.id), target: String(note.id) });
+  }
+
+  return { nodes: [...nodes.values()], edges };
+}
+
+// ── Exports ───────────────────────────────────────────────────────────────
+
+module.exports = {
+  listNotes,
+  getNote,
+  extractWikilinkTitles,
+  resolveLinks,
+  getBacklinks,
+  getLocalGraph,
+};
