@@ -46,6 +46,7 @@ const HOST        = cfg.dashboard && cfg.dashboard.host     || 'localhost';
 
 const db = require('../db.cjs');
 const modelRouter = require('../model-router.cjs');
+const brainNotes = require('../brain-notes.cjs');
 
 function ensureDb() {
   db.initialize(METRICS, DB_FILE);
@@ -543,7 +544,27 @@ app.get('/api/memory', (req, res) => {
   } catch (err) { apiErr(res, err); }
 });
 
-// ── 21. GET /api/config ───────────────────────────────────────────────────
+// ── 21. GET /api/notes (Atlas) ────────────────────────────────────────────
+
+app.get('/api/notes', (req, res) => {
+  try {
+    const limit  = Math.min(parseInt(req.query.limit, 10) || 100, 500);
+    const offset = parseInt(req.query.offset, 10) || 0;
+    const source = req.query.source || null;
+    res.json({ notes: brainNotes.listNotes({ limit, offset, source }) });
+  } catch (err) { apiErr(res, err); }
+});
+
+app.get('/api/notes/:id', (req, res) => {
+  try {
+    const id   = Number(req.params.id);
+    const note = brainNotes.getNote(id);
+    if (!note) return res.status(404).json({ error: 'note not found' });
+    res.json({ note, localGraph: brainNotes.getLocalGraph(id) });
+  } catch (err) { apiErr(res, err); }
+});
+
+// ── 22. GET /api/config ───────────────────────────────────────────────────
 
 app.get('/api/config', (_req, res) => {
   try {
