@@ -1319,12 +1319,12 @@ function renderExcalidrawSvg(container, doc) {
   const parts = [];
   for (const e of els) {
     if (e.type === 'rectangle') {
-      parts.push(`<rect x="${e.x}" y="${e.y}" width="${e.width}" height="${e.height}" rx="8" fill="${e.backgroundColor}" stroke="${e.strokeColor}" stroke-width="1.5"/>`);
+      parts.push(`<rect x="${e.x}" y="${e.y}" width="${e.width}" height="${e.height}" rx="8" fill="${esc(e.backgroundColor)}" stroke="${esc(e.strokeColor)}" stroke-width="1.5"/>`);
     } else if (e.type === 'text') {
-      parts.push(`<text x="${e.x + e.width / 2}" y="${e.y + e.height / 2}" text-anchor="middle" dominant-baseline="middle" font-family="monospace" font-size="${e.fontSize}" fill="${e.strokeColor}">${esc(e.text)}</text>`);
+      parts.push(`<text x="${e.x + e.width / 2}" y="${e.y + e.height / 2}" text-anchor="middle" dominant-baseline="middle" font-family="monospace" font-size="${e.fontSize}" fill="${esc(e.strokeColor)}">${esc(e.text)}</text>`);
     } else if (e.type === 'arrow' && e.points && e.points.length >= 2) {
       const [p0, p1] = [e.points[0], e.points[e.points.length - 1]];
-      parts.push(`<line x1="${e.x + p0[0]}" y1="${e.y + p0[1]}" x2="${e.x + p1[0]}" y2="${e.y + p1[1]}" stroke="${e.strokeColor}" stroke-width="1.5" marker-end="url(#vf-arrow)"/>`);
+      parts.push(`<line x1="${e.x + p0[0]}" y1="${e.y + p0[1]}" x2="${e.x + p1[0]}" y2="${e.y + p1[1]}" stroke="${esc(e.strokeColor)}" stroke-width="1.5" marker-end="url(#vf-arrow)"/>`);
     }
   }
   container.innerHTML =
