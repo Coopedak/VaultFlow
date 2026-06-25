@@ -19,6 +19,11 @@ const md = window.markdownit({ html: false, linkify: true, breaks: false });
 
 // ── helpers ───────────────────────────────────────────────────────────────
 
+/** Escape HTML special characters in user-controlled strings before innerHTML injection. */
+function esc(s) {
+  return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 /**
  * Replace [[Name]] tokens in a note body with markdown links that target
  * #note-<id> anchors for resolved links; dangling links become plain text.
@@ -108,7 +113,7 @@ registerView('atlas', async (el) => {
   /** Render the note list from an array of {id, title} objects. */
   function renderList(items) {
     listEl.innerHTML = items
-      .map(n => `<a href="#" data-id="${n.id}">${n.title}</a>`)
+      .map(n => `<a href="#" data-id="${n.id}">${esc(n.title)}</a>`)
       .join('');
   }
   renderList(notes);
@@ -119,7 +124,7 @@ registerView('atlas', async (el) => {
 
     // Render markdown with wikilinks resolved to in-view anchors.
     readEl.innerHTML =
-      `<h1>${note.title}</h1>` +
+      `<h1>${esc(note.title)}</h1>` +
       md.render(preprocessWikilinks(note.body, note.links));
 
     // Tag resolved wikilink anchors so CSS can style them.
@@ -130,8 +135,8 @@ registerView('atlas', async (el) => {
     // Backlinks panel.
     blEl.innerHTML = note.backlinks.length
       ? note.backlinks
-          .map(b => `<a href="#" data-id="${b.id}">${b.title}</a>`)
-          .join('<br>')
+          .map(b => `<a href="#" data-id="${b.id}">${esc(b.title)}</a>`)
+          .join('')
       : '<span class="loading">None</span>';
 
     // Local graph.
