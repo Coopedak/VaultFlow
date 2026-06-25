@@ -4,6 +4,13 @@ All notable changes to vaultflow are documented here.
 
 ---
 
+## [Unreleased] — 2026-06-24
+
+### Added
+- **`cleanup.mjs` — repo-hygiene tool.** Detects and (with `--fix`) removes mangled-path artifacts (filenames produced by a bug that strips path separators), gitignored crash/debug logs, and empty orphaned directories. Reports 0-byte `*.db` files and untracked `.md`/`.txt` docs with a brain-FTS mapped/unmapped hint for human review. Never deletes tracked files or `*.db`. Wired into `nightly.mjs` as a report-only step and exposed via `npm run cleanup` / `npm run cleanup:fix`.
+
+---
+
 ## [1.6.0] — 2026-05-08
 
 ### Added

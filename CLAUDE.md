@@ -131,6 +131,7 @@ vaultflow doctor                         # health audit
   doctor.mjs                 — one-command health audit
   audit.mjs                  — vaultflow health audit
   lint.mjs                   — vaultflow data-hygiene linter
+  cleanup.mjs                — repo-hygiene: mangled-path junk, gitignored logs, empty dirs, untracked-doc review
   doc-drift-check.mjs        — verify CLAUDE.md claims against repo reality
   one-time-cleanup.cjs       — one-time idempotent data cleanup against the live DB
   stack-detector.mjs         — 22-rule tech stack detector
