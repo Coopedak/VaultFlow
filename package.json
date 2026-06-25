@@ -10,6 +10,8 @@
   "scripts": {
     "audit": "node .claude/helpers/audit.mjs",
     "audit:fix": "node .claude/helpers/audit.mjs --fix",
+    "cleanup": "node .claude/helpers/cleanup.mjs",
+    "cleanup:fix": "node .claude/helpers/cleanup.mjs --fix",
     "lint": "node .claude/helpers/lint.mjs",
     "lint:fix": "node .claude/helpers/lint.mjs --fix",
     "plan": "node .claude/helpers/plan-init.mjs",

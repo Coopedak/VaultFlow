@@ -655,6 +655,20 @@ results.docDrift = await step('doc-drift-check', async () => {
   };
 });
 
+// 9a. repo hygiene cleanup — report-only (nightly never deletes)
+results.cleanup = await step('repo-cleanup', async () => {
+  if (DRY_RUN) return { skipped: true };
+  const { runCleanup } = await import(pathToFileURL(path.resolve(__dirname, 'cleanup.mjs')).href);
+  const r = await runCleanup({ fix: false });
+  return {
+    mangled:   r.summary.mangled,
+    logs:      r.summary.logs,
+    emptyDirs: r.summary.emptyDirs,
+    zeroDbs:   r.summary.zeroDbs,
+    docs:      r.summary.docs,
+  };
+});
+
 // 9. flush to Parquet
 results.parquet = await step('flush-parquet', async () => {
   if (DRY_RUN || SKIP_PARQUET) return { skipped: true };
