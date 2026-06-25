@@ -56,3 +56,6 @@ AUDIT-FIX-PLAN.md
 
 # generated flow diagrams (regenerable via npm run flows:draw)
 docs/flows/
+
+# static exports (regenerable via npm run export:quartz)
+dist/
