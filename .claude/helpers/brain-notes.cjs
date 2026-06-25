@@ -131,10 +131,17 @@ function getLocalGraph(id) {
 
   nodes.set(note.id, { id: String(note.id), label: note.title, center: true });
 
-  // Outgoing links: this note → neighbor
+  // Outgoing links: this note → neighbor.
+  // WHY: use the canonical DB title, not l.name (the raw wikilink text), so
+  // a link written as [[beta]] labels the node "Beta" — consistent with the
+  // backlink branch which sources titles from the DB directly.
+  const canonicalTitle = db.raw().prepare(`SELECT title FROM memory_entries WHERE id = ?`);
   for (const l of resolveLinks(note.body)) {
     if (l.id != null) {
-      if (!nodes.has(l.id)) nodes.set(l.id, { id: String(l.id), label: l.name, center: false });
+      if (!nodes.has(l.id)) {
+        const row = canonicalTitle.get(l.id);
+        nodes.set(l.id, { id: String(l.id), label: row ? row.title : l.name, center: false });
+      }
       edges.push({ source: String(note.id), target: String(l.id) });
     }
   }

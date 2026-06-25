@@ -34,6 +34,30 @@ test('listNotes returns all note headers, newest first', () => {
   assert.equal(rows.length, 3);
   assert.deepEqual(rows.map(r => r.title).sort(), ['Alpha', 'Beta', 'Gamma']);
   assert.ok('source' in rows[0] && 'tags' in rows[0] && !('body' in rows[0]));
+  // Verify ORDER BY id DESC — each successive id must be strictly smaller.
+  for (let i = 1; i < rows.length; i++) {
+    assert.ok(rows[i - 1].id > rows[i].id, `row[${i-1}].id (${rows[i-1].id}) should be > row[${i}].id (${rows[i].id})`);
+  }
+});
+
+test('listNotes source filter returns only matching rows', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vf-notes-src-'));
+  try { db.close(); } catch {}
+  db.initialize(root, 'vaultflow.db');
+  db.raw().exec(`
+    INSERT INTO memory_entries (source, title, body, tags) VALUES
+      ('a.md', 'NoteA', 'body a', ''),
+      ('b.md', 'NoteB', 'body b', ''),
+      ('a.md', 'NoteC', 'body c', '');
+  `);
+  const all = notes.listNotes({ limit: 10 });
+  assert.equal(all.length, 3);
+  const aOnly = notes.listNotes({ source: 'a.md' });
+  assert.equal(aOnly.length, 2);
+  assert.ok(aOnly.every(r => r.source === 'a.md'));
+  const bOnly = notes.listNotes({ source: 'b.md' });
+  assert.equal(bOnly.length, 1);
+  assert.equal(bOnly[0].title, 'NoteB');
 });
 
 test('getNote returns the full note including body', () => {
@@ -96,4 +120,22 @@ test('getLocalGraph returns the note plus linked + backlinking neighbors', () =>
 test('getLocalGraph on a missing id returns empty graph', () => {
   freshDb();
   assert.deepEqual(notes.getLocalGraph(999999), { nodes: [], edges: [] });
+});
+
+test('getLocalGraph outgoing neighbor label uses canonical DB title, not raw wikilink text', () => {
+  // Seed a note that links via lowercase [[beta]] to a note titled "Beta".
+  // The graph node for Beta must be labeled "Beta", not "beta".
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vf-notes-lbl-'));
+  try { db.close(); } catch {}
+  db.initialize(root, 'vaultflow.db');
+  db.raw().exec(`
+    INSERT INTO memory_entries (source, title, body, tags) VALUES
+      ('x.md', 'Source', 'Links to [[beta]] here.', ''),
+      ('x.md', 'Beta',   'Beta body.',              '');
+  `);
+  const srcId = db.raw().prepare('SELECT id FROM memory_entries WHERE title = ?').get('Source').id;
+  const g = notes.getLocalGraph(srcId);
+  const betaNode = g.nodes.find(n => !n.center);
+  assert.ok(betaNode, 'neighbor node should exist');
+  assert.equal(betaNode.label, 'Beta', `expected canonical "Beta", got "${betaNode.label}"`);
 });
