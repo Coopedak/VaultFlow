@@ -47,3 +47,35 @@ test('getNote returns null for a missing id', () => {
   freshDb();
   assert.equal(notes.getNote(999999), null);
 });
+
+// ── Task 2: wikilink extraction, resolveLinks, getBacklinks ───────────────
+
+test('extractWikilinkTitles pulls names out of [[ ]]', () => {
+  assert.deepEqual(notes.extractWikilinkTitles('see [[Beta]] and [[Ghost]] ok'), ['Beta', 'Ghost']);
+  assert.deepEqual(notes.extractWikilinkTitles('none here'), []);
+});
+
+test('resolveLinks marks resolved vs dangling, case-insensitively', () => {
+  freshDb();
+  const links = notes.resolveLinks('Gamma sees [[beta]] and [[Ghost]].');
+  const beta = links.find(l => l.name.toLowerCase() === 'beta');
+  const ghost = links.find(l => l.name === 'Ghost');
+  assert.equal(beta.dangling, false);
+  assert.equal(beta.id, idOf('Beta'));
+  assert.equal(ghost.dangling, true);
+  assert.equal(ghost.id, null);
+});
+
+test('getBacklinks finds notes linking to this note', () => {
+  freshDb();
+  const refs = notes.getBacklinks(idOf('Beta'));
+  assert.deepEqual(refs.map(r => r.title).sort(), ['Alpha', 'Gamma']);
+});
+
+test('getNote includes links and backlinks', () => {
+  freshDb();
+  const gamma = notes.getNote(idOf('Gamma'));
+  assert.equal(gamma.links.length, 2);
+  const beta = notes.getNote(idOf('Beta'));
+  assert.deepEqual(beta.backlinks.map(r => r.title).sort(), ['Alpha', 'Gamma']);
+});
