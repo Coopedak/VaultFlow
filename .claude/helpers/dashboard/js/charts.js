@@ -129,6 +129,67 @@ export function bar(canvas, labels, data, opts = {}) {
 }
 
 /**
+ * doughnut(canvas, labels, data) — pie/doughnut chart for proportional breakdowns.
+ *
+ * Used by activity-tools.js to show tool distribution.
+ * Callers are responsible for the destroy-before-init guard:
+ *   if (_c) { _c.destroy(); _c = null; }
+ *   _c = doughnut(canvas, labels, data);
+ *
+ * @param {HTMLCanvasElement} canvas
+ * @param {string[]}          labels  - one label per slice
+ * @param {number[]}          data    - slice values
+ * @returns {Chart|null}
+ */
+export function doughnut(canvas, labels, data) {
+  if (typeof Chart === 'undefined') return null;
+
+  const PALETTE = [
+    '#6366f1','#22d3ee','#4ade80','#facc15','#f87171',
+    '#a78bfa','#fb923c','#34d399','#60a5fa','#e879f9',
+    '#f472b6','#2dd4bf','#818cf8','#fbbf24','#86efac',
+  ];
+  const bg     = labels.map((_, i) => PALETTE[i % PALETTE.length] + 'cc');
+  const border = labels.map((_, i) => PALETTE[i % PALETTE.length]);
+
+  return new Chart(canvas, {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        backgroundColor: bg,
+        borderColor:     border,
+        borderWidth:     1,
+      }],
+    },
+    options: {
+      animation:  false,
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          display:  true,
+          position: 'right',
+          labels: {
+            color:    '#7C89A8',
+            boxWidth: 12,
+            font:     { family: 'ui-monospace,monospace', size: 11 },
+          },
+        },
+        tooltip: {
+          backgroundColor: '#1a1d27',
+          borderColor:     '#2a2d3a',
+          borderWidth:     1,
+          titleColor:      '#e2e8f0',
+          bodyColor:       '#8892a4',
+        },
+      },
+    },
+  });
+}
+
+/**
  * line(canvas, labels, data) — full labelled line chart for section tabs.
  *
  * @param {HTMLCanvasElement} canvas
