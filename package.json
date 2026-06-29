@@ -18,6 +18,7 @@
     "plan:dir": "node .claude/helpers/plan-init.mjs --list",
     "backfill": "node .claude/helpers/backfill.mjs",
     "backfill:cli-telemetry": "node .claude/helpers/cli-telemetry-backfill.mjs",
+    "backfill:line-count": "node .claude/helpers/backfill-line-count.mjs",
     "project-audit": "node .claude/helpers/project-audit.mjs",
     "flush": "node .claude/helpers/flush-parquet.mjs",
     "nightly": "node .claude/helpers/nightly.mjs",

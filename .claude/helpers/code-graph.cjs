@@ -433,10 +433,15 @@ function indexFile(db, filePath, project) {
   try {
     clearFile(conn, filePath);
 
+    // line_count is the total physical line count of the file — the same value
+    // stored on every symbol row for the same file so the treemap can GROUP BY
+    // file and use MAX(line_count) without a separate filesystem read.
+    const fileLineCount = content.split('\n').length;
+
     const insertSym = conn.prepare(
       `INSERT OR REPLACE INTO code_symbols
-         (file, project, lang, kind, name, line, indexed_at, content_hash)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+         (file, project, lang, kind, name, line, indexed_at, content_hash, line_count)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
     const enqueueEmbed = conn.prepare(
       `INSERT OR IGNORE INTO embed_queue (kind, target_id, queued_at) VALUES ('symbol', ?, ?)`
@@ -445,7 +450,7 @@ function indexFile(db, filePath, project) {
     // re-insert symbols every indexFile, capture the inserted rowid and enqueue.
     let nextSymbolId = 0;
     for (const s of symbols) {
-      const info = insertSym.run(filePath, project || null, lang, s.kind, s.name, s.line, now, symbolHashes.get(s));
+      const info = insertSym.run(filePath, project || null, lang, s.kind, s.name, s.line, now, symbolHashes.get(s), fileLineCount);
       const symbolId = info.lastInsertRowid;
       nextSymbolId = symbolId;
       const key = `${s.name} ${s.kind}`;
@@ -889,6 +894,173 @@ function getGraphStats(db, project) {
   return { files, symbols: syms, imports: imps, by_lang: langs };
 }
 
+/**
+ * Build an import graph for a project: nodes are files with their symbol counts,
+ * edges are internal import relationships resolved by basename/suffix heuristic.
+ *
+ * WHY heuristic resolution: code_imports.target stores the raw import string
+ * (e.g. './db', '../helpers/db.cjs', 'db.cjs'). We cannot do a full module
+ * resolver here without knowing the bundler config, so we match by normalizing
+ * both the import target and each known file's basename/path suffix and pick the
+ * first match. External imports (npm packages, stdlib) that fail to match any
+ * known file are dropped — they would just add noise to an internal graph.
+ *
+ * @param {object} db       The db.cjs module (must have .raw() and .initialize()).
+ * @param {string} project  Project name to filter on.
+ * @returns {{ nodes: Array<{id, label, file, symbols}>, edges: Array<{source, target}> }}
+ */
+function getImportGraph(db, project) {
+  db.initialize(null, null);
+  const conn = db.raw();
+  const args = [project];
+
+  // Collect all indexed files for this project with their symbol counts.
+  const fileRows = conn.prepare(
+    `SELECT file, COUNT(*) AS symbols
+       FROM code_symbols
+      WHERE project = ?
+      GROUP BY file`
+  ).all(...args);
+
+  // Build a lookup map: normalized-forward-slash path → original file string.
+  // We index by full path and by the last component (basename) to cover both
+  // relative and absolute import targets.
+  const fileMap = new Map(); // normKey → original-file-string
+  for (const r of fileRows) {
+    const norm = r.file.replace(/\\/g, '/');
+    fileMap.set(norm, r.file);
+    // Also index by basename without extension so './db' → 'db.cjs' resolves.
+    const base = path.basename(norm).replace(/\.[^/.]+$/, '');
+    if (!fileMap.has(base)) fileMap.set(base, r.file);
+  }
+
+  function resolveTarget(target) {
+    if (!target) return null;
+    const normTarget = target.replace(/\\/g, '/');
+
+    // 1. Exact forward-slash match against known full paths.
+    if (fileMap.has(normTarget)) return fileMap.get(normTarget);
+
+    // 2. Strip ./ and ../ prefixes, try basename-only match.
+    const base    = path.basename(normTarget).replace(/\.[^/.]+$/, '');
+    const baseExt = path.basename(normTarget);
+    if (fileMap.has(base))    return fileMap.get(base);
+    if (fileMap.has(baseExt)) return fileMap.get(baseExt);
+
+    // 3. Suffix match — last 2 path components (catches '../helpers/db').
+    const parts   = normTarget.split('/').filter(Boolean);
+    const suffix2 = parts.slice(-2).join('/');
+    if (fileMap.has(suffix2)) return fileMap.get(suffix2);
+
+    return null; // external package — drop
+  }
+
+  // Build edges from code_imports, keeping only internal-to-internal.
+  const importRows = conn.prepare(
+    `SELECT DISTINCT file AS src, target
+       FROM code_imports
+      WHERE project = ?`
+  ).all(...args);
+
+  const edges = [];
+  const seenEdges = new Set();
+  for (const r of importRows) {
+    const resolved = resolveTarget(r.target);
+    if (!resolved) continue;
+    const srcNorm  = r.src.replace(/\\/g, '/');
+    const destNorm = resolved.replace(/\\/g, '/');
+    if (srcNorm === destNorm) continue; // self-import noise
+    const key = `${srcNorm}|${destNorm}`;
+    if (seenEdges.has(key)) continue;
+    seenEdges.add(key);
+    edges.push({
+      source: `file:${srcNorm}`,
+      target: `file:${destNorm}`,
+    });
+  }
+
+  const nodes = fileRows.map(r => {
+    const norm = r.file.replace(/\\/g, '/');
+    return {
+      id:      `file:${norm}`,
+      label:   path.basename(norm),
+      file:    norm,
+      symbols: r.symbols,
+    };
+  });
+
+  return { nodes, edges };
+}
+
+/**
+ * Build treemap data for a project: one entry per file with LOC, churn, and
+ * folder grouping. churnData is pre-fetched by the caller (getChurn) so this
+ * function stays synchronous and avoids double-fetching.
+ *
+ * @param {object}  db         The db.cjs module.
+ * @param {string}  project    Project name to filter on.
+ * @param {object}  churnData  Result of churn.getChurn() — { churn: [...], maxCommits }.
+ * @returns {{ nodes: Array<{path, name, folder, loc, commits, ratio}> }}
+ */
+function getTreemapData(db, project, churnData) {
+  db.initialize(null, null);
+  const conn = db.raw();
+
+  // MAX(line) is the fallback when line_count is NULL (rows not yet backfilled).
+  // MAX(line_count) always wins when the column is populated since it reflects
+  // the actual file length rather than the last-symbol line number.
+  const fileRows = conn.prepare(
+    `SELECT file,
+            COALESCE(MAX(line_count), MAX(line)) AS loc
+       FROM code_symbols
+      WHERE project = ?
+      GROUP BY file`
+  ).all(project);
+
+  // Build a churn lookup keyed by the forward-slash-normalized file basename
+  // and by full path segment suffix. churn.file is repo-relative (e.g.
+  // '.claude/helpers/db.cjs') so matching against absolute DB paths requires
+  // a suffix check.
+  const churnMap = new Map(); // normalized-path-component → { commits, ratio }
+  if (churnData && churnData.churn) {
+    for (const c of churnData.churn) {
+      const norm = c.file.replace(/\\/g, '/');
+      churnMap.set(norm, c);
+      // Also index by basename for cheap lookup.
+      churnMap.set(path.posix.basename(norm), c);
+    }
+  }
+
+  function lookupChurn(filePath) {
+    const norm = filePath.replace(/\\/g, '/');
+    if (churnMap.has(norm)) return churnMap.get(norm);
+    // Walk suffix segments: match '.claude/helpers/db.cjs' against a DB path
+    // ending with that same suffix.
+    const parts = norm.split('/').filter(Boolean);
+    for (let len = Math.min(4, parts.length); len >= 1; len--) {
+      const suffix = parts.slice(-len).join('/');
+      if (churnMap.has(suffix)) return churnMap.get(suffix);
+    }
+    return null;
+  }
+
+  const nodes = fileRows.map(r => {
+    const norm   = r.file.replace(/\\/g, '/');
+    const churn  = lookupChurn(norm);
+    const folder = path.posix.dirname(norm) || 'root';
+    return {
+      path:    norm,
+      name:    path.posix.basename(norm),
+      folder:  folder === '.' ? 'root' : folder,
+      loc:     r.loc || 0,
+      commits: churn ? churn.commits : 0,
+      ratio:   churn ? churn.ratio   : 0,
+    };
+  });
+
+  return { nodes };
+}
+
 // Levenshtein distance — used to rank fuzzy matches when exact/substring fails
 function _editDist(a, b) {
   if (a === b) return 0;
@@ -968,6 +1140,8 @@ module.exports = {
   getSymbols,
   getBlastRadius,
   getGraphStats,
+  getImportGraph,
+  getTreemapData,
   searchSymbols,
   getCallers,
   getCallees,

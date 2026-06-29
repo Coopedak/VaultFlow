@@ -1375,6 +1375,11 @@ function initialize(metricsRoot, dbFile) {
     // to a real project symbol (0..1). The discovery quality gate writes it;
     // existing rows backfill to NULL (treated as "unscored" until re-discovery).
     'ALTER TABLE flows ADD COLUMN confidence REAL DEFAULT NULL',
+    // v7: line_count on code_symbols — physical line span of each file. Written
+    // by indexFile() as content.split('\n').length so the treemap query can use
+    // it for LOC-based sizing without a second filesystem read. Existing rows
+    // backfill to NULL and are populated on next re-index or via backfill:line-count.
+    'ALTER TABLE code_symbols ADD COLUMN line_count INTEGER',
   ]) {
     try { _db.exec(migration); } catch (err) {
       if (!err.message.includes('duplicate column')) {

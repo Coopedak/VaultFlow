@@ -7,12 +7,15 @@
  *   • Brain Vitals — 8-tile grid with inline-SVG sparklines
  *   • Recent Sessions — last 5 rows
  *   • Needs Attention — discoveries / stale / fail counts
+ *   • Project Health — A–F grade dial using /api/projects/health-score
  *
  * Intentionally self-contained: uses inline SVG sparklines (not charts.js)
  * so the home view has zero external module dependencies beyond core.js.
  */
 
 import { api, registerView, F } from './core.js';
+import { getProject, loadProjects } from './project-store.js';
+import { scoreToGrade, gradeColor } from './viz-util.js';
 
 // ── helpers ───────────────────────────────────────────────────────────────
 
@@ -251,6 +254,11 @@ function render(o) {
         </div>
       </div>
     </div>
+
+    <!-- project health dial — filled asynchronously by loadHealthTile() -->
+    <div class="card" id="cc-health-tile" style="margin-top:14px">
+      <div style="color:var(--muted);font:12px var(--mono);padding:10px 0">Loading project health…</div>
+    </div>
   `;
 }
 
@@ -363,6 +371,98 @@ function startPulse(canvas) {
   };
 }
 
+// ── project health tile ───────────────────────────────────────────────────
+
+/**
+ * Fetch /api/projects/health-score?project= and insert the Health tile into
+ * the Needs Attention card area. Runs after the main render so it doesn't
+ * block the rest of the Command Center from painting.
+ *
+ * WHY post-render injection: the health-score endpoint may be slow (static
+ * analysis). Inserting asynchronously keeps the hero + vitals instant.
+ *
+ * Layout: conic-gradient ring (same pattern as .ring ~line 170), grade letter
+ * centred inside, expandable breakdown list. Security term shows "not scanned"
+ * when unavailable — never implies a clean signal from absent data.
+ */
+async function loadHealthTile(el) {
+  const tileEl = el.querySelector('#cc-health-tile');
+  if (!tileEl) return;
+
+  try {
+    // loadProjects inside try so a failed /api/projects fetch is caught
+    // and falls through to the graceful error message below.
+    await loadProjects(); // ensure default project is seeded
+    const project = getProject();
+
+    const h = await fetch(`/api/projects/health-score?project=${encodeURIComponent(project)}`).then(r => r.json());
+    const score  = typeof h.score === 'number' ? h.score : 0;
+    const grade  = h.grade || scoreToGrade(score);
+    const color  = gradeColor(grade);
+    const pPct   = Math.round(score);
+
+    // Build breakdown rows.
+    // security with no unavailable field → "not scanned" (no data to signal clean).
+    // unavailable:true → "n/a (no data)" for non-security terms.
+    // otherwise → "−N pts" (real penalty data).
+    const terms = h.breakdown ? Object.entries(h.breakdown) : [];
+    const breakdownRows = terms.map(([key, t]) => {
+      const label   = key.replace(/([A-Z])/g, ' $1').replace(/^./, c => c.toUpperCase());
+      const valText = key === 'security' && t.unavailable == null
+        ? '<span style="color:var(--muted)">not scanned</span>'
+        : t.unavailable
+          ? '<span style="color:var(--muted)">n/a (no data)</span>'
+          : `<span style="color:var(--amber)">−${t.penalty ?? 0} pts</span>`;
+      const detail = t.unavailable
+        ? ''
+        : (t.value != null ? `<span style="color:var(--muted);font-size:10px"> · ${String(t.value)}</span>` : '');
+      return `<div class="att" style="padding:7px 4px">
+        <div class="d" style="flex:1"><b>${label}</b>${detail}</div>
+        ${valText}
+      </div>`;
+    }).join('');
+
+    // Security special-case: if not present in breakdown at all, mention it.
+    const hasSecKey = terms.some(([k]) => k === 'security');
+    const secRow = !hasSecKey
+      ? `<div class="att" style="padding:7px 4px">
+          <div class="d" style="flex:1"><b>Security</b></div>
+          <span style="color:var(--muted)">not scanned</span>
+        </div>`
+      : '';
+
+    tileEl.innerHTML = `
+      <h3 style="margin-bottom:14px">Project Health <span class="ct">${project}</span></h3>
+      <div style="display:flex;align-items:center;gap:18px;margin-bottom:14px;flex-wrap:wrap">
+        <div class="ring" style="
+          --p:${pPct};
+          --ring-color:${color};
+          position:relative;
+          background:conic-gradient(${color} calc(${pPct}*1%), #1c2237 0);
+        ">
+          <div class="inner">
+            <b style="color:${color};font-size:28px;line-height:1">${grade}</b>
+            <span>${score}/100</span>
+          </div>
+        </div>
+        <div style="font:600 11px/1.5 var(--mono);color:var(--muted)">
+          Score: <span style="color:${color}">${score}</span><br>
+          Grade: <span style="color:${color}">${grade}</span>
+        </div>
+      </div>
+      <div style="font:600 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Breakdown</div>
+      ${breakdownRows}
+      ${secRow}
+    `;
+  } catch (e) {
+    tileEl.innerHTML = `
+      <h3 style="margin-bottom:8px">Project Health</h3>
+      <div style="color:var(--muted);font:12px var(--mono)">
+        Health score unavailable — endpoint not yet live.
+      </div>`;
+  }
+}
+
 // ── view registration ─────────────────────────────────────────────────────
 
 let _ccCleanup = null;
@@ -376,4 +476,7 @@ registerView('command-center', async (el) => {
   }
   const canvas = el.querySelector('#pulse');
   if (canvas) _ccCleanup = startPulse(canvas);
+
+  // Inject Project Health tile asynchronously — doesn't block hero/vitals paint.
+  loadHealthTile(el);
 });

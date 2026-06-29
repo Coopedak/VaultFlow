@@ -1216,6 +1216,128 @@ app.get('/api/code-graph/top-files', (req, res) => {
   } catch (err) { apiErr(res, err); }
 });
 
+// ── projects list ─────────────────────────────────────────────────────────
+
+// GET /api/projects → {projects:[{project,files,symbols}], mostActive}
+// WHY: The frontend code-graph views need a project picker. Rather than
+// assembling this on the client from /api/code-graph/stats, we expose a
+// dedicated endpoint so the view can populate a <select> without knowing the
+// DB schema. mostActive is the project with the most sessions in the last 30
+// days (falls back to the top-symbols project when sessions data is sparse).
+app.get('/api/projects', (req, res) => {
+  try {
+    const projects = withRawDb(conn => conn.prepare(`
+      SELECT   project,
+               COUNT(DISTINCT file) AS files,
+               COUNT(*)             AS symbols
+        FROM   code_symbols
+       WHERE   project IS NOT NULL AND project != ''
+       GROUP   BY project
+       ORDER   BY files DESC
+    `).all());
+
+    // Determine mostActive: the project with the highest session count in the
+    // last 30 days. Falls back to the top-symbols project (index 0) when no
+    // sessions exist.
+    const sessionRow = withRawDb(conn => {
+      try {
+        return conn.prepare(`
+          SELECT   COALESCE(NULLIF(project,''),'(unknown)') AS project,
+                   COUNT(*) AS n
+            FROM   sessions
+           WHERE   started_at >= datetime('now','-30 days')
+             AND   project IS NOT NULL AND project != ''
+           GROUP   BY project
+           ORDER   BY n DESC
+           LIMIT   1
+        `).get();
+      } catch (_) { return null; }
+    });
+
+    const mostActive = (sessionRow && sessionRow.project)
+      || (projects.length > 0 ? projects[0].project : null);
+
+    res.json({ projects, mostActive });
+  } catch (err) { apiErr(res, err); }
+});
+
+// ── code-graph extended endpoints ─────────────────────────────────────────
+
+// GET /api/code-graph/import-graph?project=
+// Returns the internal import graph for a project: nodes (files + symbol
+// counts) and edges (file-to-file import relationships). Edges are resolved
+// by basename/suffix heuristic — external packages are dropped.
+app.get('/api/code-graph/import-graph', (req, res) => {
+  try {
+    const project = req.query.project || '';
+    if (!project) return res.status(400).json({ error: 'project required' });
+    const codeGraph = require('../code-graph.cjs');
+    res.json(codeGraph.getImportGraph(db, project));
+  } catch (err) { apiErr(res, err); }
+});
+
+// GET /api/code-graph/churn?project=
+// Returns per-file commit frequency using git log (primary) or edit_events
+// (fallback). Never 500s — degrades to {unavailable:true,churn:[]} when
+// neither source is available. repoDir is resolved as C:/GIT/<project>.
+app.get('/api/code-graph/churn', async (req, res) => {
+  try {
+    const project = req.query.project || '';
+    if (!project) return res.status(400).json({ error: 'project required' });
+    if (!/^[\w.-]+$/.test(project)) return res.status(400).json({ error: 'invalid project name' });
+
+    const churn = require('../churn.cjs');
+    // Conventional repo location. Missing dirs are handled inside getChurn
+    // (existence check before spawnSync) so no 500 on unknown projects.
+    const repoDir = `C:/GIT/${project}`;
+    const result  = await churn.getChurn(project, repoDir, db, METRICS, PARQUET_DIR);
+    res.json(result);
+  } catch (err) {
+    // Defense-in-depth: getChurn already swallows errors, but if somehow it
+    // throws, degrade gracefully rather than returning a 500.
+    res.json({ source: 'edits', unavailable: true, maxCommits: 0, churn: [] });
+  }
+});
+
+// GET /api/code-graph/treemap?project=
+// Returns per-file LOC + churn data for a treemap visualization. Merges
+// code_symbols.line_count with churn.getChurn() for a heat-map signal.
+app.get('/api/code-graph/treemap', async (req, res) => {
+  try {
+    const project = req.query.project || '';
+    if (!project) return res.status(400).json({ error: 'project required' });
+    if (!/^[\w.-]+$/.test(project)) return res.status(400).json({ error: 'invalid project name' });
+
+    const codeGraph = require('../code-graph.cjs');
+    const churn     = require('../churn.cjs');
+    const repoDir   = `C:/GIT/${project}`;
+    const churnData = await churn.getChurn(project, repoDir, db, METRICS, PARQUET_DIR);
+    res.json(codeGraph.getTreemapData(db, project, churnData));
+  } catch (err) { apiErr(res, err); }
+});
+
+// GET /api/projects/health-score?project=
+// Returns a deterministic code-health score (A–F) for a project.
+// Inputs: code_symbols, code_imports, code_calls (populated by code-graph.cjs).
+// On compute failure, catches the error and returns a controlled 500 with an {error} body (never an unhandled crash); the dashboard api() helper surfaces it as a friendly message.
+app.get('/api/projects/health-score', (req, res) => {
+  try {
+    const project = req.query.project || '';
+    if (!project) return res.status(400).json({ error: 'project required' });
+    // Reject path-traversal / injection attempts — same guard as churn + treemap.
+    if (!/^[\w.-]+$/.test(project)) return res.status(400).json({ error: 'invalid project name' });
+
+    const healthScore = require('../health-score.cjs');
+    const result = healthScore.computeHealthScore(db, project);
+    res.json(result);
+  } catch (err) {
+    // Degrade gracefully: bad data (e.g. project not in DB) should not 500.
+    // Return the error in the payload so the FE can show a friendly message.
+    console.error('[dashboard] health-score error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── project focus ─────────────────────────────────────────────────────────
 
 app.get('/api/focus', (req, res) => {

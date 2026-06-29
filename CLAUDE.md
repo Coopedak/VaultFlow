@@ -95,6 +95,7 @@ vaultflow doctor                         # health audit
 8. **Skill reuse finder** — skills get reuse-before-build enforcement via `search_skills` MCP tool, `vaultflow find-skill` CLI, and a non-blocking PreToolUse(Write) authoring gate. Search is over `vault_agents` name/description (body/semantic deferred). Verdict (REUSE/MODIFY/BUILD-NEW-OK) is advisory; gate fires only on NEW skill writes via Write tool. See ADR-002 for design.
 9. **Flow catalog is APPROXIMATE** — discovered from call-graph (bare-name identifier resolution) and router-import hinting; partial by design (decorators, dynamic dispatch, DB/event/queue couplings not auto-detected). Every flow carries `confidence` (auto|manual|declared) and `source` markers; per-node `ambiguous` flags signal bare-name collisions. User-declared entry points (`vaultflow flows declare <file> <symbol>`) form the recall floor (prune-exempt, re-traced nightly). Human annotation (name/description/user_notes) marks a flow manual and reads authoritatively as the ground truth for the agent. Flows are stored in `flows`/`flow_nodes`/`flow_edges` tables with a 150-node transitive limit per flow + cycle detection. Dashboard "Flows" tab surfaces each flow as a Cytoscape flowchart; declare/annotate forms are available for human curation. See ADR-003 for design.
 10. **Agent creation is deterministic, not LLM-powered** — the Agents wizard in Synapse v2 (dashboard/js/agents.js + agent-authoring.mjs) fills SKILL.md + agents/*.md templates via schema validation and file merging, with zero model calls. Stack auto-detection reuses existing stack-detector.mjs; reuse search reuses existing skill-reuse.cjs. New agents write to ~/.claude (Claude Code's config), not the project. Newly created agents are dispatchable after Claude Code restart and appear in reuse-search after `npm run backfill --skills-only`. v1 creates single agents only; teams are deferred to v2. See ADR-004 for design.
+11. **CodeFlow code-intelligence features** — churn, health-score, and visualization layers (code-graph, treemap) use hybrid git/edit-events churn measurement and a deterministic 5-term health formula with data-unavailable guards. No new dependencies: squarified treemap is pure JS (~60 lines), Cytoscape is vendored. All critical logic (parseGitNameOnly, countCycles, scoreFromStats, squarify) is pure and separately unit-testable; WHY comments explain intent, not mechanics. See ADR-005 for architecture, formula rationale, and data-integrity guards (path containment, SQL binding, honest unavailability signals).
 
 ## File Map
 
@@ -147,19 +148,26 @@ vaultflow doctor                         # health audit
   plan-init.mjs              — project-lift plan scaffolder
   project-audit.mjs          — inventory C:\GIT projects + correlate vaultflow history
   agent-authoring.mjs        — pure ESM: slug validation, SKILL.md + agents/*.md renderers, safe devteam-config.json merge, reuse + stack lookup, createAgent orchestrator
+  churn.cjs                  — file-level churn (commit frequency) from git log or edit_events fallback; primary path for code-graph/treemap coloring
+  health-score.cjs           — deterministic A–F health score via Tarjan SCC + dead-code/god-object/coupling formula; guards against incomplete indexing
+  backfill-line-count.mjs    — idempotent backfill for code_symbols.line_count (migration v7); enables accurate treemap leaf sizing
   mcp-server.cjs             — vaultflow MCP (Model Context Protocol) server
   dashboard/
-    server.mjs               — Express API server + serves the live SPA (incl. /api/notes for Atlas)
+    server.mjs               — Express API server + serves the live SPA (incl. /api/notes for Atlas, /api/health, /api/code-graph/import-graph)
     index.html               — v1 SPA shell (Brain tab + operational tabs)
     app.js                   — v1 Chart.js + Cytoscape dashboard logic
     index-v2.html            — Synapse v2 shell (modular js/ views, served at /v2)
     js/
       core.js                — v2 SPA core: hash router, view registry, api() fetch, mount
-      command-center.js      — v2 Command Center home view
+      command-center.js      — v2 Command Center home view + health-score dial (A–F grade)
       charts.js              — v2 Chart.js theme defaults + sparkline/line factories
       format.js              — v2 formatting helpers
       atlas.js               — Atlas view: Quartz-style brain notes (markdown + backlinks + local graph + search)
       agents.js              — Agents view: 7-step deterministic wizard (no-LLM) for single-agent creation w/ stack detect + reuse search
+      project-store.js       — shared project selector (localStorage 'vf_project', seeded from /api/projects mostActive)
+      code-graph.js          — import-dependency Cytoscape view (Folder | Churn coloring, legend, cose layout)
+      treemap.js             — squarified treemap view (leaf area ∝ LOC, Folder | Churn coloring, cell tooltips)
+      viz-util.js            — pure color + layout helpers: churnColor, folderColor, scoreToGrade, gradeColor, squarify (Bruls et al.)
     vendor/
       chart.umd.min.js       — vendored Chart.js (UMD)
       cytoscape.min.js       — vendored Cytoscape
