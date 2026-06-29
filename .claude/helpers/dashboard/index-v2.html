@@ -26,14 +26,14 @@
 
     <div class="nav-group">Brain</div>
     <a class="nav-item" href="#/brain" data-view="brain"><span class="ico">🧠</span><span class="lbl">Graph</span></a>
-    <a class="nav-item" href="#/brain" data-view="brain"><span class="ico">◈</span><span class="lbl">Memory</span></a>
+    <a class="nav-item" href="#/brain-memory" data-view="brain-memory"><span class="ico">◈</span><span class="lbl">Memory</span></a>
     <a class="nav-item" href="#/brain" data-view="brain"><span class="ico">≡</span><span class="lbl">Dictionary</span></a>
-    <a class="nav-item" href="#/brain" data-view="brain"><span class="ico">✦</span><span class="lbl">Discoveries</span></a>
+    <a class="nav-item" href="#/brain-discoveries" data-view="brain-discoveries"><span class="ico">✦</span><span class="lbl">Discoveries</span></a>
 
     <div class="nav-group">Code</div>
     <a class="nav-item" href="#/code" data-view="code"><span class="ico">⊹</span><span class="lbl">Code Graph</span></a>
     <a class="nav-item" href="#/code" data-view="code"><span class="ico">⇄</span><span class="lbl">Flows</span></a>
-    <a class="nav-item" href="#/code" data-view="code"><span class="ico">▦</span><span class="lbl">Stacks</span></a>
+    <a class="nav-item" href="#/code-stacks" data-view="code-stacks"><span class="ico">▦</span><span class="lbl">Stacks</span></a>
 
     <div class="nav-group">Learning</div>
     <a class="nav-item" href="#/learning" data-view="learning"><span class="ico">⟲</span><span class="lbl">Patterns</span></a>
@@ -47,7 +47,7 @@
       <span class="ico">▦</span><span class="lbl">Atlas</span></a>
 
     <div class="nav-group">System</div>
-    <a class="nav-item" href="#/system" data-view="system"><span class="ico">♥</span><span class="lbl">Health</span></a>
+    <a class="nav-item" href="#/system-health" data-view="system-health"><span class="ico">♥</span><span class="lbl">Health</span></a>
     <a class="nav-item" href="#/system" data-view="system"><span class="ico">⚙</span><span class="lbl">Control</span></a>
   </aside>
 
@@ -57,9 +57,14 @@
 
 <script src="/vendor/cytoscape.min.js"></script>
 <script src="/vendor/markdown-it.min.js"></script>
+<script src="/vendor/chart.umd.min.js"></script>
 <script type="module" src="/js/core.js"></script>
 <script type="module" src="/js/command-center.js"></script>
 <script type="module" src="/js/atlas.js"></script>
 <script type="module" src="/js/agents.js"></script>
+<script type="module" src="/js/brain-memory.js"></script>
+<script type="module" src="/js/brain-discoveries.js"></script>
+<script type="module" src="/js/code-stacks.js"></script>
+<script type="module" src="/js/system-health.js"></script>
 </body>
 </html>
