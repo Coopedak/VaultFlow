@@ -13,7 +13,7 @@ tech stack detection, tool call deduplication, and a Parquet cold archive.
 | Runtime | Node.js 22+ (CJS hooks + ESM helpers) |
 | Hot store | SQLite via node:sqlite built-in (FTS5 + WAL) |
 | Cold archive | Apache Parquet via @duckdb/node-api (Lambda architecture) |
-| Dashboard | Express 4 + Chart.js SPA (61 endpoints) |
+| Dashboard | Express 4 + Chart.js SPA (66 endpoints) |
 | AI agents | Codex CLI via `.agents/config.toml` (15 enabled) |
 | Package manager | npm |
 
@@ -94,6 +94,7 @@ vaultflow doctor                         # health audit
 7. **Claude Desktop chats** — imported chats reuse the `sessions` table (not a separate table); distinguished by `cli='claude-desktop'`. The `imported_chats` idempotency table dedupes on conversation uuid + updated_at. See ADR-001 for rationale.
 8. **Skill reuse finder** — skills get reuse-before-build enforcement via `search_skills` MCP tool, `vaultflow find-skill` CLI, and a non-blocking PreToolUse(Write) authoring gate. Search is over `vault_agents` name/description (body/semantic deferred). Verdict (REUSE/MODIFY/BUILD-NEW-OK) is advisory; gate fires only on NEW skill writes via Write tool. See ADR-002 for design.
 9. **Flow catalog is APPROXIMATE** — discovered from call-graph (bare-name identifier resolution) and router-import hinting; partial by design (decorators, dynamic dispatch, DB/event/queue couplings not auto-detected). Every flow carries `confidence` (auto|manual|declared) and `source` markers; per-node `ambiguous` flags signal bare-name collisions. User-declared entry points (`vaultflow flows declare <file> <symbol>`) form the recall floor (prune-exempt, re-traced nightly). Human annotation (name/description/user_notes) marks a flow manual and reads authoritatively as the ground truth for the agent. Flows are stored in `flows`/`flow_nodes`/`flow_edges` tables with a 150-node transitive limit per flow + cycle detection. Dashboard "Flows" tab surfaces each flow as a Cytoscape flowchart; declare/annotate forms are available for human curation. See ADR-003 for design.
+10. **Agent creation is deterministic, not LLM-powered** — the Agents wizard in Synapse v2 (dashboard/js/agents.js + agent-authoring.mjs) fills SKILL.md + agents/*.md templates via schema validation and file merging, with zero model calls. Stack auto-detection reuses existing stack-detector.mjs; reuse search reuses existing skill-reuse.cjs. New agents write to ~/.claude (Claude Code's config), not the project. Newly created agents are dispatchable after Claude Code restart and appear in reuse-search after `npm run backfill --skills-only`. v1 creates single agents only; teams are deferred to v2. See ADR-004 for design.
 
 ## File Map
 
@@ -145,6 +146,7 @@ vaultflow doctor                         # health audit
   sync-csm-names.mjs         — derives friendly session names from prompts → ~/.claude/sessions.json (read by csm TUI; never overwrites user-set names)
   plan-init.mjs              — project-lift plan scaffolder
   project-audit.mjs          — inventory C:\GIT projects + correlate vaultflow history
+  agent-authoring.mjs        — pure ESM: slug validation, SKILL.md + agents/*.md renderers, safe devteam-config.json merge, reuse + stack lookup, createAgent orchestrator
   mcp-server.cjs             — vaultflow MCP (Model Context Protocol) server
   dashboard/
     server.mjs               — Express API server + serves the live SPA (incl. /api/notes for Atlas)
@@ -157,6 +159,7 @@ vaultflow doctor                         # health audit
       charts.js              — v2 Chart.js theme defaults + sparkline/line factories
       format.js              — v2 formatting helpers
       atlas.js               — Atlas view: Quartz-style brain notes (markdown + backlinks + local graph + search)
+      agents.js              — Agents view: 7-step deterministic wizard (no-LLM) for single-agent creation w/ stack detect + reuse search
     vendor/
       chart.umd.min.js       — vendored Chart.js (UMD)
       cytoscape.min.js       — vendored Cytoscape

@@ -48,6 +48,7 @@ const db = require('../db.cjs');
 const modelRouter = require('../model-router.cjs');
 const brainNotes = require('../brain-notes.cjs');
 const flowExcalidraw = require('../flow-excalidraw.cjs');
+const skillReuse = require('../skill-reuse.cjs');
 
 function ensureDb() {
   db.initialize(METRICS, DB_FILE);
@@ -349,6 +350,139 @@ app.get('/api/dictionary', (req, res) => {
     });
     res.json(result);
   } catch (err) { apiErr(res, err); }
+});
+
+// ── Agent Wizard endpoints (11a-11e) ──────────────────────────────────────
+// Must be registered BEFORE the existing GET /api/agents (11) so the
+// more-specific paths are matched first by Express.
+
+// 11a. GET /api/agents/projects — list C:\GIT project directories
+app.get('/api/agents/projects', (_req, res) => {
+  try {
+    const gitRoot = 'C:\\GIT';
+    if (!fs.existsSync(gitRoot)) return res.json([]);
+    const entries = fs.readdirSync(gitRoot, { withFileTypes: true });
+    const projects = entries
+      .filter(e => e.isDirectory())
+      .map(e => ({ name: e.name, fullPath: path.join(gitRoot, e.name) }));
+    res.json(projects);
+  } catch (err) { apiErr(res, err); }
+});
+
+// 11b. GET /api/agents/detect-stack?path= — run stack detector on a project path
+app.get('/api/agents/detect-stack', async (req, res) => {
+  try {
+    const projectPath = String(req.query.path || '').trim();
+    if (!projectPath) return res.status(400).json({ error: 'path required' });
+    const { detectStacks } = await import('../stack-detector.mjs');
+    const stacks = await detectStacks(projectPath);
+    res.json({ stacks });
+  } catch (err) { apiErr(res, err); }
+});
+
+// 11c. GET /api/agents/search?q=&limit= — search existing skills via skill-reuse scorer
+app.get('/api/agents/search', (req, res) => {
+  try {
+    const q     = String(req.query.q || '').trim();
+    const limit = Math.min(Math.max(1, Number(req.query.limit) || 10), 50);
+    if (!q) return res.status(400).json({ error: 'q required' });
+    ensureDb();
+    const rows = db.searchVaultAgents(q, limit);
+    const results = skillReuse.scoreSkillRows(q, rows).map(r => ({
+      name:        r.name        || null,
+      source:      r.source      || null,
+      description: r.description || null,
+      confidence:  r.confidence,
+      verdict:     r.verdict,
+    }));
+    res.json({ results });
+  } catch (err) { apiErr(res, err); }
+});
+
+// 11d. GET /api/agents/existing — list existing agents + skills from ~/.claude
+app.get('/api/agents/existing', (_req, res) => {
+  try {
+    const claudeDir  = os.homedir() ? path.join(os.homedir(), '.claude') : null;
+    if (!claudeDir) return res.json({ agents: [], skills: [] });
+
+    const agentsDir  = path.join(claudeDir, 'agents');
+    const skillsDir  = path.join(claudeDir, 'skills');
+
+    const agents = fs.existsSync(agentsDir)
+      ? fs.readdirSync(agentsDir)
+          .filter(f => f.endsWith('.md'))
+          .map(f => path.basename(f, '.md'))
+      : [];
+
+    const skills = fs.existsSync(skillsDir)
+      ? fs.readdirSync(skillsDir, { withFileTypes: true })
+          .filter(e => e.isDirectory())
+          .map(e => e.name)
+      : [];
+
+    res.json({ agents, skills });
+  } catch (err) { apiErr(res, err); }
+});
+
+// 11e. POST /api/agents/create — create or dry-run a new agent
+app.post('/api/agents/create', async (req, res) => {
+  try {
+    const {
+      slug, role, description, domain, boundaries, orientation,
+      doneCriteria, model = 'sonnet', stack = [], techStackEntry = null,
+      dryRun = false, overwrite = false,
+    } = req.body || {};
+
+    if (!slug) return res.status(400).json({ error: 'slug required' });
+
+    // Import pure logic lazily (ESM).
+    const authoring = await import('../agent-authoring.mjs');
+
+    if (dryRun) {
+      // Dry run: render previews + check collision, write nothing.
+      const validSlug = authoring.validateSlug(slug);
+      if (!validSlug) {
+        return res.status(400).json({ error: `Invalid slug "${slug}".` });
+      }
+      const renderOpts = { name: slug, role, description: description || '', model, domain, boundaries, orientation, doneCriteria };
+      const skillMd    = authoring.renderSkillMd(renderOpts);
+      const agentMd    = authoring.renderAgentMd({ ...renderOpts, stack });
+      const claudeDir  = path.join(os.homedir(), '.claude');
+      const agentsDir  = path.join(claudeDir, 'agents');
+      const skillsDir  = path.join(claudeDir, 'skills');
+      const agentPath  = path.resolve(agentsDir, `${slug}.md`);
+      const skillPath  = path.resolve(skillsDir, slug, 'SKILL.md');
+      // Defense-in-depth: assert no path traversal even in dry-run, consistent
+      // with the trust model in createAgent.
+      authoring.assertSafe(agentPath, agentsDir);
+      authoring.assertSafe(path.resolve(skillsDir, slug), skillsDir);
+      const collision  = {
+        agent: fs.existsSync(agentPath) ? agentPath : null,
+        skill: fs.existsSync(skillPath) ? skillPath : null,
+      };
+      return res.json({ preview: { skillMd, agentMd }, collision });
+    }
+
+    // Real create.
+    const result = await authoring.createAgent({
+      slug, role, description, domain, boundaries, orientation,
+      doneCriteria, model, stack, techStackEntry, overwrite,
+    });
+
+    res.json({
+      ok:     true,
+      files:  result.files,
+      notice: 'Restart Claude Code to use this agent; run `npm run backfill -- --skills-only` for reuse-search to index it.',
+    });
+  } catch (err) {
+    if (err.status === 409) {
+      return res.status(409).json({ error: err.message, existing: err.existing });
+    }
+    if (err.status === 400) {
+      return res.status(400).json({ error: err.message });
+    }
+    apiErr(res, err);
+  }
 });
 
 // ── 11. GET /api/agents ───────────────────────────────────────────────────

@@ -4,7 +4,14 @@ All notable changes to vaultflow are documented here.
 
 ---
 
-## [Unreleased] — 2026-06-24
+## [Unreleased] — 2026-06-29
+
+### Added
+- **Agent creation wizard (Agents view in Synapse v2).** Deterministic (no-LLM) 7-step wizard for creating single agents via the dashboard. Validates slug, detects stack, searches for reusable skills (via skill-reuse.cjs), and renders SKILL.md + agents/*.md templates. Safely merges devteam-config.json and registers the new agent in skills/index.md. Writes to ~/.claude (Claude Code's config). New agent is dispatchable after Claude Code restart and appears in reuse-search after `npm run backfill --skills-only`. Teams deferred to v2. Endpoints: `/api/agents/projects`, `/api/agents/detect-stack`, `/api/agents/search`, `/api/agents/existing`, `POST /api/agents/create`. Tests: 9 cases in tests/agentWizard.test.mjs. See ADR-004.
+
+---
+
+## [1.6.1] — 2026-06-24
 
 ### Added
 - **`cleanup.mjs` — repo-hygiene tool.** Detects and (with `--fix`) removes mangled-path artifacts (filenames produced by a bug that strips path separators), gitignored crash/debug logs, and empty orphaned directories. Reports 0-byte `*.db` files and untracked `.md`/`.txt` docs with a brain-FTS mapped/unmapped hint for human review. Never deletes tracked files or `*.db`. Wired into `nightly.mjs` as a report-only step and exposed via `npm run cleanup` / `npm run cleanup:fix`.
