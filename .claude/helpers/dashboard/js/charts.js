@@ -70,6 +70,65 @@ export function sparkline(canvas, points, color = '#34E1FF') {
 }
 
 /**
+ * bar(canvas, labels, data, opts) — horizontal bar chart for ranked lists.
+ *
+ * Renders an `indexAxis: 'y'` bar chart — the standard for "top N files/agents/etc"
+ * views in Synapse. Callers are responsible for the destroy-before-init guard:
+ *   if (_c) { _c.destroy(); _c = null; }
+ *   _c = bar(canvas, labels, data);
+ *
+ * @param {HTMLCanvasElement} canvas
+ * @param {string[]}          labels  - y-axis labels (one per bar)
+ * @param {number[]}          data    - bar lengths (x values)
+ * @param {object}            [opts]  - optional overrides merged into options
+ * @returns {Chart|null}
+ */
+export function bar(canvas, labels, data, opts = {}) {
+  if (typeof Chart === 'undefined') return null;
+
+  const PALETTE = [
+    '#6366f1','#22d3ee','#4ade80','#facc15','#f87171',
+    '#a78bfa','#fb923c','#34d399','#60a5fa','#e879f9',
+    '#f472b6','#2dd4bf','#818cf8','#fbbf24','#86efac',
+  ];
+  const bg     = labels.map((_, i) => PALETTE[i % PALETTE.length] + '99');
+  const border = labels.map((_, i) => PALETTE[i % PALETTE.length]);
+
+  return new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        backgroundColor: bg,
+        borderColor:     border,
+        borderWidth:     1,
+      }],
+    },
+    options: Object.assign({
+      animation:  false,
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: 'y',
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#1a1d27',
+          borderColor:     '#2a2d3a',
+          borderWidth:     1,
+          titleColor:      '#e2e8f0',
+          bodyColor:       '#8892a4',
+        },
+      },
+      scales: {
+        x: { ticks: { color: '#7C89A8', font: { family: 'ui-monospace,monospace', size: 11 } }, grid: { color: '#202845' } },
+        y: { ticks: { color: '#7C89A8', font: { family: 'ui-monospace,monospace', size: 11 } }, grid: { color: '#202845' } },
+      },
+    }, opts),
+  });
+}
+
+/**
  * line(canvas, labels, data) — full labelled line chart for section tabs.
  *
  * @param {HTMLCanvasElement} canvas
