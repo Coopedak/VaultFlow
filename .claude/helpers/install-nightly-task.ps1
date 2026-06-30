@@ -43,7 +43,13 @@ if ($Uninstall) {
 $Action  = New-ScheduledTaskAction -Execute $NodeExe -Argument "`"$NightlyMjs`"" -WorkingDirectory $RepoRoot
 $Trigger = New-ScheduledTaskTrigger -Daily -At $Time
 $Settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 30)
-$Principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
+# S4U = "Run whether user is logged on or not" WITHOUT storing a password.
+# Interactive logon type silently skips the 3 AM run whenever the user is
+# logged off overnight (and -StartWhenAvailable does NOT catch up condition
+# misses), which is why nightly maintenance/backup stalled for days. S4U fires
+# regardless of logon state; the limited/no-network token is fine because
+# nightly.mjs operates only on local files.
+$Principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType S4U -RunLevel Limited
 
 if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
     Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
