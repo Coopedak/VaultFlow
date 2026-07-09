@@ -23,6 +23,18 @@ tech stack detection, tool call deduplication, and a Parquet cold archive.
 # Install (first time)
 cd C:\GIT\vaultflow && npm install --ignore-scripts
 
+# Setup / install on this machine (idempotent — safe to re-run)
+npm run setup                  # global hooks + `npm link` CLI + nightly task + watcher, then doctor
+npm run setup:dry-run          # show what would change, write nothing
+npm run setup:hooks-only       # only (re)install the global hooks
+npm run setup:uninstall        # remove global hooks + nightly task
+vaultflow install              # same as `npm run setup` once the CLI is linked
+# Installs vaultflow's canonical hook set into ~/.claude/settings.json (USER-global)
+# so hooks fire in EVERY Claude Code project, not just the vaultflow repo. The
+# project's own .claude/settings.json stays minimal; the full lifecycle wiring is
+# defined in scripts/install.mjs (CANONICAL_HOOKS). Backs up prior user settings
+# to ~/.claude/backups/ and preserves other keys (model/theme/etc).
+
 # Dashboard
 npm run dashboard              # http://localhost:7700
 

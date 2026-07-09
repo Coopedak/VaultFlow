@@ -8,6 +8,10 @@
     "vaultflow": "./scripts/cli.mjs"
   },
   "scripts": {
+    "setup": "node scripts/install.mjs",
+    "setup:dry-run": "node scripts/install.mjs --dry-run",
+    "setup:hooks-only": "node scripts/install.mjs --hooks-only",
+    "setup:uninstall": "node scripts/install.mjs --uninstall",
     "audit": "node .claude/helpers/audit.mjs",
     "audit:fix": "node .claude/helpers/audit.mjs --fix",
     "cleanup": "node .claude/helpers/cleanup.mjs",
