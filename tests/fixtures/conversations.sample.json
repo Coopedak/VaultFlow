@@ -1,0 +1,100 @@
+[
+  {
+    "uuid": "conv-uuid-001",
+    "name": "Conversation with content blocks",
+    "created_at": "2026-06-10T10:00:00Z",
+    "updated_at": "2026-06-10T10:30:00Z",
+    "chat_messages": [
+      {
+        "uuid": "msg-001a",
+        "sender": "human",
+        "content": [{ "type": "text", "text": "First synthetic question from the human." }],
+        "created_at": "2026-06-10T10:00:00Z"
+      },
+      {
+        "uuid": "msg-001b",
+        "sender": "assistant",
+        "content": [{ "type": "text", "text": "First synthetic answer containing the ZEBRAFIXTURE token." }],
+        "created_at": "2026-06-10T10:01:00Z"
+      },
+      {
+        "uuid": "msg-001c",
+        "sender": "human",
+        "content": [{ "type": "text", "text": "Second synthetic follow-up question." }],
+        "created_at": "2026-06-10T10:02:00Z"
+      },
+      {
+        "uuid": "msg-001d",
+        "sender": "assistant",
+        "content": [{ "type": "text", "text": "Second synthetic answer." }],
+        "created_at": "2026-06-10T10:03:00Z"
+      }
+    ]
+  },
+  {
+    "uuid": "conv-uuid-002",
+    "name": "Conversation with flat text field",
+    "created_at": "2026-06-11T09:00:00Z",
+    "updated_at": "2026-06-11T09:15:00Z",
+    "chat_messages": [
+      {
+        "uuid": "msg-002a",
+        "sender": "user",
+        "text": "A human turn using the flat text field instead of content blocks.",
+        "created_at": "2026-06-11T09:00:00Z"
+      },
+      {
+        "uuid": "msg-002b",
+        "sender": "assistant",
+        "text": "An assistant reply using the flat text field.",
+        "created_at": "2026-06-11T09:01:00Z"
+      }
+    ]
+  },
+  {
+    "uuid": "conv-uuid-003",
+    "name": "Conversation belonging to a project",
+    "created_at": "2026-06-12T14:00:00Z",
+    "updated_at": "2026-06-12T14:20:00Z",
+    "project_uuid": "proj-uuid-001",
+    "chat_messages": [
+      {
+        "uuid": "msg-003a",
+        "sender": "human",
+        "content": [{ "type": "text", "text": "Question scoped to the synthetic project." }],
+        "created_at": "2026-06-12T14:00:00Z"
+      },
+      {
+        "uuid": "msg-003b",
+        "sender": "assistant",
+        "content": [{ "type": "text", "text": "Answer scoped to the synthetic project." }],
+        "created_at": "2026-06-12T14:01:00Z"
+      }
+    ]
+  },
+  {
+    "uuid": "conv-uuid-004",
+    "created_at": "2026-06-13T08:00:00Z",
+    "updated_at": "2026-06-13T08:10:00Z",
+    "chat_messages": [
+      {
+        "uuid": "msg-004a",
+        "sender": "human",
+        "content": [{ "type": "text", "text": "" }],
+        "created_at": "2026-06-13T08:00:00Z"
+      },
+      {
+        "uuid": "msg-004b",
+        "sender": "human",
+        "content": [{ "type": "text", "text": "A real human turn in the conversation that is missing a name." }],
+        "created_at": "2026-06-13T08:01:00Z"
+      },
+      {
+        "uuid": "msg-004c",
+        "sender": "assistant",
+        "content": [{ "type": "text", "text": "Reply in the unnamed conversation." }],
+        "created_at": "2026-06-13T08:02:00Z"
+      }
+    ]
+  }
+]

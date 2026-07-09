@@ -1,0 +1,23 @@
+{
+  "id": "3791958d-bc2d-40ff-bb8d-d2cbaee5e6a4",
+  "startedAt": "2026-05-26T12:15:59.079Z",
+  "endedAt": "2026-05-26T12:28:31.178Z",
+  "restoredAt": "2026-05-26T12:28:29.376Z",
+  "durationMs": 752100,
+  "platform": "win32",
+  "cwd": "C:\\GIT\\BUZZ",
+  "context": "claude-code",
+  "metrics": {
+    "edits": 0,
+    "commands": 0,
+    "tasks": 0,
+    "errors": 0
+  },
+  "project": "BUZZ",
+  "model": null,
+  "modelProvider": null,
+  "cliVersion": null,
+  "lastInjectedSkill": null,
+  "lastInjectedAt": null,
+  "injectedSources": []
+}

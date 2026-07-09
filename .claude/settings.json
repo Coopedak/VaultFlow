@@ -18,6 +18,15 @@
             "command": "node C:/GIT/vaultflow/.claude/helpers/pre-read.cjs"
           }
         ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node C:/GIT/vaultflow/.claude/helpers/pre-edit.cjs"
+          }
+        ]
       }
     ],
     "PostToolUse": [

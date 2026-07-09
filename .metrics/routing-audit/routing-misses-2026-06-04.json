@@ -1,0 +1,346 @@
+{
+  "date": "2026-06-04",
+  "prompts_scanned": 28,
+  "strong_matches": 19,
+  "misses_count": 16,
+  "miss_rate": 0.842,
+  "misses": [
+    {
+      "prompt_id": 3453,
+      "ts": "2026-06-04T06:00:09.092Z",
+      "snippet": "You are the Librarian running a vault maintenance audit. Your job is to find real gaps and generate a prioritized task list. ## What to aud",
+      "candidates": [
+        {
+          "name": "vault-librarian",
+          "rank": -13.62,
+          "use_count": 30
+        },
+        {
+          "name": "customer-expert",
+          "rank": -7.83,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.52,
+          "use_count": 14
+        }
+      ]
+    },
+    {
+      "prompt_id": 3451,
+      "ts": "2026-06-03T19:23:19.048Z",
+      "snippet": "alright lets update those",
+      "candidates": [
+        {
+          "name": "psi-wiki",
+          "rank": -5.7,
+          "use_count": 24
+        },
+        {
+          "name": "session-reviewer",
+          "rank": -4.85,
+          "use_count": 0
+        },
+        {
+          "name": "session-reviewer",
+          "rank": -3.7,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3447,
+      "ts": "2026-06-03T19:06:15.545Z",
+      "snippet": "should we add the column?",
+      "candidates": [
+        {
+          "name": "grid-specialist",
+          "rank": -9.79,
+          "use_count": 0
+        },
+        {
+          "name": "sales-architect",
+          "rank": -6.9,
+          "use_count": 0
+        },
+        {
+          "name": "agent-planner",
+          "rank": -5.45,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3446,
+      "ts": "2026-06-03T19:01:11.500Z",
+      "snippet": "do we have this field in the table?",
+      "candidates": [
+        {
+          "name": "api-integration",
+          "rank": -8.58,
+          "use_count": 0
+        },
+        {
+          "name": "customer-expert",
+          "rank": -7.32,
+          "use_count": 0
+        },
+        {
+          "name": "quoting-expert",
+          "rank": -5.34,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3443,
+      "ts": "2026-06-03T18:04:27.376Z",
+      "snippet": "alright we need to address and resolve",
+      "candidates": [
+        {
+          "name": "test-writer",
+          "rank": -8.15,
+          "use_count": 1
+        },
+        {
+          "name": "test-writer",
+          "rank": -8.01,
+          "use_count": 1
+        },
+        {
+          "name": "psi-wiki",
+          "rank": -4.69,
+          "use_count": 24
+        }
+      ]
+    },
+    {
+      "prompt_id": 3440,
+      "ts": "2026-06-03T17:39:21.231Z",
+      "snippet": "sounds good lets get it good",
+      "candidates": [
+        {
+          "name": "agent-ado",
+          "rank": -6.34,
+          "use_count": 5
+        }
+      ]
+    },
+    {
+      "prompt_id": 3439,
+      "ts": "2026-06-03T17:25:56.136Z",
+      "snippet": "we also need to have a ship to address. based on the customer",
+      "candidates": [
+        {
+          "name": "test-writer",
+          "rank": -8.15,
+          "use_count": 1
+        },
+        {
+          "name": "test-writer",
+          "rank": -8.01,
+          "use_count": 1
+        },
+        {
+          "name": "documenter",
+          "rank": -7.16,
+          "use_count": 11
+        }
+      ]
+    },
+    {
+      "prompt_id": 3438,
+      "ts": "2026-06-03T17:11:18.029Z",
+      "snippet": "so i looks like the load report is also got a grey background it should just be black ad white. also between shipped barcode and cust part n",
+      "candidates": [
+        {
+          "name": "dev-team",
+          "rank": -8.37,
+          "use_count": 16
+        },
+        {
+          "name": "database-optimizer",
+          "rank": -5.74,
+          "use_count": 0
+        },
+        {
+          "name": "logistics-expert",
+          "rank": -4.52,
+          "use_count": 10
+        }
+      ]
+    },
+    {
+      "prompt_id": 3437,
+      "ts": "2026-06-03T17:09:47.440Z",
+      "snippet": "can you explain this to me simiplier i dont understand",
+      "candidates": [
+        {
+          "name": "sql-migration-validator",
+          "rank": -7.1,
+          "use_count": 2
+        },
+        {
+          "name": "sql-migration-validator",
+          "rank": -7.1,
+          "use_count": 2
+        },
+        {
+          "name": "leadtime-planner",
+          "rank": -6.63,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3436,
+      "ts": "2026-06-03T15:28:34.502Z",
+      "snippet": "make it a desktop shortcut",
+      "candidates": [
+        {
+          "name": "excalidraw-diagram",
+          "rank": -6.47,
+          "use_count": 4
+        },
+        {
+          "name": "pr-shepherd",
+          "rank": -4.39,
+          "use_count": 10
+        }
+      ]
+    },
+    {
+      "prompt_id": 3435,
+      "ts": "2026-06-03T15:24:23.495Z",
+      "snippet": "alright lets open it",
+      "candidates": [
+        {
+          "name": "pr-shepherd",
+          "rank": -5.71,
+          "use_count": 10
+        },
+        {
+          "name": "debugger",
+          "rank": -5.06,
+          "use_count": 0
+        },
+        {
+          "name": "access-data-extractor",
+          "rank": -3.72,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3434,
+      "ts": "2026-06-03T15:10:37.622Z",
+      "snippet": "so what are you suggesting for tp/dp?",
+      "candidates": [
+        {
+          "name": "order-flow-expert",
+          "rank": -8.11,
+          "use_count": 4
+        },
+        {
+          "name": "order-flow-expert",
+          "rank": -8.11,
+          "use_count": 4
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.53,
+          "use_count": 14
+        }
+      ]
+    },
+    {
+      "prompt_id": 3428,
+      "ts": "2026-06-03T13:56:56.422Z",
+      "snippet": "lets look at order entry module and https://psmes.progressivesurface.com/order-entry can you review this and see what the flow is",
+      "candidates": [
+        {
+          "name": "order-flow-expert",
+          "rank": -10.52,
+          "use_count": 4
+        },
+        {
+          "name": "order-flow-expert",
+          "rank": -10.52,
+          "use_count": 4
+        },
+        {
+          "name": "workflow-expert",
+          "rank": -8.18,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3419,
+      "ts": "2026-06-03T13:11:31.859Z",
+      "snippet": "railway mcp what all is in it?",
+      "candidates": [
+        {
+          "name": "mcp-builder",
+          "rank": -7.9,
+          "use_count": 0
+        },
+        {
+          "name": "mes-architect",
+          "rank": -5.52,
+          "use_count": 0
+        },
+        {
+          "name": "mes-architect",
+          "rank": -5.52,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3418,
+      "ts": "2026-06-03T13:10:36.722Z",
+      "snippet": "look at PR 72 and 286 is there anything in there about lisence plates?",
+      "candidates": [
+        {
+          "name": "reviewer-code",
+          "rank": -10.16,
+          "use_count": 71
+        },
+        {
+          "name": "pr-shepherd",
+          "rank": -7.14,
+          "use_count": 10
+        },
+        {
+          "name": "agent-code-review-swarm",
+          "rank": -5.66,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3417,
+      "ts": "2026-06-03T13:09:14.397Z",
+      "snippet": "⚠ 1 setup issue: MCP · /doctor ⎿ SessionStart:startup says: [PRGJSMES] Model tiers: /model haiku (reads) | /model sonnet (default) | /mod",
+      "candidates": [
+        {
+          "name": "mcp-builder",
+          "rank": -7.9,
+          "use_count": 0
+        },
+        {
+          "name": "deploy-prep",
+          "rank": -4.07,
+          "use_count": 0
+        },
+        {
+          "name": "order-flow-expert",
+          "rank": -4.01,
+          "use_count": 4
+        }
+      ]
+    }
+  ]
+}

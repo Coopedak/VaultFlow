@@ -1,0 +1,23 @@
+{
+  "id": "b1ec8c4f-150b-495a-8068-663e8d069788",
+  "startedAt": "2026-06-15T14:58:57.553Z",
+  "endedAt": "2026-06-15T15:00:23.288Z",
+  "restoredAt": "2026-06-15T15:00:21.171Z",
+  "durationMs": 85736,
+  "platform": "win32",
+  "cwd": "C:\\GIT\\STPT",
+  "context": "claude-code",
+  "metrics": {
+    "edits": 0,
+    "commands": 0,
+    "tasks": 0,
+    "errors": 0
+  },
+  "project": "STPT",
+  "model": null,
+  "modelProvider": null,
+  "cliVersion": null,
+  "lastInjectedSkill": null,
+  "lastInjectedAt": null,
+  "injectedSources": []
+}

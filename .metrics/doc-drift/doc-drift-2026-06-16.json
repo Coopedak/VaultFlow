@@ -1,0 +1,23 @@
+{
+  "date": "2026-06-16",
+  "generated_at": "2026-06-16T07:00:24.620Z",
+  "repo_root": "C:\\GIT\\vaultflow",
+  "ok": false,
+  "drifts": [
+    {
+      "section": "endpoint-count",
+      "claim": "44 endpoints",
+      "actual": "51 routes in .claude/helpers/dashboard/server.mjs",
+      "snippet": "rd | Express 4 + Chart.js SPA (44 read-only API endpoints) | | AI agents | Codex CLI via"
+    }
+  ],
+  "summary": {
+    "endpoints": 51,
+    "skill_dirs": 134,
+    "agents": {
+      "enabled": 15,
+      "disabled": 119
+    },
+    "helpers_on_disk": 43
+  }
+}

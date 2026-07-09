@@ -1,0 +1,2 @@
+# Format: timestamp(ISO8601),model(Claude/GPT/Copilot/Cursor/Windsurf),query,index_used,search_method(grep|semantic|embeddings|@workspace|ripgrep),found(yes/no),source,time_seconds,quality_percent(0-100)
+timestamp,model,query,index_used,search_method,found,source,time_seconds,quality_percent

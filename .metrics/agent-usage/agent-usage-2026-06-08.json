@@ -1,0 +1,285 @@
+{
+  "date": "2026-06-08",
+  "totals": {
+    "registered": 155,
+    "ever_used": 45,
+    "active_24h": 0,
+    "total_invocations": 1086
+  },
+  "topUsed": [
+    {
+      "name": "ctx-opt",
+      "source": "user-skill",
+      "use_count": 562,
+      "last_used": "2026-05-27T18:26:53.294Z"
+    },
+    {
+      "name": "reviewer-code",
+      "source": "user-skill",
+      "use_count": 71,
+      "last_used": "2026-06-02T20:48:30.930Z"
+    },
+    {
+      "name": "quality-expert",
+      "source": "project:PRGJSMES",
+      "use_count": 54,
+      "last_used": "2026-06-02T19:58:08.208Z"
+    },
+    {
+      "name": "quality-expert",
+      "source": "project:PRGJSMES-wt",
+      "use_count": 41,
+      "last_used": "2026-06-02T19:58:08.208Z"
+    },
+    {
+      "name": "pipeline-gateway",
+      "source": "user-skill",
+      "use_count": 37,
+      "last_used": "2026-06-03T18:01:08.057Z"
+    },
+    {
+      "name": "vault-librarian",
+      "source": "user-skill",
+      "use_count": 30,
+      "last_used": "2026-05-23T02:41:51.022Z"
+    },
+    {
+      "name": "tdd-test-first",
+      "source": "user-skill",
+      "use_count": 25,
+      "last_used": "2026-06-01T13:08:17.299Z"
+    },
+    {
+      "name": "psi-wiki",
+      "source": "user-skill",
+      "use_count": 24,
+      "last_used": "2026-06-03T14:12:42.613Z"
+    },
+    {
+      "name": "researcher",
+      "source": "user-skill",
+      "use_count": 19,
+      "last_used": "2026-06-02T19:46:27.675Z"
+    },
+    {
+      "name": "deep-plan",
+      "source": "user-skill",
+      "use_count": 19,
+      "last_used": "2026-05-22T01:17:14.389Z"
+    },
+    {
+      "name": "agent-communicator",
+      "source": "user-skill",
+      "use_count": 18,
+      "last_used": "2026-05-26T17:58:52.244Z"
+    },
+    {
+      "name": "api-documentation",
+      "source": "user-skill",
+      "use_count": 17,
+      "last_used": "2026-05-13T23:21:15.524Z"
+    },
+    {
+      "name": "dev-team",
+      "source": "user-skill",
+      "use_count": 16,
+      "last_used": "2026-05-29T20:27:13.872Z"
+    },
+    {
+      "name": "developer-backend",
+      "source": "user-skill",
+      "use_count": 15,
+      "last_used": "2026-06-02T20:42:53.027Z"
+    },
+    {
+      "name": "pattern-analyst",
+      "source": "user-skill",
+      "use_count": 14,
+      "last_used": "2026-06-03T19:01:11.492Z"
+    },
+    {
+      "name": "project-manager",
+      "source": "user-skill",
+      "use_count": 14,
+      "last_used": "2026-05-29T19:07:14.659Z"
+    },
+    {
+      "name": "documenter",
+      "source": "user-skill",
+      "use_count": 11,
+      "last_used": "2026-06-02T20:52:39.078Z"
+    },
+    {
+      "name": "pr-shepherd",
+      "source": "project:PRGJSMES",
+      "use_count": 10,
+      "last_used": "2026-06-03T17:40:36.180Z"
+    },
+    {
+      "name": "logistics-expert",
+      "source": "project:PRGJSMES",
+      "use_count": 10,
+      "last_used": "2026-06-03T17:28:17.617Z"
+    },
+    {
+      "name": "logistics-expert",
+      "source": "project:PRGJSMES-wt",
+      "use_count": 9,
+      "last_used": "2026-06-03T17:28:17.617Z"
+    },
+    {
+      "name": "configure-devteam",
+      "source": "user-skill",
+      "use_count": 7,
+      "last_used": "2026-06-01T12:18:06.315Z"
+    },
+    {
+      "name": "voice-of-reason",
+      "source": "project",
+      "use_count": 7,
+      "last_used": "2026-06-02T20:26:30.416Z"
+    },
+    {
+      "name": "agent-ado",
+      "source": "user-skill",
+      "use_count": 5,
+      "last_used": "2026-05-27T18:13:23.599Z"
+    },
+    {
+      "name": "api-contract-auditor",
+      "source": "project:PRGJSMES",
+      "use_count": 5,
+      "last_used": "2026-06-02T17:57:46.828Z"
+    },
+    {
+      "name": "developer-fullstack",
+      "source": "user-skill",
+      "use_count": 4,
+      "last_used": "2026-05-20T16:11:52.866Z"
+    }
+  ],
+  "active_last_24h": [],
+  "never_used_sample": [
+    {
+      "name": "Context Optimization",
+      "source": "claude"
+    },
+    {
+      "name": "Dev-Team Pipeline (Claude Code, PSI-specific)",
+      "source": "claude"
+    },
+    {
+      "name": "Development",
+      "source": "claude"
+    },
+    {
+      "name": "Diagrams",
+      "source": "claude"
+    },
+    {
+      "name": "Domain (PSI / Manufacturing)",
+      "source": "claude"
+    },
+    {
+      "name": "MIGRATION_SUMMARY",
+      "source": "project:ruflo"
+    },
+    {
+      "name": "Planning",
+      "source": "claude"
+    },
+    {
+      "name": "README",
+      "source": "project:StockTool"
+    },
+    {
+      "name": "Writing & Documentation",
+      "source": "claude"
+    },
+    {
+      "name": "access-data-extractor",
+      "source": "project:PRGJSMES"
+    },
+    {
+      "name": "access-data-extractor",
+      "source": "project:PRGJSMES-wt"
+    },
+    {
+      "name": "aftec-integration",
+      "source": "claude"
+    },
+    {
+      "name": "agent-architecture",
+      "source": "codex"
+    },
+    {
+      "name": "agent-code-analyzer",
+      "source": "codex"
+    },
+    {
+      "name": "agent-code-review-swarm",
+      "source": "codex"
+    },
+    {
+      "name": "agent-coder",
+      "source": "codex"
+    },
+    {
+      "name": "agent-dev-backend-api",
+      "source": "codex"
+    },
+    {
+      "name": "agent-docs-api-openapi",
+      "source": "codex"
+    },
+    {
+      "name": "agent-goal-planner",
+      "source": "codex"
+    },
+    {
+      "name": "agent-migration-plan",
+      "source": "codex"
+    },
+    {
+      "name": "agent-performance-analyzer",
+      "source": "codex"
+    },
+    {
+      "name": "agent-planner",
+      "source": "codex"
+    },
+    {
+      "name": "agent-researcher",
+      "source": "codex"
+    },
+    {
+      "name": "agent-reviewer",
+      "source": "codex"
+    },
+    {
+      "name": "agent-security-manager",
+      "source": "codex"
+    },
+    {
+      "name": "agent-specification",
+      "source": "codex"
+    },
+    {
+      "name": "agent-tester",
+      "source": "codex"
+    },
+    {
+      "name": "ai-data-remediation-engineer",
+      "source": "user-skill"
+    },
+    {
+      "name": "api-integration",
+      "source": "project:Quoting"
+    },
+    {
+      "name": "automation-governance-architect",
+      "source": "user-skill"
+    }
+  ],
+  "never_used_count": 110
+}

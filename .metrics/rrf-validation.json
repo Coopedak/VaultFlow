@@ -1,0 +1,459 @@
+{
+  "date": "2026-05-22T01:26:39.135Z",
+  "baseline": {
+    "avg_sources_in_top5": 0.9,
+    "avg_latency_ms": 41.05
+  },
+  "rrf": {
+    "avg_sources_in_top5": 1.1,
+    "avg_latency_ms": 42.09
+  },
+  "delta": {
+    "sources_in_top5": 0.2,
+    "latency_ms": 1.04
+  },
+  "per_query": [
+    {
+      "q": "RRF reciprocal rank fusion",
+      "rrf": {
+        "ms": 50.53,
+        "total": 2,
+        "top5": [
+          {
+            "_source": "memory",
+            "_docId": "memory:135884",
+            "title": "Phase 3: Hybrid FTS5 + sqlite-vec with RRF [M — 2-3 days]  · 🟡 IN PROGRESS",
+            "_rrfScore": 0.01639344262295082
+          },
+          {
+            "_source": "memory",
+            "_docId": "memory:135746",
+            "title": "Methodologies",
+            "_rrfScore": 0.016129032258064516
+          }
+        ],
+        "sources_in_top5": 1
+      },
+      "baseline": {
+        "ms": 46.47,
+        "counts": {
+          "memory": 2,
+          "symbols": 0,
+          "commits": 0,
+          "dictionary": 0,
+          "tools": 0
+        },
+        "top5": [
+          {
+            "source": "memory",
+            "ref": "Phase 3: Hybrid FTS5 + sqlite-vec with RRF [M — 2-3 days]  · 🟡 IN PROGRESS"
+          },
+          {
+            "source": "memory",
+            "ref": "Methodologies"
+          }
+        ],
+        "sources_in_top5": 1
+      }
+    },
+    {
+      "q": "FTS5 BM25",
+      "rrf": {
+        "ms": 32.02,
+        "total": 6,
+        "top5": [
+          {
+            "_source": "memory",
+            "_docId": "memory:126794",
+            "title": "Critical Architecture Rules",
+            "_rrfScore": 0.01639344262295082
+          },
+          {
+            "_source": "commit",
+            "_docId": "commit:0fb2b76ba1351c25f446acd52c3f0200743ee9a3",
+            "subject": "Initial commit: PrismIQ ERP — 131-table SQLite distribution backend",
+            "_rrfScore": 0.01639344262295082
+          },
+          {
+            "_source": "memory",
+            "_docId": "memory:135882",
+            "title": "Phase 1: FTS5 over RawText [M — 1-2 days]  · ⛔ SUPERSEDED",
+            "_rrfScore": 0.016129032258064516
+          },
+          {
+            "_source": "memory",
+            "_docId": "memory:139150",
+            "title": "2026-05-07 — wiki reconciliation against live brain state",
+            "_rrfScore": 0.015873015873015872
+          },
+          {
+            "_source": "memory",
+            "_docId": "memory:135743",
+            "title": "Tech Stack",
+            "_rrfScore": 0.015625
+          }
+        ],
+        "sources_in_top5": 2
+      },
+      "baseline": {
+        "ms": 31.45,
+        "counts": {
+          "memory": 5,
+          "symbols": 0,
+          "commits": 1,
+          "dictionary": 0,
+          "tools": 0
+        },
+        "top5": [
+          {
+            "source": "memory",
+            "ref": "Critical Architecture Rules"
+          },
+          {
+            "source": "memory",
+            "ref": "Phase 1: FTS5 over RawText [M — 1-2 days]  · ⛔ SUPERSEDED"
+          },
+          {
+            "source": "memory",
+            "ref": "2026-05-07 — wiki reconciliation against live brain state"
+          },
+          {
+            "source": "memory",
+            "ref": "Tech Stack"
+          },
+          {
+            "source": "memory",
+            "ref": "Phase 3: Hybrid FTS5 + sqlite-vec with RRF [M — 2-3 days]  · 🟡 IN PROGRESS"
+          }
+        ],
+        "sources_in_top5": 1
+      }
+    },
+    {
+      "q": "searchMemory",
+      "rrf": {
+        "ms": 17,
+        "total": 4,
+        "top5": [
+          {
+            "_source": "symbol",
+            "_docId": "symbol:C:\\GIT\\vaultflow\\.claude\\helpers\\db.cjs:searchMemory",
+            "name": "searchMemory",
+            "_rrfScore": 0.03252247488101534
+          },
+          {
+            "_source": "symbol",
+            "_docId": "symbol:C:/GIT/vaultflow/.claude/helpers/db.cjs:searchMemory",
+            "name": "searchMemory",
+            "_rrfScore": 0.03149801587301587
+          },
+          {
+            "_source": "commit",
+            "_docId": "commit:dc8463872da64ddde618084f859f0a5a5d3fa275",
+            "subject": "feat(ADR-057): RVF native storage with security hardening (#1244)",
+            "_rrfScore": 0.01639344262295082
+          },
+          {
+            "_source": "symbol",
+            "_docId": "symbol:C:\\GIT\\ruflo\\v3\\mcp\\tools\\memory-tools.js:searchMemoryTool",
+            "name": "searchMemoryTool",
+            "_rrfScore": 0.015384615384615385
+          }
+        ],
+        "sources_in_top5": 2
+      },
+      "baseline": {
+        "ms": 15.9,
+        "counts": {
+          "memory": 0,
+          "symbols": 5,
+          "commits": 1,
+          "dictionary": 0,
+          "tools": 0
+        },
+        "top5": [
+          {
+            "source": "symbols",
+            "ref": "searchMemory"
+          },
+          {
+            "source": "symbols",
+            "ref": "searchMemory"
+          },
+          {
+            "source": "symbols",
+            "ref": "searchMemory"
+          },
+          {
+            "source": "symbols",
+            "ref": "searchMemory"
+          },
+          {
+            "source": "symbols",
+            "ref": "searchMemoryTool"
+          }
+        ],
+        "sources_in_top5": 1
+      }
+    },
+    {
+      "q": "hook-handler session start",
+      "rrf": {
+        "ms": 45.3,
+        "total": 1,
+        "top5": [
+          {
+            "_source": "memory",
+            "_docId": "memory:126795",
+            "title": "File Map",
+            "_rrfScore": 0.01639344262295082
+          }
+        ],
+        "sources_in_top5": 1
+      },
+      "baseline": {
+        "ms": 43.14,
+        "counts": {
+          "memory": 1,
+          "symbols": 0,
+          "commits": 0,
+          "dictionary": 0,
+          "tools": 0
+        },
+        "top5": [
+          {
+            "source": "memory",
+            "ref": "File Map"
+          }
+        ],
+        "sources_in_top5": 1
+      }
+    },
+    {
+      "q": "parquet flush duckdb",
+      "rrf": {
+        "ms": 57.73,
+        "total": 3,
+        "top5": [
+          {
+            "_source": "memory",
+            "_docId": "memory:127208",
+            "title": "vaultflow Integration",
+            "_rrfScore": 0.01639344262295082
+          },
+          {
+            "_source": "memory",
+            "_docId": "memory:126795",
+            "title": "File Map",
+            "_rrfScore": 0.016129032258064516
+          },
+          {
+            "_source": "memory",
+            "_docId": "memory:128426",
+            "title": "Reusable Tools (Flat Structure)",
+            "_rrfScore": 0.015873015873015872
+          }
+        ],
+        "sources_in_top5": 1
+      },
+      "baseline": {
+        "ms": 53.99,
+        "counts": {
+          "memory": 3,
+          "symbols": 0,
+          "commits": 0,
+          "dictionary": 0,
+          "tools": 0
+        },
+        "top5": [
+          {
+            "source": "memory",
+            "ref": "vaultflow Integration"
+          },
+          {
+            "source": "memory",
+            "ref": "File Map"
+          },
+          {
+            "source": "memory",
+            "ref": "Reusable Tools (Flat Structure)"
+          }
+        ],
+        "sources_in_top5": 1
+      }
+    },
+    {
+      "q": "skill injection router",
+      "rrf": {
+        "ms": 48.42,
+        "total": 2,
+        "top5": [
+          {
+            "_source": "memory",
+            "_docId": "memory:126795",
+            "title": "File Map",
+            "_rrfScore": 0.01639344262295082
+          },
+          {
+            "_source": "memory",
+            "_docId": "memory:128426",
+            "title": "Reusable Tools (Flat Structure)",
+            "_rrfScore": 0.016129032258064516
+          }
+        ],
+        "sources_in_top5": 1
+      },
+      "baseline": {
+        "ms": 50.24,
+        "counts": {
+          "memory": 2,
+          "symbols": 0,
+          "commits": 0,
+          "dictionary": 0,
+          "tools": 0
+        },
+        "top5": [
+          {
+            "source": "memory",
+            "ref": "File Map"
+          },
+          {
+            "source": "memory",
+            "ref": "Reusable Tools (Flat Structure)"
+          }
+        ],
+        "sources_in_top5": 1
+      }
+    },
+    {
+      "q": "stack detector tech stack",
+      "rrf": {
+        "ms": 45.38,
+        "total": 1,
+        "top5": [
+          {
+            "_source": "memory",
+            "_docId": "memory:126795",
+            "title": "File Map",
+            "_rrfScore": 0.01639344262295082
+          }
+        ],
+        "sources_in_top5": 1
+      },
+      "baseline": {
+        "ms": 44.96,
+        "counts": {
+          "memory": 1,
+          "symbols": 0,
+          "commits": 0,
+          "dictionary": 0,
+          "tools": 0
+        },
+        "top5": [
+          {
+            "source": "memory",
+            "ref": "File Map"
+          }
+        ],
+        "sources_in_top5": 1
+      }
+    },
+    {
+      "q": "unified search merge",
+      "rrf": {
+        "ms": 52.47,
+        "total": 1,
+        "top5": [
+          {
+            "_source": "memory",
+            "_docId": "memory:128426",
+            "title": "Reusable Tools (Flat Structure)",
+            "_rrfScore": 0.01639344262295082
+          }
+        ],
+        "sources_in_top5": 1
+      },
+      "baseline": {
+        "ms": 56.26,
+        "counts": {
+          "memory": 1,
+          "symbols": 0,
+          "commits": 0,
+          "dictionary": 0,
+          "tools": 0
+        },
+        "top5": [
+          {
+            "source": "memory",
+            "ref": "Reusable Tools (Flat Structure)"
+          }
+        ],
+        "sources_in_top5": 1
+      }
+    },
+    {
+      "q": "watcher chokidar file tracking",
+      "rrf": {
+        "ms": 38.56,
+        "total": 2,
+        "top5": [
+          {
+            "_source": "memory",
+            "_docId": "memory:126795",
+            "title": "File Map",
+            "_rrfScore": 0.01639344262295082
+          },
+          {
+            "_source": "memory",
+            "_docId": "memory:128426",
+            "title": "Reusable Tools (Flat Structure)",
+            "_rrfScore": 0.016129032258064516
+          }
+        ],
+        "sources_in_top5": 1
+      },
+      "baseline": {
+        "ms": 35.46,
+        "counts": {
+          "memory": 2,
+          "symbols": 0,
+          "commits": 0,
+          "dictionary": 0,
+          "tools": 0
+        },
+        "top5": [
+          {
+            "source": "memory",
+            "ref": "File Map"
+          },
+          {
+            "source": "memory",
+            "ref": "Reusable Tools (Flat Structure)"
+          }
+        ],
+        "sources_in_top5": 1
+      }
+    },
+    {
+      "q": "embedding similarity prompt dedup",
+      "rrf": {
+        "ms": 33.48,
+        "total": 0,
+        "top5": [],
+        "sources_in_top5": 0
+      },
+      "baseline": {
+        "ms": 32.58,
+        "counts": {
+          "memory": 0,
+          "symbols": 0,
+          "commits": 0,
+          "dictionary": 0,
+          "tools": 0
+        },
+        "top5": [],
+        "sources_in_top5": 0
+      }
+    }
+  ]
+}

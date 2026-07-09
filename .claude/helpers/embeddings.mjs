@@ -132,7 +132,10 @@ export async function processEmbedQueue({ batchSize = 200 } = {}) {
   db.initialize(null, null);
   const conn = db.raw();
 
-  const rows = db.popEmbedQueue(batchSize);
+  // Claim ONLY memory + prompt rows — symbol rows belong to the nightly
+  // processSymbolEmbedQueue drainer. popEmbedQueue deletes on pop, so popping
+  // symbol rows here would discard them unembedded (the `else continue` below).
+  const rows = db.popEmbedQueue(batchSize, ['memory', 'prompt']);
   if (!rows.length) return { processed: 0 };
 
   const upsertMem = conn.prepare(`
@@ -175,6 +178,189 @@ export async function processEmbedQueue({ batchSize = 200 } = {}) {
     }
   }
   return { processed, batch: rows.length };
+}
+
+/**
+ * Drain the embed_queue for kind='symbol'. Reads body via slice (same boundary
+ * logic indexFile uses), embeds, writes to symbol_embeddings keyed by
+ * (file, name, kind) plus the content_hash that produced the vector.
+ * Hash mismatches on later passes are how stale embeddings get refreshed.
+ */
+export async function processSymbolEmbedQueue({ batchSize = 100 } = {}) {
+  const db = require('./db.cjs');
+  const fs = await import('node:fs');
+  db.initialize(null, null);
+  const conn = db.raw();
+
+  // Pull ONLY symbol-kind queue entries; popEmbedQueue handles delete-on-pop.
+  // Passing the kind filter (rather than popping all + .filter) means we never
+  // claim-and-discard memory/prompt rows that processEmbedQueue owns.
+  const rows = db.popEmbedQueue(batchSize, ['symbol']);
+  if (!rows.length) return { processed: 0 };
+
+  // For each queue row (target_id = code_symbols.rowid), read symbol body
+  // and embed. Slice boundaries match indexFile()'s bodySlice.
+  let processed = 0, failed = 0;
+  for (const r of rows) {
+    try {
+      const sym = conn.prepare(
+        `SELECT file, name, kind, line, content_hash FROM code_symbols WHERE rowid = ?`
+      ).get(r.target_id);
+      if (!sym || !sym.content_hash) continue;
+
+      const content = fs.readFileSync(sym.file, 'utf8');
+      const lines = content.split(/\r?\n/);
+      const peers = conn.prepare(
+        `SELECT line FROM code_symbols WHERE file = ? AND line > ? ORDER BY line ASC LIMIT 1`
+      ).get(sym.file, sym.line);
+      const startIdx = Math.max(0, sym.line - 1);
+      const endIdx = peers ? Math.max(startIdx, peers.line - 1) : Math.min(lines.length, startIdx + 200);
+      const body = lines.slice(startIdx, endIdx).join('\n');
+      if (body.length < 10) continue;
+
+      const vec = await embed(body);
+      db.upsertSymbolEmbedding({
+        file: sym.file, name: sym.name, kind: sym.kind,
+        vector: vec, model: MODEL_ID, contentHash: sym.content_hash,
+      });
+      processed++;
+    } catch (err) {
+      failed++;
+      process.stderr.write(`[embeddings] symbol queue rowid=${r.target_id} err: ${err.message}\n`);
+    }
+  }
+  return { processed, failed, batch: rows.length };
+}
+
+/**
+ * Backfill loop: embed code symbols that already have a content_hash but no
+ * symbol_embeddings row yet. WHY: code-graph only enqueues symbols whose hash
+ * CHANGED, so symbols indexed before they were ever edited never got enqueued —
+ * which left semanticSymbolSearch stuck at ~4% coverage. This climbs coverage a
+ * bounded batch per night without re-indexing files. Enqueue + drain happen in
+ * one pass so the code_symbols.rowid we enqueue stays valid (rowids change when
+ * a file is re-indexed). Relies on popEmbedQueue being kind-filtered so the
+ * memory/prompt drainer can't claim-and-discard these symbol rows mid-pass.
+ *
+ * @param {object} opts
+ * @param {number} opts.maxSymbols  Cap enqueued per call (default 3000 — ~100s nightly)
+ * @param {number} opts.embedBatch  Symbols embedded per drain iteration (default 500)
+ */
+export async function backfillUnembeddedSymbols({ maxSymbols = 3000, embedBatch = 500 } = {}) {
+  const db = require('./db.cjs');
+  db.initialize(null, null);
+  const conn = db.raw();
+
+  const missing = conn.prepare(`
+    SELECT cs.rowid AS rid
+      FROM code_symbols cs
+      LEFT JOIN symbol_embeddings se
+        ON se.file = cs.file AND se.symbol_name = cs.name AND se.symbol_kind = cs.kind
+     WHERE se.file IS NULL
+       AND cs.content_hash IS NOT NULL
+     LIMIT ?
+  `).all(maxSymbols);
+  if (!missing.length) return { enqueued: 0, processed: 0, failed: 0, skipped: 'fully-covered' };
+
+  const enq = conn.prepare(`INSERT OR IGNORE INTO embed_queue (kind, target_id, queued_at) VALUES ('symbol', ?, ?)`);
+  const now = new Date().toISOString();
+  let enqueued = 0;
+  for (const m of missing) { try { enq.run(m.rid, now); enqueued++; } catch (_) {} }
+
+  let processed = 0, failed = 0;
+  while (true) {
+    const r = await processSymbolEmbedQueue({ batchSize: embedBatch });
+    processed += r.processed || 0;
+    failed += r.failed || 0;
+    if (!r.processed && !r.failed) break;
+    if ((r.batch || 0) < embedBatch) break;
+  }
+  return { enqueued, processed, failed };
+}
+
+/**
+ * Cosine similarity over symbol_embeddings. Used by unified_search as the
+ * "code semantic" source — finds symbols whose body is conceptually related
+ * to the query, even when no keyword overlap exists.
+ *
+ * @param {string} query
+ * @param {number} limit  default 5
+ * @param {number} threshold  default 0.25 — low because code prose differs
+ *                            from natural-language queries; tune later.
+ */
+export async function semanticSymbolSearch(query, { limit = 5, threshold = 0.25 } = {}) {
+  const db = require('./db.cjs');
+  db.initialize(null, null);
+  const conn = db.raw();
+
+  const qVec = await embed(query);
+
+  const rows = conn.prepare(`
+    SELECT file, symbol_name AS name, symbol_kind AS kind, vector
+    FROM symbol_embeddings
+  `).all();
+  if (!rows.length) return [];
+
+  const scored = [];
+  for (const r of rows) {
+    let v; try { v = JSON.parse(r.vector); } catch (_) { continue; }
+    const s = cosine(qVec, v);
+    if (s >= threshold) scored.push({ file: r.file, name: r.name, kind: r.kind, score: s });
+  }
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, limit);
+}
+
+/**
+ * One-time backfill: re-index every file that has symbols but no hashes yet,
+ * then drain the resulting embed_queue. Heavier than the nightly path but
+ * useful for an initial population pass.
+ *
+ * @param {object} opts
+ * @param {string|null} opts.projectFilter  Only re-index files for this project (faster, e.g. 'vaultflow')
+ * @param {number} opts.maxFiles  Cap to this many files (default 100)
+ * @param {number} opts.embedBatch  How many symbols to embed per batch (default 200)
+ */
+export async function backfillSymbolEmbeddings({ projectFilter = null, maxFiles = 100, embedBatch = 200 } = {}) {
+  const db = require('./db.cjs');
+  const fs = await import('node:fs');
+  const cg = await import('./code-graph.cjs').then(m => m.default || m).catch(() => require('./code-graph.cjs'));
+  db.initialize(null, null);
+  const conn = db.raw();
+
+  // Files with at least one symbol lacking content_hash.
+  const files = conn.prepare(`
+    SELECT DISTINCT file, project
+    FROM code_symbols
+    WHERE content_hash IS NULL
+      ${projectFilter ? "AND project = ?" : ""}
+    ORDER BY file
+    LIMIT ?
+  `).all(...(projectFilter ? [projectFilter, maxFiles] : [maxFiles]));
+
+  let indexedFiles = 0, enqueued = 0;
+  for (const f of files) {
+    if (!fs.existsSync(f.file)) continue;
+    try {
+      const before = conn.prepare(`SELECT COUNT(*) AS n FROM embed_queue WHERE kind='symbol'`).get().n;
+      cg.indexFile(db, f.file, f.project);
+      const after = conn.prepare(`SELECT COUNT(*) AS n FROM embed_queue WHERE kind='symbol'`).get().n;
+      enqueued += Math.max(0, after - before);
+      indexedFiles++;
+    } catch (_) {}
+  }
+
+  // Now drain whatever's queued.
+  let totalProcessed = 0, totalFailed = 0;
+  while (true) {
+    const r = await processSymbolEmbedQueue({ batchSize: embedBatch });
+    if (!r.processed && !r.failed) break;
+    totalProcessed += r.processed || 0;
+    totalFailed += r.failed || 0;
+    if ((r.batch || 0) < embedBatch) break;
+  }
+
+  return { indexedFiles, enqueued, processed: totalProcessed, failed: totalFailed };
 }
 
 /**

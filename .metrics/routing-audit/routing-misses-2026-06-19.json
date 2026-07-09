@@ -1,0 +1,383 @@
+{
+  "date": "2026-06-19",
+  "prompts_scanned": 22,
+  "strong_matches": 17,
+  "misses_count": 17,
+  "miss_rate": 1,
+  "misses": [
+    {
+      "prompt_id": 3725,
+      "ts": "2026-06-19T06:00:08.040Z",
+      "snippet": "You are the Librarian running a vault maintenance audit. Your job is to find real gaps and generate a prioritized task list. ## What to aud",
+      "candidates": [
+        {
+          "name": "vault-librarian",
+          "rank": -13.65,
+          "use_count": 32
+        },
+        {
+          "name": "customer-expert",
+          "rank": -8.01,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.45,
+          "use_count": 18
+        }
+      ]
+    },
+    {
+      "prompt_id": 3724,
+      "ts": "2026-06-18T20:35:28.964Z",
+      "snippet": "alright now with the engines we need to make sure we know which are core bc, dynamics, how they work if they relay on isvs ect does this mak",
+      "candidates": [
+        {
+          "name": "test-writer",
+          "rank": -8.38,
+          "use_count": 1
+        },
+        {
+          "name": "test-writer",
+          "rank": -8.24,
+          "use_count": 1
+        },
+        {
+          "name": "excalidraw-diagram",
+          "rank": -6.55,
+          "use_count": 4
+        }
+      ]
+    },
+    {
+      "prompt_id": 3720,
+      "ts": "2026-06-18T18:30:27.481Z",
+      "snippet": "I think i have a token",
+      "candidates": [
+        {
+          "name": "leadtime-planner",
+          "rank": -5.32,
+          "use_count": 0
+        },
+        {
+          "name": "configure-devteam",
+          "rank": -4.84,
+          "use_count": 7
+        },
+        {
+          "name": "agent-communicator",
+          "rank": -4.7,
+          "use_count": 23
+        }
+      ]
+    },
+    {
+      "prompt_id": 3718,
+      "ts": "2026-06-18T17:09:28.707Z",
+      "snippet": "i have another session doing it all and the ui",
+      "candidates": [
+        {
+          "name": "session-reviewer",
+          "rank": -8,
+          "use_count": 1
+        },
+        {
+          "name": "session-reviewer",
+          "rank": -8,
+          "use_count": 1
+        },
+        {
+          "name": "session-reviewer",
+          "rank": -7.91,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3716,
+      "ts": "2026-06-18T16:59:53.867Z",
+      "snippet": "the UI is the html file",
+      "candidates": [
+        {
+          "name": "developer-frontend",
+          "rank": -8.9,
+          "use_count": 3
+        },
+        {
+          "name": "developer-backend",
+          "rank": -7.43,
+          "use_count": 53
+        },
+        {
+          "name": "pipeline-gateway",
+          "rank": -4.59,
+          "use_count": 39
+        }
+      ]
+    },
+    {
+      "prompt_id": 3713,
+      "ts": "2026-06-18T16:15:50.231Z",
+      "snippet": "Alright i Like this do you think it might be better to do this but for every table then go to engines?",
+      "candidates": [
+        {
+          "name": "database-optimizer",
+          "rank": -5.82,
+          "use_count": 0
+        },
+        {
+          "name": "quoting-expert",
+          "rank": -5.48,
+          "use_count": 0
+        },
+        {
+          "name": "workflow-expert",
+          "rank": -4.23,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3712,
+      "ts": "2026-06-18T16:14:17.895Z",
+      "snippet": "now is this on the html? the html doc is the dashboard the ui we need to design a ui that tkaes and allows up to have a few robust knowledge",
+      "candidates": [
+        {
+          "name": "agent-communicator",
+          "rank": -14.17,
+          "use_count": 23
+        },
+        {
+          "name": "developer-frontend",
+          "rank": -13.21,
+          "use_count": 3
+        },
+        {
+          "name": "developer-backend",
+          "rank": -11.73,
+          "use_count": 53
+        }
+      ]
+    },
+    {
+      "prompt_id": 3711,
+      "ts": "2026-06-18T16:05:15.925Z",
+      "snippet": "can we go throught and deep dive each engine that bc has and all the plugs we need to have a deep understanding. also can we take a look at ",
+      "candidates": [
+        {
+          "name": "workflow-architect",
+          "rank": -5.45,
+          "use_count": 0
+        },
+        {
+          "name": "deep-plan",
+          "rank": -4.97,
+          "use_count": 19
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.64,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3706,
+      "ts": "2026-06-18T13:11:30.856Z",
+      "snippet": "okay.... i like this do i have ollama?",
+      "candidates": [
+        {
+          "name": "database-optimizer",
+          "rank": -5.82,
+          "use_count": 0
+        },
+        {
+          "name": "quoting-expert",
+          "rank": -5.48,
+          "use_count": 0
+        },
+        {
+          "name": "ai-data-remediation-engineer",
+          "rank": -5.41,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3704,
+      "ts": "2026-06-18T12:59:08.646Z",
+      "snippet": "can we fix the 7 that failed",
+      "candidates": [
+        {
+          "name": "ai-data-remediation-engineer",
+          "rank": -9.62,
+          "use_count": 0
+        },
+        {
+          "name": "workflow-architect",
+          "rank": -5.45,
+          "use_count": 0
+        },
+        {
+          "name": "minimal-change-engineer",
+          "rank": -5.38,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3703,
+      "ts": "2026-06-18T12:44:05.792Z",
+      "snippet": "well was is the fix engine?",
+      "candidates": [
+        {
+          "name": "base-template-generator",
+          "rank": -6.9,
+          "use_count": 0
+        },
+        {
+          "name": "cost-engine",
+          "rank": -6.01,
+          "use_count": 0
+        },
+        {
+          "name": "ai-data-remediation-engineer",
+          "rank": -5.76,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3701,
+      "ts": "2026-06-18T12:33:43.680Z",
+      "snippet": "yes and port it to the e drive as well",
+      "candidates": [
+        {
+          "name": "base-template-generator",
+          "rank": -6.9,
+          "use_count": 0
+        },
+        {
+          "name": "agent-migration-plan",
+          "rank": -6.37,
+          "use_count": 0
+        },
+        {
+          "name": "cost-engine",
+          "rank": -6.03,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3700,
+      "ts": "2026-06-18T12:31:03.355Z",
+      "snippet": "did we update my computer and the sub directories as well",
+      "candidates": [
+        {
+          "name": "psi-wiki",
+          "rank": -5.76,
+          "use_count": 29
+        },
+        {
+          "name": "session-reviewer",
+          "rank": -4.94,
+          "use_count": 1
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.64,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3698,
+      "ts": "2026-06-18T12:20:46.406Z",
+      "snippet": "alright well lets commit and push what we have",
+      "candidates": [
+        {
+          "name": "base-template-generator",
+          "rank": -6.9,
+          "use_count": 0
+        },
+        {
+          "name": "code-reviewer",
+          "rank": -5.57,
+          "use_count": 0
+        },
+        {
+          "name": "code-reviewer",
+          "rank": -5.57,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3697,
+      "ts": "2026-06-18T06:00:09.382Z",
+      "snippet": "You are the Librarian running a vault maintenance audit. Your job is to find real gaps and generate a prioritized task list. ## What to aud",
+      "candidates": [
+        {
+          "name": "vault-librarian",
+          "rank": -13.65,
+          "use_count": 32
+        },
+        {
+          "name": "customer-expert",
+          "rank": -8.01,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.45,
+          "use_count": 18
+        }
+      ]
+    },
+    {
+      "prompt_id": 3692,
+      "ts": "2026-06-18T02:51:10.244Z",
+      "snippet": "leave it run and we will have the 2 am fill in the gaps?",
+      "candidates": [
+        {
+          "name": "leadtime-planner",
+          "rank": -5.32,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.64,
+          "use_count": 1
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.57,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3691,
+      "ts": "2026-06-18T02:10:49.385Z",
+      "snippet": "did we get the e drive backed up?",
+      "candidates": [
+        {
+          "name": "agent-ado",
+          "rank": -6.47,
+          "use_count": 5
+        },
+        {
+          "name": "frontend-dev",
+          "rank": -4.92,
+          "use_count": 1
+        },
+        {
+          "name": "api-integration",
+          "rank": -4.84,
+          "use_count": 0
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,276 @@
+{
+  "date": "2026-05-22T01:24:51.955Z",
+  "idea1": {
+    "code_symbols": 73515,
+    "symbol_embeddings": 0,
+    "symbol_embeddings_table_exists": false,
+    "has_content_hash": false,
+    "memory_embeddings": 13685,
+    "prompt_embeddings": 472,
+    "indexFile_runs_ms": [
+      {
+        "ms": 26.6
+      },
+      {
+        "ms": 15.9
+      },
+      {
+        "ms": 28.4
+      }
+    ],
+    "probe_file": "C:/GIT/vaultflow/.claude/helpers/db.cjs"
+  },
+  "idea2": {
+    "queries": [
+      {
+        "q": "RRF reciprocal rank fusion",
+        "result": {
+          "ms": 46.47,
+          "counts": {
+            "memory": 2,
+            "symbols": 0,
+            "commits": 0,
+            "dictionary": 0,
+            "tools": 0
+          },
+          "top5": [
+            {
+              "source": "memory",
+              "ref": "Phase 3: Hybrid FTS5 + sqlite-vec with RRF [M — 2-3 days]  · 🟡 IN PROGRESS"
+            },
+            {
+              "source": "memory",
+              "ref": "Methodologies"
+            }
+          ],
+          "sources_in_top5": 1
+        }
+      },
+      {
+        "q": "FTS5 BM25",
+        "result": {
+          "ms": 31.45,
+          "counts": {
+            "memory": 5,
+            "symbols": 0,
+            "commits": 1,
+            "dictionary": 0,
+            "tools": 0
+          },
+          "top5": [
+            {
+              "source": "memory",
+              "ref": "Critical Architecture Rules"
+            },
+            {
+              "source": "memory",
+              "ref": "Phase 1: FTS5 over RawText [M — 1-2 days]  · ⛔ SUPERSEDED"
+            },
+            {
+              "source": "memory",
+              "ref": "2026-05-07 — wiki reconciliation against live brain state"
+            },
+            {
+              "source": "memory",
+              "ref": "Tech Stack"
+            },
+            {
+              "source": "memory",
+              "ref": "Phase 3: Hybrid FTS5 + sqlite-vec with RRF [M — 2-3 days]  · 🟡 IN PROGRESS"
+            }
+          ],
+          "sources_in_top5": 1
+        }
+      },
+      {
+        "q": "searchMemory",
+        "result": {
+          "ms": 15.9,
+          "counts": {
+            "memory": 0,
+            "symbols": 5,
+            "commits": 1,
+            "dictionary": 0,
+            "tools": 0
+          },
+          "top5": [
+            {
+              "source": "symbols",
+              "ref": "searchMemory"
+            },
+            {
+              "source": "symbols",
+              "ref": "searchMemory"
+            },
+            {
+              "source": "symbols",
+              "ref": "searchMemory"
+            },
+            {
+              "source": "symbols",
+              "ref": "searchMemory"
+            },
+            {
+              "source": "symbols",
+              "ref": "searchMemoryTool"
+            }
+          ],
+          "sources_in_top5": 1
+        }
+      },
+      {
+        "q": "hook-handler session start",
+        "result": {
+          "ms": 43.14,
+          "counts": {
+            "memory": 1,
+            "symbols": 0,
+            "commits": 0,
+            "dictionary": 0,
+            "tools": 0
+          },
+          "top5": [
+            {
+              "source": "memory",
+              "ref": "File Map"
+            }
+          ],
+          "sources_in_top5": 1
+        }
+      },
+      {
+        "q": "parquet flush duckdb",
+        "result": {
+          "ms": 53.99,
+          "counts": {
+            "memory": 3,
+            "symbols": 0,
+            "commits": 0,
+            "dictionary": 0,
+            "tools": 0
+          },
+          "top5": [
+            {
+              "source": "memory",
+              "ref": "vaultflow Integration"
+            },
+            {
+              "source": "memory",
+              "ref": "File Map"
+            },
+            {
+              "source": "memory",
+              "ref": "Reusable Tools (Flat Structure)"
+            }
+          ],
+          "sources_in_top5": 1
+        }
+      },
+      {
+        "q": "skill injection router",
+        "result": {
+          "ms": 50.24,
+          "counts": {
+            "memory": 2,
+            "symbols": 0,
+            "commits": 0,
+            "dictionary": 0,
+            "tools": 0
+          },
+          "top5": [
+            {
+              "source": "memory",
+              "ref": "File Map"
+            },
+            {
+              "source": "memory",
+              "ref": "Reusable Tools (Flat Structure)"
+            }
+          ],
+          "sources_in_top5": 1
+        }
+      },
+      {
+        "q": "stack detector tech stack",
+        "result": {
+          "ms": 44.96,
+          "counts": {
+            "memory": 1,
+            "symbols": 0,
+            "commits": 0,
+            "dictionary": 0,
+            "tools": 0
+          },
+          "top5": [
+            {
+              "source": "memory",
+              "ref": "File Map"
+            }
+          ],
+          "sources_in_top5": 1
+        }
+      },
+      {
+        "q": "unified search merge",
+        "result": {
+          "ms": 56.26,
+          "counts": {
+            "memory": 1,
+            "symbols": 0,
+            "commits": 0,
+            "dictionary": 0,
+            "tools": 0
+          },
+          "top5": [
+            {
+              "source": "memory",
+              "ref": "Reusable Tools (Flat Structure)"
+            }
+          ],
+          "sources_in_top5": 1
+        }
+      },
+      {
+        "q": "watcher chokidar file tracking",
+        "result": {
+          "ms": 35.46,
+          "counts": {
+            "memory": 2,
+            "symbols": 0,
+            "commits": 0,
+            "dictionary": 0,
+            "tools": 0
+          },
+          "top5": [
+            {
+              "source": "memory",
+              "ref": "File Map"
+            },
+            {
+              "source": "memory",
+              "ref": "Reusable Tools (Flat Structure)"
+            }
+          ],
+          "sources_in_top5": 1
+        }
+      },
+      {
+        "q": "embedding similarity prompt dedup",
+        "result": {
+          "ms": 32.58,
+          "counts": {
+            "memory": 0,
+            "symbols": 0,
+            "commits": 0,
+            "dictionary": 0,
+            "tools": 0
+          },
+          "top5": [],
+          "sources_in_top5": 0
+        }
+      }
+    ],
+    "avg_sources_in_top5": 0.9,
+    "avg_latency_ms": 41.05
+  }
+}

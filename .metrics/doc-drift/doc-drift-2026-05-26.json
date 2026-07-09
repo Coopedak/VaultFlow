@@ -1,0 +1,62 @@
+{
+  "date": "2026-05-26",
+  "generated_at": "2026-05-26T07:00:34.429Z",
+  "repo_root": "C:\\GIT\\vaultflow",
+  "ok": false,
+  "drifts": [
+    {
+      "section": "endpoint-count",
+      "claim": "24 endpoints",
+      "actual": "44 routes in .claude/helpers/dashboard/server.mjs",
+      "snippet": "rd | Express 4 + Chart.js SPA (24 read-only API endpoints) | | AI agents | Codex CLI via"
+    },
+    {
+      "section": "endpoint-count",
+      "claim": "12 endpoints",
+      "actual": "44 routes in .claude/helpers/dashboard/server.mjs",
+      "snippet": "— Express API server (12 endpoints) index.html — S"
+    },
+    {
+      "section": "file-map-missing-in-doc",
+      "claim": "File Map mentions 18 helper file(s)",
+      "actual": "44 helper files exist; 26 not documented",
+      "items": [
+        "audit.mjs",
+        "cli-telemetry-backfill.mjs",
+        "code-graph.cjs",
+        "commit-indexer.cjs",
+        "copilot-resume.cjs",
+        "doc-drift-check.mjs",
+        "doctor.mjs",
+        "embeddings.mjs",
+        "ensure-watcher.mjs",
+        "focus.cjs",
+        "gen.mjs",
+        "git-context.cjs",
+        "lint.mjs",
+        "mcp-server.cjs",
+        "model-router.cjs",
+        "nightly.mjs",
+        "one-time-cleanup.cjs",
+        "plan-init.mjs",
+        "pre-bash.cjs",
+        "pre-edit.cjs",
+        "pre-read.cjs",
+        "pre-search.cjs",
+        "project-audit.mjs",
+        "project-id.cjs",
+        "session-start-bg.mjs",
+        "shell-intent.cjs"
+      ]
+    }
+  ],
+  "summary": {
+    "endpoints": 44,
+    "skill_dirs": 134,
+    "agents": {
+      "enabled": 15,
+      "disabled": 119
+    },
+    "helpers_on_disk": 44
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "id": "bdda8af5-4e1c-4d3c-a854-9ebb4bc74a57",
+  "startedAt": "2026-06-17T13:20:15.072Z",
+  "endedAt": "2026-06-17T13:27:05.032Z",
+  "restoredAt": null,
+  "durationMs": 409961,
+  "platform": "win32",
+  "cwd": "S:\\OneNote\\Employee Manual",
+  "context": "claude-code",
+  "metrics": {
+    "edits": 0,
+    "commands": 0,
+    "tasks": 0,
+    "errors": 0
+  },
+  "project": null,
+  "model": null,
+  "modelProvider": null,
+  "cliVersion": null,
+  "lastInjectedSkill": null,
+  "lastInjectedAt": null,
+  "injectedSources": []
+}

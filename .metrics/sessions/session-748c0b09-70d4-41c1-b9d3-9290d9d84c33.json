@@ -1,0 +1,23 @@
+{
+  "id": "748c0b09-70d4-41c1-b9d3-9290d9d84c33",
+  "startedAt": "2026-05-29T20:07:44.515Z",
+  "endedAt": "2026-05-29T20:39:23.420Z",
+  "restoredAt": "2026-05-29T20:35:49.902Z",
+  "durationMs": 1898905,
+  "platform": "win32",
+  "cwd": "C:\\Users\\DCC",
+  "context": "claude-code",
+  "metrics": {
+    "edits": 0,
+    "commands": 0,
+    "tasks": 0,
+    "errors": 0
+  },
+  "project": null,
+  "model": null,
+  "modelProvider": null,
+  "cliVersion": null,
+  "lastInjectedSkill": null,
+  "lastInjectedAt": null,
+  "injectedSources": []
+}

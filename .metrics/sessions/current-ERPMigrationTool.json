@@ -1,0 +1,23 @@
+{
+  "id": "e02e4a6f-2165-4008-9af6-b4c9a37cf11a",
+  "startedAt": "2026-06-10T18:09:31.906Z",
+  "endedAt": "2026-06-10T18:14:18.231Z",
+  "restoredAt": "2026-06-10T18:09:39.840Z",
+  "durationMs": 286325,
+  "platform": "win32",
+  "cwd": "C:\\GIT\\ERPMigrationTool",
+  "context": "claude-code",
+  "metrics": {
+    "edits": 0,
+    "commands": 0,
+    "tasks": 0,
+    "errors": 0
+  },
+  "project": "ERPMigrationTool",
+  "model": null,
+  "modelProvider": null,
+  "cliVersion": null,
+  "lastInjectedSkill": null,
+  "lastInjectedAt": null,
+  "injectedSources": []
+}

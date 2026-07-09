@@ -1,0 +1,180 @@
+{
+  "date": "2026-05-21",
+  "prompts_scanned": 200,
+  "strong_matches": 9,
+  "misses_count": 8,
+  "miss_rate": 0.889,
+  "misses": [
+    {
+      "prompt_id": 2871,
+      "ts": "2026-05-21T19:23:33.871Z",
+      "snippet": "https://psmes.progressivesurface.com/qa/dashboard lot audit for skid 13 when i complete nd it makes the shipment traveler the rga has good l",
+      "candidates": [
+        {
+          "name": "admin-expert",
+          "overlap": 4,
+          "use_count": 0
+        },
+        {
+          "name": "admin-expert",
+          "overlap": 4,
+          "use_count": 0
+        },
+        {
+          "name": "quality-expert",
+          "overlap": 3,
+          "use_count": 15
+        }
+      ]
+    },
+    {
+      "prompt_id": 2841,
+      "ts": "2026-05-21T17:30:44.858Z",
+      "snippet": "alright next topic in skid scan explain how rga works seems like each coinstack or skid is creating an rga the problem is multip skids or co",
+      "candidates": [
+        {
+          "name": "order-flow-expert",
+          "overlap": 4,
+          "use_count": 0
+        },
+        {
+          "name": "order-flow-expert",
+          "overlap": 4,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2784,
+      "ts": "2026-05-21T06:00:08.113Z",
+      "snippet": "You are the Librarian running a vault maintenance audit. Your job is to find real gaps and generate a prioritized task list. ## What to aud",
+      "candidates": [
+        {
+          "name": "session-reviewer",
+          "overlap": 18,
+          "use_count": 2
+        },
+        {
+          "name": "session-reviewer",
+          "overlap": 15,
+          "use_count": 0
+        },
+        {
+          "name": "session-reviewer",
+          "overlap": 14,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2766,
+      "ts": "2026-05-20T19:15:38.488Z",
+      "snippet": "<task-notification> <task-id>a026f4efca72e37bc</task-id> <output-file>C:\\Users\\DCC\\AppData\\Local\\Temp\\claude\\C--GIT-PRGJSMES\\77128d67-52a3-4",
+      "candidates": [
+        {
+          "name": "code-reviewer",
+          "overlap": 6,
+          "use_count": 0
+        },
+        {
+          "name": "code-reviewer",
+          "overlap": 5,
+          "use_count": 0
+        },
+        {
+          "name": "frontend-dev",
+          "overlap": 4,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 2754,
+      "ts": "2026-05-20T18:39:01.919Z",
+      "snippet": "<task-notification> <task-id>a026f4efca72e37bc</task-id> <output-file>C:\\Users\\DCC\\AppData\\Local\\Temp\\claude\\C--GIT-PRGJSMES\\77128d67-52a3-4",
+      "candidates": [
+        {
+          "name": "sql-migration-validator",
+          "overlap": 7,
+          "use_count": 0
+        },
+        {
+          "name": "sql-migration-validator",
+          "overlap": 7,
+          "use_count": 0
+        },
+        {
+          "name": "legacy-modernization-auditor",
+          "overlap": 6,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2744,
+      "ts": "2026-05-20T17:50:10.726Z",
+      "snippet": "<task-notification> <task-id>a3cf6df5f00b7da41</task-id> <output-file>C:\\Users\\DCC\\AppData\\Local\\Temp\\claude\\C--GIT-PRGJSMES\\77128d67-52a3-4",
+      "candidates": [
+        {
+          "name": "frontend-dev",
+          "overlap": 4,
+          "use_count": 1
+        },
+        {
+          "name": "frontend-dev",
+          "overlap": 4,
+          "use_count": 0
+        },
+        {
+          "name": "agent-communicator",
+          "overlap": 3,
+          "use_count": 16
+        }
+      ]
+    },
+    {
+      "prompt_id": 2738,
+      "ts": "2026-05-20T17:45:16.570Z",
+      "snippet": "<task-notification> <task-id>a3cf6df5f00b7da41</task-id> <tool-use-id>toolu_014cTjkLyPjqDijwnd11HjMq</tool-use-id> <output-file>C:\\Users\\DCC",
+      "candidates": [
+        {
+          "name": "code-reviewer",
+          "overlap": 10,
+          "use_count": 0
+        },
+        {
+          "name": "code-reviewer",
+          "overlap": 8,
+          "use_count": 0
+        },
+        {
+          "name": "pr-shepherd",
+          "overlap": 8,
+          "use_count": 4
+        }
+      ]
+    },
+    {
+      "prompt_id": 2735,
+      "ts": "2026-05-20T17:38:05.470Z",
+      "snippet": "<task-notification> <task-id>a7eb3232c653511a9</task-id> <tool-use-id>toolu_018z5Lfj1QDyWkNQKiJUgvKP</tool-use-id> <output-file>C:\\Users\\DCC",
+      "candidates": [
+        {
+          "name": "debugger",
+          "overlap": 10,
+          "use_count": 0
+        },
+        {
+          "name": "pr-shepherd",
+          "overlap": 9,
+          "use_count": 4
+        },
+        {
+          "name": "agent-ado",
+          "overlap": 8,
+          "use_count": 2
+        }
+      ]
+    }
+  ]
+}

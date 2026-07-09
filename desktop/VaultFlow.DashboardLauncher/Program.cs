@@ -3,13 +3,23 @@ using System.Net.Http;
 
 const string DefaultUrl = "http://localhost:7700";
 const int StartupTimeoutSeconds = 25;
+const string RepoRootFileName = "vaultflow.repo-root.txt";
 
 var dashboardUrl = GetArgValue(args, "--url") ?? Environment.GetEnvironmentVariable("VAULTFLOW_DASHBOARD_URL") ?? DefaultUrl;
-var repoRoot = GetArgValue(args, "--repo") ?? FindRepoRoot() ?? @"C:\GIT\vaultflow";
+var installDir = AppContext.BaseDirectory;
+var repoRoot = GetArgValue(args, "--repo")
+    ?? Environment.GetEnvironmentVariable("VAULTFLOW_REPO_ROOT")
+    ?? ReadRepoRootFromInstall(installDir);
 
-if (!IsVaultFlowRepo(repoRoot))
+if (string.IsNullOrWhiteSpace(repoRoot) || !IsVaultFlowRepo(repoRoot))
 {
-    ShowError($"VaultFlow repo not found.\n\nChecked: {repoRoot}");
+    ShowError($"""
+VaultFlow repo not found.
+
+Launcher install: {installDir}
+
+Expected repo root file: {Path.Combine(installDir, RepoRootFileName)}
+""");
     return;
 }
 
@@ -37,41 +47,23 @@ static string? GetArgValue(string[] args, string name)
     return null;
 }
 
-static string? FindRepoRoot()
+static string? ReadRepoRootFromInstall(string installDir)
 {
-    var candidates = new[]
+    var manifestPath = Path.Combine(installDir, RepoRootFileName);
+    if (!File.Exists(manifestPath))
     {
-        Directory.GetCurrentDirectory(),
-        AppContext.BaseDirectory,
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "source", "repos", "vaultflow"),
-        @"C:\GIT\vaultflow",
-    };
-
-    foreach (var candidate in candidates)
-    {
-        var found = WalkUpForRepo(candidate);
-        if (found is not null) return found;
+        return null;
     }
 
-    return null;
-}
-
-static string? WalkUpForRepo(string start)
-{
     try
     {
-        var dir = new DirectoryInfo(start);
-        while (dir is not null)
-        {
-            if (IsVaultFlowRepo(dir.FullName)) return dir.FullName;
-            dir = dir.Parent;
-        }
+        var repoRoot = File.ReadAllText(manifestPath).Trim();
+        return string.IsNullOrWhiteSpace(repoRoot) ? null : repoRoot;
     }
     catch
     {
+        return null;
     }
-
-    return null;
 }
 
 static bool IsVaultFlowRepo(string path)

@@ -10,6 +10,8 @@ const ROOT = path.resolve(__dirname, '..');
 const COMMANDS = {
   tui:             ['tui', 'index.mjs'],
   'tui:dev':       ['tui', 'index.mjs'],
+  install:         ['scripts', 'install.mjs'],
+  setup:           ['scripts', 'install.mjs'],
   audit:           ['.claude', 'helpers', 'audit.mjs'],
   lint:            ['.claude', 'helpers', 'lint.mjs'],
   backfill:        ['.claude', 'helpers', 'backfill.mjs'],
@@ -18,6 +20,7 @@ const COMMANDS = {
   watcher:         ['.claude', 'helpers', 'watcher.mjs'],
   dict:            ['.claude', 'helpers', 'dict.mjs'],
   'dict:import':   ['.claude', 'helpers', 'dict.mjs'],
+  'import-chats':  ['.claude', 'helpers', 'import-claude-chats.mjs'],
   'gen-context':   ['.claude', 'helpers', 'gen-context.mjs'],
   'install-hooks': ['.claude', 'helpers', 'install-git-hooks.mjs'],
   'model-status':  ['.claude', 'helpers', 'model-router.cjs'],
@@ -36,6 +39,7 @@ function printHelp() {
     `  vault <command> [args]    Run a vaultflow command\n` +
     `  vaultflow [command]       Same as vault\n\n` +
     `Commands:\n` +
+    `  install           Install/repair vaultflow on this machine (global hooks, CLI, nightly, watcher)\n` +
     `  tui               Launch the TUI (default)\n` +
     `  dashboard         Generate the static dashboard HTML\n` +
     `  dashboard:open    Generate and open the static dashboard HTML\n` +
@@ -46,11 +50,21 @@ function printHelp() {
     `  audit             Run the health audit\n` +
     `  lint              Run the lint checks\n` +
     `  dict              Run dictionary commands\n` +
+    `  import-chats      Import Claude Desktop / claude.ai chat exports\n` +
     `  gen-context       Generate project context files\n` +
     `  install-hooks     Install git hooks into a project\n` +
     `  model-status      Show model routing status\n` +
     `  flush             Flush SQLite data to Parquet\n` +
-    `  mcp-server        Start the MCP server\n`
+    `  mcp-server        Start the MCP server\n` +
+    `\nQuery (headless brain access):\n` +
+    `  search <query>    Search memory/symbols/commits (add --json)\n` +
+    `  find-skill <task> Find existing skills before authoring a new one (add --json)\n` +
+    `  context [project] Show the context vaultflow would inject\n` +
+    `  graph [--center]  Print the brain graph (add --json)\n` +
+    `  mission           Mission Control ledger (add --json)\n` +
+    `  flows <sub>       Flow catalog: discover|list [project] | declare <file> <symbol> | declared [project] (add --json)\n` +
+    `  impact <target>   Change-impact report for a file or symbol (add --project, --json)\n` +
+    `  doctor            Run the health audit\n`
   );
 }
 
@@ -90,7 +104,12 @@ if (command === 'tui:dev') {
   forwardedArgs = ['--status', ...forwardedArgs];
 }
 
-if (scriptKey === 'dict:import') {
+const QUERY_COMMANDS = new Set(['search', 'find-skill', 'context', 'graph', 'mission', 'doctor', 'flows', 'impact']);
+
+if (QUERY_COMMANDS.has(command)) {
+  // Pass the full args (incl. subcommand) so cli-query.mjs sees argv[0]=subcommand.
+  runNodeScript(path.join(ROOT, 'scripts', 'cli-query.mjs'), args, nodeArgs);
+} else if (scriptKey === 'dict:import') {
   runNodeScript(path.join(ROOT, '.claude', 'helpers', 'dict.mjs'), ['--import', ...forwardedArgs], nodeArgs);
 } else {
   const segments = COMMANDS[scriptKey];

@@ -1,0 +1,637 @@
+{
+  "date": "2026-06-12",
+  "prompts_scanned": 38,
+  "strong_matches": 31,
+  "misses_count": 29,
+  "miss_rate": 0.935,
+  "misses": [
+    {
+      "prompt_id": 3545,
+      "ts": "2026-06-12T19:13:25.525Z",
+      "snippet": "smoke test needs to function like the old one but improved performance",
+      "candidates": [
+        {
+          "name": "agent-coder",
+          "rank": -7.19,
+          "use_count": 0
+        },
+        {
+          "name": "database-optimizer",
+          "rank": -5.74,
+          "use_count": 0
+        },
+        {
+          "name": "reality-checker",
+          "rank": -5.72,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3543,
+      "ts": "2026-06-12T19:02:21.690Z",
+      "snippet": "can you create me a pdf work instruction step by step on how to run it",
+      "candidates": [
+        {
+          "name": "test-writer",
+          "rank": -7.96,
+          "use_count": 1
+        },
+        {
+          "name": "quoting-expert",
+          "rank": -7.68,
+          "use_count": 0
+        },
+        {
+          "name": "pdf-pipeline",
+          "rank": -7.42,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3539,
+      "ts": "2026-06-12T17:52:22.640Z",
+      "snippet": "is there a way we can find the proprietarty data",
+      "candidates": [
+        {
+          "name": "researcher",
+          "rank": -9.08,
+          "use_count": 21
+        },
+        {
+          "name": "agent-researcher",
+          "rank": -5.41,
+          "use_count": 0
+        },
+        {
+          "name": "workflow-architect",
+          "rank": -5.38,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3538,
+      "ts": "2026-06-12T17:37:46.644Z",
+      "snippet": "https://getwayland.com/ you can down load it and get what you need frmo it",
+      "candidates": [
+        {
+          "name": "agent-ado",
+          "rank": -8.52,
+          "use_count": 5
+        },
+        {
+          "name": "project-manager",
+          "rank": -7.83,
+          "use_count": 14
+        },
+        {
+          "name": "leadtime-planner",
+          "rank": -6.63,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3536,
+      "ts": "2026-06-12T17:31:29.361Z",
+      "snippet": "yes my goal is for vaultflow to be similar to this \"https://www.scriptbyai.com/wayland-local-ai-agent/\"",
+      "candidates": [
+        {
+          "name": "agent-goal-planner",
+          "rank": -8.39,
+          "use_count": 0
+        },
+        {
+          "name": "minimal-change-engineer",
+          "rank": -6.49,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.36,
+          "use_count": 16
+        }
+      ]
+    },
+    {
+      "prompt_id": 3535,
+      "ts": "2026-06-12T17:25:03.471Z",
+      "snippet": "in the reports the reports are mapped to specfic printers",
+      "candidates": [
+        {
+          "name": "logistics-expert",
+          "rank": -9.04,
+          "use_count": 11
+        },
+        {
+          "name": "logistics-expert",
+          "rank": -9.04,
+          "use_count": 10
+        }
+      ]
+    },
+    {
+      "prompt_id": 3531,
+      "ts": "2026-06-12T17:07:19.278Z",
+      "snippet": "what features could we add to this repo to make it better and what are we missing in the dashboard? I really would like a data brain that sh",
+      "candidates": [
+        {
+          "name": "customer-expert",
+          "rank": -6.13,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.52,
+          "use_count": 1
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.44,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3530,
+      "ts": "2026-06-12T17:04:08.659Z",
+      "snippet": "you can stop git ignoring the wikis",
+      "candidates": [
+        {
+          "name": "ai-data-remediation-engineer",
+          "rank": -9.04,
+          "use_count": 0
+        },
+        {
+          "name": "git-workflow-master",
+          "rank": -7.09,
+          "use_count": 0
+        },
+        {
+          "name": "leadtime-planner",
+          "rank": -6.63,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3527,
+      "ts": "2026-06-12T17:02:01.817Z",
+      "snippet": "well make this all part of the start up process to get this working",
+      "candidates": [
+        {
+          "name": "frontend-dev",
+          "rank": -7.46,
+          "use_count": 1
+        },
+        {
+          "name": "excalidraw-diagram",
+          "rank": -6.47,
+          "use_count": 4
+        },
+        {
+          "name": "api-integration",
+          "rank": -5.05,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3525,
+      "ts": "2026-06-12T15:05:02.563Z",
+      "snippet": "so the vm login infomation should be in this repo",
+      "candidates": [
+        {
+          "name": "agent-planner",
+          "rank": -5.45,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -4.18,
+          "use_count": 16
+        },
+        {
+          "name": "sales-architect",
+          "rank": -3.88,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3524,
+      "ts": "2026-06-12T15:03:47.958Z",
+      "snippet": "\"S:\\Dept\\JobShop\\IC Production\\Production Planning\\Production Scheduling\\Scheduling Programs\\Quality\\QALabelDashBoard - Copy.accdb\" this is ",
+      "candidates": [
+        {
+          "name": "order-flow-expert",
+          "rank": -11.37,
+          "use_count": 5
+        },
+        {
+          "name": "order-flow-expert",
+          "rank": -11.37,
+          "use_count": 5
+        },
+        {
+          "name": "mes-architect",
+          "rank": -8.19,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3523,
+      "ts": "2026-06-12T15:01:33.625Z",
+      "snippet": "is this production ready? has detailed step by step instructions for the vm to get what it needs and work?",
+      "candidates": [
+        {
+          "name": "workflow-expert",
+          "rank": -11.89,
+          "use_count": 1
+        },
+        {
+          "name": "workflow-expert",
+          "rank": -11.89,
+          "use_count": 1
+        },
+        {
+          "name": "codebase-onboarding-engineer",
+          "rank": -5.58,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3522,
+      "ts": "2026-06-12T14:56:31.622Z",
+      "snippet": "so these are all the same but the printers are routed dirrect to the terminal printer that is why they are nammed different",
+      "candidates": [
+        {
+          "name": "session-reviewer",
+          "rank": -6.86,
+          "use_count": 0
+        },
+        {
+          "name": "agent-ado",
+          "rank": -4.6,
+          "use_count": 5
+        },
+        {
+          "name": "pr-shepherd",
+          "rank": -4.39,
+          "use_count": 10
+        }
+      ]
+    },
+    {
+      "prompt_id": 3521,
+      "ts": "2026-06-12T14:53:11.004Z",
+      "snippet": "alright can you look at teh \"S:\\Dept\\JobShop\\IC Production\\Production Planning\\Production Scheduling\\Scheduling Programs\\Quality\\QALabelDash",
+      "candidates": [
+        {
+          "name": "leadtime-planner",
+          "rank": -9.57,
+          "use_count": 0
+        },
+        {
+          "name": "leadtime-analyst",
+          "rank": -6.68,
+          "use_count": 0
+        },
+        {
+          "name": "sql-migration-validator",
+          "rank": -6.07,
+          "use_count": 2
+        }
+      ]
+    },
+    {
+      "prompt_id": 3520,
+      "ts": "2026-06-12T14:50:26.196Z",
+      "snippet": "alright fix all the bugs",
+      "candidates": [
+        {
+          "name": "frontend-dev",
+          "rank": -5.78,
+          "use_count": 1
+        },
+        {
+          "name": "frontend-dev",
+          "rank": -5.78,
+          "use_count": 0
+        },
+        {
+          "name": "frontend-dev",
+          "rank": -5.75,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3519,
+      "ts": "2026-06-12T14:44:39.932Z",
+      "snippet": "well let me ask you this are the argo line programs 1-6 ready for cut over? just need a yes or no answer",
+      "candidates": [
+        {
+          "name": "quality-expert",
+          "rank": -7.68,
+          "use_count": 55
+        },
+        {
+          "name": "quality-expert",
+          "rank": -7.68,
+          "use_count": 42
+        },
+        {
+          "name": "debugger",
+          "rank": -6.31,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3518,
+      "ts": "2026-06-12T14:42:18.014Z",
+      "snippet": "how can we do the cut over?",
+      "candidates": [
+        {
+          "name": "minimal-change-engineer",
+          "rank": -5.76,
+          "use_count": 0
+        },
+        {
+          "name": "workflow-architect",
+          "rank": -5.38,
+          "use_count": 0
+        },
+        {
+          "name": "quoting-expert",
+          "rank": -5.34,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3516,
+      "ts": "2026-06-12T14:29:27.441Z",
+      "snippet": "well fix line 5 to be like 1,2,3,4,6",
+      "candidates": [
+        {
+          "name": "database-optimizer",
+          "rank": -5.74,
+          "use_count": 0
+        },
+        {
+          "name": "ai-data-remediation-engineer",
+          "rank": -5.66,
+          "use_count": 0
+        },
+        {
+          "name": "minimal-change-engineer",
+          "rank": -5.28,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3515,
+      "ts": "2026-06-12T14:25:34.502Z",
+      "snippet": "are the changes made so i can go test?",
+      "candidates": [
+        {
+          "name": "code-reviewer",
+          "rank": -10.59,
+          "use_count": 0
+        },
+        {
+          "name": "code-reviewer",
+          "rank": -10.59,
+          "use_count": 0
+        },
+        {
+          "name": "sql-migration-validator",
+          "rank": -9.17,
+          "use_count": 2
+        }
+      ]
+    },
+    {
+      "prompt_id": 3513,
+      "ts": "2026-06-12T14:16:38.712Z",
+      "snippet": "alright go through the sop and work inssturctions and make sure they are up todate. for all modules not including jobshop",
+      "candidates": [
+        {
+          "name": "code-reviewer",
+          "rank": -7.76,
+          "use_count": 0
+        },
+        {
+          "name": "workflow-expert",
+          "rank": -5.89,
+          "use_count": 1
+        },
+        {
+          "name": "workflow-expert",
+          "rank": -5.89,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3511,
+      "ts": "2026-06-12T13:30:18.102Z",
+      "snippet": "well we need to ensure that the get thsi working and flowing to the qa dashboard",
+      "candidates": [
+        {
+          "name": "test-writer",
+          "rank": -8.15,
+          "use_count": 1
+        },
+        {
+          "name": "test-writer",
+          "rank": -8.01,
+          "use_count": 1
+        },
+        {
+          "name": "agent-ado",
+          "rank": -6.34,
+          "use_count": 5
+        }
+      ]
+    },
+    {
+      "prompt_id": 3506,
+      "ts": "2026-06-12T12:57:21.198Z",
+      "snippet": "lines 1-4 have a similar path with a similar file \"S:\\Dept\\JobShop\\IC Production\\Production Planning\\Production Scheduling\\Scheduling Progra",
+      "candidates": [
+        {
+          "name": "minimal-change-engineer",
+          "rank": -19.46,
+          "use_count": 0
+        },
+        {
+          "name": "leadtime-planner",
+          "rank": -5.18,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3504,
+      "ts": "2026-06-12T12:21:59.099Z",
+      "snippet": "fep and aep out going box can only be 25 but they come in as 30",
+      "candidates": [
+        {
+          "name": "workflow-architect",
+          "rank": -5.38,
+          "use_count": 0
+        },
+        {
+          "name": "quality-expert",
+          "rank": -4.46,
+          "use_count": 55
+        },
+        {
+          "name": "quality-expert",
+          "rank": -4.46,
+          "use_count": 42
+        }
+      ]
+    },
+    {
+      "prompt_id": 3502,
+      "ts": "2026-06-12T06:00:07.825Z",
+      "snippet": "You are the Librarian running a vault maintenance audit. Your job is to find real gaps and generate a prioritized task list. ## What to aud",
+      "candidates": [
+        {
+          "name": "vault-librarian",
+          "rank": -13.62,
+          "use_count": 30
+        },
+        {
+          "name": "customer-expert",
+          "rank": -7.83,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.52,
+          "use_count": 16
+        }
+      ]
+    },
+    {
+      "prompt_id": 3500,
+      "ts": "2026-06-12T01:37:22.460Z",
+      "snippet": "you need to find and read all vba in each ms access source to make sure you know and have it and how it works and what it is doing",
+      "candidates": [
+        {
+          "name": "psi-wiki",
+          "rank": -13.39,
+          "use_count": 25
+        },
+        {
+          "name": "access-data-extractor",
+          "rank": -8.07,
+          "use_count": 0
+        },
+        {
+          "name": "access-data-extractor",
+          "rank": -8.07,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3499,
+      "ts": "2026-06-12T01:28:16.351Z",
+      "snippet": "alright so the thermal and argo label programs should be clones for the most part but the difference they single each line. coinstacks the",
+      "candidates": [
+        {
+          "name": "quality-expert",
+          "rank": -13.99,
+          "use_count": 55
+        },
+        {
+          "name": "quality-expert",
+          "rank": -13.99,
+          "use_count": 42
+        },
+        {
+          "name": "thermal-expert",
+          "rank": -5.59,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3498,
+      "ts": "2026-06-11T21:29:08.870Z",
+      "snippet": "this repo needs to ensure that access can live in case the creator gets hit by a bus",
+      "candidates": [
+        {
+          "name": "legacy-modernization-auditor",
+          "rank": -8.01,
+          "use_count": 0
+        },
+        {
+          "name": "legacy-modernization-auditor",
+          "rank": -8.01,
+          "use_count": 0
+        },
+        {
+          "name": "sql-migration-validator",
+          "rank": -6.76,
+          "use_count": 2
+        }
+      ]
+    },
+    {
+      "prompt_id": 3497,
+      "ts": "2026-06-11T20:23:54.613Z",
+      "snippet": "alrright what i would like for you to do is to review all the ms access and make sure what we have is updated and correct because looking at",
+      "candidates": [
+        {
+          "name": "pattern-analyst",
+          "rank": -6.53,
+          "use_count": 16
+        },
+        {
+          "name": "leadtime-analyst",
+          "rank": -6.14,
+          "use_count": 0
+        },
+        {
+          "name": "database-optimizer",
+          "rank": -5.74,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3496,
+      "ts": "2026-06-11T06:00:08.109Z",
+      "snippet": "You are the Librarian running a vault maintenance audit. Your job is to find real gaps and generate a prioritized task list. ## What to aud",
+      "candidates": [
+        {
+          "name": "vault-librarian",
+          "rank": -13.62,
+          "use_count": 30
+        },
+        {
+          "name": "customer-expert",
+          "rank": -7.83,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.52,
+          "use_count": 16
+        }
+      ]
+    }
+  ]
+}

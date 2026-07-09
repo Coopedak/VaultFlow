@@ -1,0 +1,23 @@
+{
+  "id": "0b720700-9078-44b4-957e-d133c9046482",
+  "startedAt": "2026-05-19T11:35:52.730Z",
+  "endedAt": "2026-05-19T11:38:13.622Z",
+  "restoredAt": "2026-05-19T11:37:40.090Z",
+  "durationMs": 140893,
+  "platform": "win32",
+  "cwd": "C:\\GIT\\StockTool",
+  "context": "claude-code",
+  "metrics": {
+    "edits": 0,
+    "commands": 0,
+    "tasks": 0,
+    "errors": 0
+  },
+  "project": "StockTool",
+  "model": null,
+  "modelProvider": null,
+  "cliVersion": null,
+  "lastInjectedSkill": null,
+  "lastInjectedAt": null,
+  "injectedSources": []
+}

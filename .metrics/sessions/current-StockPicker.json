@@ -1,0 +1,23 @@
+{
+  "id": "5034d78a-4630-4dbf-801b-bb346e5b03f7",
+  "startedAt": "2026-06-19T17:37:35.659Z",
+  "endedAt": null,
+  "restoredAt": "2026-06-19T17:45:06.142Z",
+  "durationMs": null,
+  "platform": "win32",
+  "cwd": "C:\\GIT\\StockPicker",
+  "context": "claude-code",
+  "metrics": {
+    "edits": 3,
+    "commands": 0,
+    "tasks": 0,
+    "errors": 0
+  },
+  "project": "StockPicker",
+  "model": null,
+  "modelProvider": null,
+  "cliVersion": null,
+  "lastInjectedSkill": null,
+  "lastInjectedAt": null,
+  "injectedSources": []
+}

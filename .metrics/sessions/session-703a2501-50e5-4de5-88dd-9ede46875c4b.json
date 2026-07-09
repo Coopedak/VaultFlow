@@ -1,0 +1,23 @@
+{
+  "id": "703a2501-50e5-4de5-88dd-9ede46875c4b",
+  "startedAt": "2026-06-15T15:23:03.303Z",
+  "endedAt": "2026-06-15T15:36:12.704Z",
+  "restoredAt": null,
+  "durationMs": 789401,
+  "platform": "win32",
+  "cwd": "C:\\GIT\\MSAccessLegacy",
+  "context": "claude-code",
+  "metrics": {
+    "edits": 0,
+    "commands": 0,
+    "tasks": 0,
+    "errors": 0
+  },
+  "project": "MSAccessLegacy",
+  "model": null,
+  "modelProvider": null,
+  "cliVersion": null,
+  "lastInjectedSkill": null,
+  "lastInjectedAt": null,
+  "injectedSources": []
+}

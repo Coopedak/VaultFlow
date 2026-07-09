@@ -282,7 +282,9 @@ npm run dashboard:desktop:publish
 npm run dashboard:desktop:shortcut
 ```
 
-That creates a desktop shortcut named **VaultFlow Dashboard** pointing at the published launcher.
+That installs the launcher under `%LOCALAPPDATA%\VaultFlow\DashboardLauncher\<Configuration>\` and creates a desktop shortcut named **VaultFlow Dashboard** pointing at the installed launcher.
+
+The shortcut install also writes the repo root into the launcher directory, so the EXE can start the dashboard without requiring a `--repo` argument at runtime.
 
 ### Tracked CLI launchers
 

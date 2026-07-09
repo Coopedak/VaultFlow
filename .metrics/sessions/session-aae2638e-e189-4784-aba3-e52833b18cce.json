@@ -1,0 +1,23 @@
+{
+  "id": "aae2638e-e189-4784-aba3-e52833b18cce",
+  "startedAt": "2026-06-17T13:34:57.746Z",
+  "endedAt": "2026-06-17T13:48:37.961Z",
+  "restoredAt": "2026-06-17T13:42:25.565Z",
+  "durationMs": 820216,
+  "platform": "win32",
+  "cwd": "C:\\GIT\\vaultflow",
+  "context": "claude-code",
+  "metrics": {
+    "edits": 13,
+    "commands": 0,
+    "tasks": 0,
+    "errors": 0
+  },
+  "project": "vaultflow",
+  "model": null,
+  "modelProvider": null,
+  "cliVersion": null,
+  "lastInjectedSkill": null,
+  "lastInjectedAt": null,
+  "injectedSources": []
+}

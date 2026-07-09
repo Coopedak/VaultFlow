@@ -282,11 +282,39 @@ function run(input) {
       }
     } catch (_) { /* leave activeAgent null on any read failure */ }
 
+    // Resolve exclude_index_prefixes ONCE before the loop — reading config per
+    // file was wasteful (N yaml parses for N edited files in a MultiEdit call).
+    // Mirrors how code-graph.cjs caches _excludePrefixes via getExcludePrefixes().
+    let _excludePrefixes = null;
+    function getExcludePrefixes() {
+      if (_excludePrefixes !== null) return _excludePrefixes;
+      try {
+        const yaml    = require('js-yaml');
+        const fsLocal = require('fs');
+        const cfgPath = require('../../config/resolve.cjs');
+        const cfg     = fsLocal.existsSync(cfgPath) ? yaml.load(fsLocal.readFileSync(cfgPath, 'utf8')) : {};
+        _excludePrefixes = ((cfg.paths && cfg.paths.exclude_index_prefixes) || ['d:/vaultflow', 'e:/git/vaultflow'])
+          .map(p => String(p).replace(/\\/g, '/').toLowerCase());
+      } catch (_) {
+        // If config fails to load, fall back to the hardcoded defaults.
+        _excludePrefixes = ['d:/vaultflow', 'e:/git/vaultflow'];
+      }
+      return _excludePrefixes;
+    }
+
     // Record all edited files (MultiEdit may touch multiple paths).
     // db.recordEdit now also fires upsertPattern internally so the watcher
     // daemon and Copilot/Codex paths get pattern coverage too — pass the
     // active subagent through so attribution survives the consolidation.
     for (const filePath of filePaths) {
+      // Skip transient DB files — WAL journals and SHM files are write-ahead
+      // logs that change on every DB transaction and produce enormous noise in
+      // edit_events and the Brain graph. Also skip excluded path prefixes for
+      // defense-in-depth against snapshot copies (mirrors of D:/vaultflow etc).
+      const fpNorm = filePath.replace(/\\/g, '/').toLowerCase();
+      if (/\.(wal|duckdb\.wal|db-wal|db-shm)$/.test(fpNorm)) continue;
+      if (getExcludePrefixes().some(pfx => fpNorm.startsWith(pfx))) continue;
+
       const project = deriveProject(filePath);
 
       db.recordEdit(sessionId, filePath, project, changeType, activeAgent);

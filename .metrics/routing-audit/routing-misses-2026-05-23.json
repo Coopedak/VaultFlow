@@ -1,0 +1,1079 @@
+{
+  "date": "2026-05-23",
+  "prompts_scanned": 113,
+  "strong_matches": 69,
+  "misses_count": 66,
+  "miss_rate": 0.957,
+  "misses": [
+    {
+      "prompt_id": 3070,
+      "ts": "2026-05-23T06:00:08.387Z",
+      "snippet": "You are the Librarian running a vault maintenance audit. Your job is to find real gaps and generate a prioritized task list. ## What to aud",
+      "candidates": [
+        {
+          "name": "vault-librarian",
+          "rank": -13.62,
+          "use_count": 30
+        },
+        {
+          "name": "customer-expert",
+          "rank": -7.83,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.52,
+          "use_count": 11
+        }
+      ]
+    },
+    {
+      "prompt_id": 3068,
+      "ts": "2026-05-23T02:52:27.099Z",
+      "snippet": "fill embedding we have a lot of htis already done unless these are new chunks i dont want to do more more we just add on to it",
+      "candidates": [
+        {
+          "name": "materials-expert",
+          "rank": -6.65,
+          "use_count": 0
+        },
+        {
+          "name": "materials-expert",
+          "rank": -6.65,
+          "use_count": 0
+        },
+        {
+          "name": "debugger",
+          "rank": -5.49,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3067,
+      "ts": "2026-05-23T02:50:50.384Z",
+      "snippet": "so when we make a pick that is the pick date. price at time of pick. assume we want a 5% gain so we monitor if the high gets to what 5% incr",
+      "candidates": [
+        {
+          "name": "logistics-expert",
+          "rank": -12.06,
+          "use_count": 2
+        },
+        {
+          "name": "logistics-expert",
+          "rank": -12.06,
+          "use_count": 1
+        },
+        {
+          "name": "excalidraw-diagram",
+          "rank": -8.57,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3066,
+      "ts": "2026-05-23T02:47:46.588Z",
+      "snippet": "no i want everything in order done ill be gone over the weekend so we can just run",
+      "candidates": [
+        {
+          "name": "evidence-collector",
+          "rank": -7.48,
+          "use_count": 0
+        },
+        {
+          "name": "order-flow-expert",
+          "rank": -5.77,
+          "use_count": 1
+        },
+        {
+          "name": "order-flow-expert",
+          "rank": -5.77,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3060,
+      "ts": "2026-05-23T02:44:26.697Z",
+      "snippet": "well lets plan this out for the extraction in an order once this done lets we bm25 fts, embed and vector",
+      "candidates": [
+        {
+          "name": "order-flow-expert",
+          "rank": -5.77,
+          "use_count": 1
+        },
+        {
+          "name": "order-flow-expert",
+          "rank": -5.77,
+          "use_count": 1
+        },
+        {
+          "name": "workflow-expert",
+          "rank": -4.57,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3059,
+      "ts": "2026-05-23T02:43:50.174Z",
+      "snippet": "well why is the md's outdated? we need to ensure all the mds are updated daily everything get updated nightly right?",
+      "candidates": [
+        {
+          "name": "test-writer",
+          "rank": -8.15,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -8.01,
+          "use_count": 0
+        },
+        {
+          "name": "psi-wiki",
+          "rank": -4.69,
+          "use_count": 19
+        }
+      ]
+    },
+    {
+      "prompt_id": 3058,
+      "ts": "2026-05-23T02:43:49.826Z",
+      "snippet": "well why is the md's outdated? we need to ensure all the mds are updated daily everything get updated nightly right?",
+      "candidates": [
+        {
+          "name": "test-writer",
+          "rank": -8.15,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -8.01,
+          "use_count": 0
+        },
+        {
+          "name": "psi-wiki",
+          "rank": -4.69,
+          "use_count": 19
+        }
+      ]
+    },
+    {
+      "prompt_id": 3051,
+      "ts": "2026-05-23T02:32:59.432Z",
+      "snippet": "so these should be added to the refresh",
+      "candidates": [
+        {
+          "name": "sql-migration-validator",
+          "rank": -5.59,
+          "use_count": 0
+        },
+        {
+          "name": "sql-migration-validator",
+          "rank": -5.59,
+          "use_count": 0
+        },
+        {
+          "name": "agent-planner",
+          "rank": -5.45,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3049,
+      "ts": "2026-05-23T02:32:40.050Z",
+      "snippet": "<task-notification> <task-id>bdctu9gao</task-id> <summary>Monitor event: \"PR #221 deploy run 64452751 — job state changes\"</summary> <event>",
+      "candidates": [
+        {
+          "name": "MIGRATION_SUMMARY",
+          "rank": -6.25,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3048,
+      "ts": "2026-05-23T02:32:29.527Z",
+      "snippet": "<task-notification> <task-id>bdctu9gao</task-id> <summary>Monitor event: \"PR #221 deploy run 64452751 — job state changes\"</summary> <event>",
+      "candidates": [
+        {
+          "name": "MIGRATION_SUMMARY",
+          "rank": -6.25,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3047,
+      "ts": "2026-05-23T02:25:21.650Z",
+      "snippet": "<task-notification> <task-id>bdctu9gao</task-id> <summary>Monitor event: \"PR #221 deploy run 64452751 — job state changes\"</summary> <event>",
+      "candidates": [
+        {
+          "name": "MIGRATION_SUMMARY",
+          "rank": -6.25,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3042,
+      "ts": "2026-05-23T02:22:00.734Z",
+      "snippet": "any comments we need to look into",
+      "candidates": [
+        {
+          "name": "test-writer",
+          "rank": -8.15,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -8.01,
+          "use_count": 0
+        },
+        {
+          "name": "pr-shepherd",
+          "rank": -4.94,
+          "use_count": 7
+        }
+      ]
+    },
+    {
+      "prompt_id": 3040,
+      "ts": "2026-05-23T02:20:46.426Z",
+      "snippet": "K:\\PROJECT\\2401\\sw\\PRIMS lot for this should be the same for almost every project can you confirm? might also find something called CITS",
+      "candidates": [
+        {
+          "name": "materials-expert",
+          "rank": -6.65,
+          "use_count": 0
+        },
+        {
+          "name": "materials-expert",
+          "rank": -6.65,
+          "use_count": 0
+        },
+        {
+          "name": "debugger",
+          "rank": -5.49,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3024,
+      "ts": "2026-05-23T00:51:03.105Z",
+      "snippet": "DID YOU CHECK THE I DRIVE THE S DRIVE THE X DRIVE FOR NEW INFOMATION TO PULL AS WELL AS THE APIS AND TABLES WE ARE LINKED TO?",
+      "candidates": [
+        {
+          "name": "sql-migration-validator",
+          "rank": -5.27,
+          "use_count": 0
+        },
+        {
+          "name": "sql-migration-validator",
+          "rank": -5.27,
+          "use_count": 0
+        },
+        {
+          "name": "agent-reviewer",
+          "rank": -3.89,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3023,
+      "ts": "2026-05-23T00:50:15.568Z",
+      "snippet": "WATACH FOR COMMENTS AND REVIEW THEM AND UPDATE THEM AS THEY COME IN",
+      "candidates": [
+        {
+          "name": "debugger",
+          "rank": -8.21,
+          "use_count": 0
+        },
+        {
+          "name": "pipeline-gateway",
+          "rank": -8.19,
+          "use_count": 32
+        },
+        {
+          "name": "debugger",
+          "rank": -8.07,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3022,
+      "ts": "2026-05-23T00:49:45.336Z",
+      "snippet": "ALRIGHT SO IF I JUST WANT A SCREEN THAT IS A SLAVE UNIT AND WILL WORK WHAT WOULD BE A GOOD UNIT",
+      "candidates": [
+        {
+          "name": "leadtime-planner",
+          "rank": -7.72,
+          "use_count": 0
+        },
+        {
+          "name": "Dev-Team Pipeline (Claude Code, PSI-specific)",
+          "rank": -5.24,
+          "use_count": 0
+        },
+        {
+          "name": "code-reviewer",
+          "rank": -4.54,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3020,
+      "ts": "2026-05-23T00:45:43.891Z",
+      "snippet": "https://nbtmarine.com/ whatt is different about nbt marine then how do these work",
+      "candidates": [
+        {
+          "name": "tdd-test-first",
+          "rank": -6.45,
+          "use_count": 22
+        },
+        {
+          "name": "psi-wiki",
+          "rank": -5.83,
+          "use_count": 19
+        },
+        {
+          "name": "developer-database",
+          "rank": -4.68,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3018,
+      "ts": "2026-05-23T00:42:39.172Z",
+      "snippet": "so for this pr are there comments we need to review",
+      "candidates": [
+        {
+          "name": "pr-shepherd",
+          "rank": -12.07,
+          "use_count": 7
+        },
+        {
+          "name": "test-writer",
+          "rank": -8.15,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -8.01,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3017,
+      "ts": "2026-05-23T00:41:19.893Z",
+      "snippet": "how about we commit and push",
+      "candidates": [
+        {
+          "name": "psi-wiki",
+          "rank": -5.83,
+          "use_count": 19
+        },
+        {
+          "name": "code-reviewer",
+          "rank": -5.46,
+          "use_count": 0
+        },
+        {
+          "name": "code-reviewer",
+          "rank": -5.46,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3015,
+      "ts": "2026-05-22T22:01:23.985Z",
+      "snippet": "i feel like this is wrong",
+      "candidates": [
+        {
+          "name": "database-optimizer",
+          "rank": -5.74,
+          "use_count": 0
+        },
+        {
+          "name": "quoting-expert",
+          "rank": -4.35,
+          "use_count": 0
+        },
+        {
+          "name": "workflow-expert",
+          "rank": -4.12,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3013,
+      "ts": "2026-05-22T21:49:21.649Z",
+      "snippet": "can we review what we need to do?",
+      "candidates": [
+        {
+          "name": "test-writer",
+          "rank": -12.67,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -12.45,
+          "use_count": 0
+        },
+        {
+          "name": "leadtime-planner",
+          "rank": -6.08,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3012,
+      "ts": "2026-05-22T21:48:52.528Z",
+      "snippet": "now does the math work for the coinstack 1 and skid 13 as well?",
+      "candidates": [
+        {
+          "name": "agent-ado",
+          "rank": -6.71,
+          "use_count": 2
+        },
+        {
+          "name": "developer-database",
+          "rank": -6,
+          "use_count": 1
+        },
+        {
+          "name": "agent-researcher",
+          "rank": -4.82,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3009,
+      "ts": "2026-05-22T20:12:38.935Z",
+      "snippet": "what about for a lowrance top tier unit",
+      "candidates": [
+        {
+          "name": "agent-tester",
+          "rank": -7.19,
+          "use_count": 0
+        },
+        {
+          "name": "psi-wiki",
+          "rank": -5.83,
+          "use_count": 19
+        },
+        {
+          "name": "security-reviewer",
+          "rank": -5.37,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3007,
+      "ts": "2026-05-22T20:10:17.651Z",
+      "snippet": "alright should we commit this then",
+      "candidates": [
+        {
+          "name": "tdd-test-first",
+          "rank": -6.45,
+          "use_count": 22
+        },
+        {
+          "name": "agent-planner",
+          "rank": -5.45,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.52,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3006,
+      "ts": "2026-05-22T20:08:52.197Z",
+      "snippet": "how do we make it so the 8610 series works",
+      "candidates": [
+        {
+          "name": "excalidraw-diagram",
+          "rank": -6.47,
+          "use_count": 1
+        },
+        {
+          "name": "quoting-expert",
+          "rank": -5.34,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.52,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3004,
+      "ts": "2026-05-22T20:06:48.163Z",
+      "snippet": "i want you to do what you think is bers",
+      "candidates": [
+        {
+          "name": "leadtime-analyst",
+          "rank": -13.46,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -13.38,
+          "use_count": 11
+        },
+        {
+          "name": "leadtime-auditor",
+          "rank": -10.45,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3002,
+      "ts": "2026-05-22T19:23:28.561Z",
+      "snippet": "now how do you make them work with lowrance or gamrin",
+      "candidates": [
+        {
+          "name": "quoting-expert",
+          "rank": -7.8,
+          "use_count": 0
+        },
+        {
+          "name": "pipeline-gateway",
+          "rank": -6.94,
+          "use_count": 32
+        },
+        {
+          "name": "excalidraw-diagram",
+          "rank": -6.47,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3001,
+      "ts": "2026-05-22T19:18:38.036Z",
+      "snippet": "https://www.russellmarineproducts.com/flex-19-monitor-rmp-flx-19 where do they buy these like could i jsut buy this myself?",
+      "candidates": [
+        {
+          "name": "database-optimizer",
+          "rank": -5.74,
+          "use_count": 0
+        },
+        {
+          "name": "quoting-expert",
+          "rank": -5.34,
+          "use_count": 0
+        },
+        {
+          "name": "pr-shepherd",
+          "rank": -4.39,
+          "use_count": 7
+        }
+      ]
+    },
+    {
+      "prompt_id": 2996,
+      "ts": "2026-05-22T18:37:22.477Z",
+      "snippet": "so machine build types can we go through each type and find the like purchase parts for them? what we will want to do is make a new table in",
+      "candidates": [
+        {
+          "name": "workflow-architect",
+          "rank": -8.9,
+          "use_count": 0
+        },
+        {
+          "name": "pdf-pipeline",
+          "rank": -7.48,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.52,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2995,
+      "ts": "2026-05-22T18:35:20.107Z",
+      "snippet": "can you add this to our md file",
+      "candidates": [
+        {
+          "name": "session-reviewer",
+          "rank": -8.44,
+          "use_count": 2
+        },
+        {
+          "name": "pipeline-gateway",
+          "rank": -7.32,
+          "use_count": 32
+        },
+        {
+          "name": "leadtime-planner",
+          "rank": -6.63,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2994,
+      "ts": "2026-05-22T17:48:34.664Z",
+      "snippet": "now will this also stop makeing the rga crate labels as well?",
+      "candidates": [
+        {
+          "name": "ai-data-remediation-engineer",
+          "rank": -5.27,
+          "use_count": 0
+        },
+        {
+          "name": "researcher",
+          "rank": -3.69,
+          "use_count": 16
+        },
+        {
+          "name": "documenter",
+          "rank": -3.58,
+          "use_count": 9
+        }
+      ]
+    },
+    {
+      "prompt_id": 2993,
+      "ts": "2026-05-22T16:34:48.667Z",
+      "snippet": "now for purchased parts and plc code can you explain to the optimal code for a new machine",
+      "candidates": [
+        {
+          "name": "workflow-architect",
+          "rank": -5.38,
+          "use_count": 0
+        },
+        {
+          "name": "ai-data-remediation-engineer",
+          "rank": -3.76,
+          "use_count": 0
+        },
+        {
+          "name": "leadtime-planner",
+          "rank": -3.7,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2992,
+      "ts": "2026-05-22T16:29:03.302Z",
+      "snippet": "now create me an md file with my prompts and your response for each of my prompts",
+      "candidates": [
+        {
+          "name": "session-reviewer",
+          "rank": -8.44,
+          "use_count": 2
+        },
+        {
+          "name": "agent-ado",
+          "rank": -6.91,
+          "use_count": 2
+        },
+        {
+          "name": "session-reviewer",
+          "rank": -4.6,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2991,
+      "ts": "2026-05-22T16:18:12.090Z",
+      "snippet": "i want to know more about the machines like what type of guns what type of media what was teh customer supplier part dementions",
+      "candidates": [
+        {
+          "name": "leadtime-planner",
+          "rank": -8.68,
+          "use_count": 0
+        },
+        {
+          "name": "psi-wiki",
+          "rank": -5.83,
+          "use_count": 19
+        },
+        {
+          "name": "database-optimizer",
+          "rank": -5.74,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2989,
+      "ts": "2026-05-22T16:10:50.220Z",
+      "snippet": "alright well thats good to know we will want to just remove those scans",
+      "candidates": [
+        {
+          "name": "leadtime-planner",
+          "rank": -5.18,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.52,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.44,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2987,
+      "ts": "2026-05-22T14:09:43.521Z",
+      "snippet": "now is it 4 or 5 boxes cause that is showing as 2/5 now",
+      "candidates": [
+        {
+          "name": "debugger",
+          "rank": -8.96,
+          "use_count": 0
+        },
+        {
+          "name": "threat-detection-engineer",
+          "rank": -5.24,
+          "use_count": 0
+        },
+        {
+          "name": "agent-communicator",
+          "rank": -4.57,
+          "use_count": 16
+        }
+      ]
+    },
+    {
+      "prompt_id": 2985,
+      "ts": "2026-05-22T13:40:02.436Z",
+      "snippet": "alright now explain to me exactly what is currently going on and what we need to do to get thsi fix asap",
+      "candidates": [
+        {
+          "name": "quoting-expert",
+          "rank": -5.91,
+          "use_count": 0
+        },
+        {
+          "name": "leadtime-planner",
+          "rank": -5.18,
+          "use_count": 0
+        },
+        {
+          "name": "documenter",
+          "rank": -4.45,
+          "use_count": 9
+        }
+      ]
+    },
+    {
+      "prompt_id": 2984,
+      "ts": "2026-05-22T13:38:16.620Z",
+      "snippet": "look at the local session now i have it pulled up",
+      "candidates": [
+        {
+          "name": "session-reviewer",
+          "rank": -5.92,
+          "use_count": 2
+        },
+        {
+          "name": "session-reviewer",
+          "rank": -5.55,
+          "use_count": 0
+        },
+        {
+          "name": "session-reviewer",
+          "rank": -5.4,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2982,
+      "ts": "2026-05-22T13:36:46.374Z",
+      "snippet": "nope you goit partial box and rework enclosed should be in the bulk bucket",
+      "candidates": [
+        {
+          "name": "quality-expert",
+          "rank": -8.05,
+          "use_count": 19
+        },
+        {
+          "name": "quality-expert",
+          "rank": -8.05,
+          "use_count": 6
+        },
+        {
+          "name": "frontend-dev",
+          "rank": -4.85,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 2981,
+      "ts": "2026-05-22T13:35:56.659Z",
+      "snippet": "http://localhost:3000/qa/dashboard look at lot audit and assume your auditing coinstack 2. what i see is [Image #1] on the right side you wi",
+      "candidates": [
+        {
+          "name": "materials-expert",
+          "rank": -6.65,
+          "use_count": 0
+        },
+        {
+          "name": "materials-expert",
+          "rank": -6.65,
+          "use_count": 0
+        },
+        {
+          "name": "debugger",
+          "rank": -5.49,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2980,
+      "ts": "2026-05-22T13:33:34.203Z",
+      "snippet": "now its 5 not all boxes are full you can look at the box scan history and find nonforming, and prg scrap and count how many boxes there are ",
+      "candidates": [
+        {
+          "name": "developer-fullstack",
+          "rank": -6.87,
+          "use_count": 4
+        },
+        {
+          "name": "index",
+          "rank": -6.06,
+          "use_count": 0
+        },
+        {
+          "name": "mes-architect",
+          "rank": -5.37,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2977,
+      "ts": "2026-05-22T13:21:27.792Z",
+      "snippet": "it displays 1/5 after my scan and will not let me continue",
+      "candidates": [
+        {
+          "name": "agent-ado",
+          "rank": -7.36,
+          "use_count": 2
+        },
+        {
+          "name": "dev-team",
+          "rank": -4.88,
+          "use_count": 13
+        },
+        {
+          "name": "reviewer-code",
+          "rank": -4.29,
+          "use_count": 53
+        }
+      ]
+    },
+    {
+      "prompt_id": 2976,
+      "ts": "2026-05-22T13:07:46.853Z",
+      "snippet": "the RGA card shows 0/5 93 pieces all through out but will not let me scan after 1 box",
+      "candidates": [
+        {
+          "name": "agent-communicator",
+          "rank": -7.52,
+          "use_count": 16
+        },
+        {
+          "name": "performance-benchmarker",
+          "rank": -3.38,
+          "use_count": 0
+        },
+        {
+          "name": "agent-code-review-swarm",
+          "rank": -3.2,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2975,
+      "ts": "2026-05-22T13:05:20.360Z",
+      "snippet": "so coinstack can have multpe rga boxes in it for example coinstack 2 has 5 boxes that should be scanned for RGA",
+      "candidates": [
+        {
+          "name": "leadtime-planner",
+          "rank": -8.87,
+          "use_count": 0
+        },
+        {
+          "name": "workflow-architect",
+          "rank": -5.38,
+          "use_count": 0
+        },
+        {
+          "name": "order-flow-expert",
+          "rank": -4.38,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 2974,
+      "ts": "2026-05-22T13:02:54.694Z",
+      "snippet": "so testing im trying to do RGA and it wont let me continue after 1 scan complete",
+      "candidates": [
+        {
+          "name": "performance-benchmarker",
+          "rank": -5.58,
+          "use_count": 0
+        },
+        {
+          "name": "quoting-expert",
+          "rank": -5.34,
+          "use_count": 0
+        },
+        {
+          "name": "model-qa",
+          "rank": -5.06,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2973,
+      "ts": "2026-05-22T12:57:42.456Z",
+      "snippet": "will the local session write to the actual sql or not?",
+      "candidates": [
+        {
+          "name": "developer-database",
+          "rank": -8.05,
+          "use_count": 1
+        },
+        {
+          "name": "session-reviewer",
+          "rank": -5.92,
+          "use_count": 2
+        },
+        {
+          "name": "sql-migration-validator",
+          "rank": -5.58,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2968,
+      "ts": "2026-05-22T12:16:34.044Z",
+      "snippet": "❯ so this is what we need to do. forget about all the box details. we need to know how many boxes should be in the Boxes/crates are assig",
+      "candidates": [
+        {
+          "name": "test-writer",
+          "rank": -8.15,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -8.01,
+          "use_count": 0
+        },
+        {
+          "name": "quoting-expert",
+          "rank": -5.34,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2967,
+      "ts": "2026-05-22T12:10:21.546Z",
+      "snippet": "rga for coinstack 2 is not correct when rga is selected and im scanning it says 1 remaing none have been scanned went to scan them and get t",
+      "candidates": [
+        {
+          "name": "agent-reviewer",
+          "rank": -5.8,
+          "use_count": 0
+        },
+        {
+          "name": "developer-database",
+          "rank": -5.28,
+          "use_count": 1
+        },
+        {
+          "name": "ai-data-remediation-engineer",
+          "rank": -5.28,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2964,
+      "ts": "2026-05-22T06:00:09.409Z",
+      "snippet": "You are the Librarian running a vault maintenance audit. Your job is to find real gaps and generate a prioritized task list. ## What to aud",
+      "candidates": [
+        {
+          "name": "vault-librarian",
+          "rank": -13.62,
+          "use_count": 30
+        },
+        {
+          "name": "customer-expert",
+          "rank": -7.83,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.52,
+          "use_count": 11
+        }
+      ]
+    },
+    {
+      "prompt_id": 2960,
+      "ts": "2026-05-22T01:53:23.106Z",
+      "snippet": "monitor pr 210 look at comment as well because we will need to resolve this as well fix if we need to",
+      "candidates": [
+        {
+          "name": "reviewer-code",
+          "rank": -10.16,
+          "use_count": 53
+        },
+        {
+          "name": "pr-shepherd",
+          "rank": -7.14,
+          "use_count": 7
+        },
+        {
+          "name": "agent-code-review-swarm",
+          "rank": -5.66,
+          "use_count": 0
+        }
+      ]
+    }
+  ]
+}

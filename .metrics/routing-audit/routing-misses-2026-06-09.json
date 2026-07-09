@@ -1,0 +1,75 @@
+{
+  "date": "2026-06-09",
+  "prompts_scanned": 4,
+  "strong_matches": 3,
+  "misses_count": 3,
+  "miss_rate": 1,
+  "misses": [
+    {
+      "prompt_id": 3462,
+      "ts": "2026-06-09T06:00:09.112Z",
+      "snippet": "You are the Librarian running a vault maintenance audit. Your job is to find real gaps and generate a prioritized task list. ## What to aud",
+      "candidates": [
+        {
+          "name": "vault-librarian",
+          "rank": -13.62,
+          "use_count": 30
+        },
+        {
+          "name": "customer-expert",
+          "rank": -7.83,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.52,
+          "use_count": 14
+        }
+      ]
+    },
+    {
+      "prompt_id": 3458,
+      "ts": "2026-06-08T12:31:43.668Z",
+      "snippet": "any land mines we need ot be concerned with",
+      "candidates": [
+        {
+          "name": "test-writer",
+          "rank": -8.15,
+          "use_count": 1
+        },
+        {
+          "name": "test-writer",
+          "rank": -8.01,
+          "use_count": 1
+        },
+        {
+          "name": "psi-wiki",
+          "rank": -4.69,
+          "use_count": 24
+        }
+      ]
+    },
+    {
+      "prompt_id": 3457,
+      "ts": "2026-06-08T06:00:14.343Z",
+      "snippet": "You are the Librarian running a vault maintenance audit. Your job is to find real gaps and generate a prioritized task list. ## What to aud",
+      "candidates": [
+        {
+          "name": "vault-librarian",
+          "rank": -13.62,
+          "use_count": 30
+        },
+        {
+          "name": "customer-expert",
+          "rank": -7.83,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.52,
+          "use_count": 14
+        }
+      ]
+    }
+  ]
+}

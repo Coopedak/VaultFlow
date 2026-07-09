@@ -1,0 +1,20 @@
+{
+  "id": "3ff7cc71-3e1e-441f-8e74-fc686c44b3cb",
+  "startedAt": "2026-05-07T06:00:06.741Z",
+  "endedAt": "2026-05-07T06:00:18.666Z",
+  "restoredAt": "2026-05-07T06:00:13.024Z",
+  "durationMs": 11926,
+  "platform": "win32",
+  "cwd": "C:\\WINDOWS\\system32",
+  "context": "claude-code",
+  "metrics": {
+    "edits": 0,
+    "commands": 0,
+    "tasks": 0,
+    "errors": 0
+  },
+  "project": "system32",
+  "lastInjectedSkill": null,
+  "lastInjectedAt": null,
+  "injectedSources": []
+}

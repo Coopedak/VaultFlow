@@ -1,0 +1,19 @@
+{
+  "id": "00085262-9024-4d10-a676-1f61f4067d93",
+  "startedAt": "2026-05-05T04:35:32.050Z",
+  "endedAt": "2026-05-05T07:04:43.950Z",
+  "restoredAt": "2026-05-05T07:03:13.771Z",
+  "durationMs": 8951900,
+  "platform": "win32",
+  "cwd": "C:\\Users\\DCC",
+  "context": "claude-code",
+  "metrics": {
+    "edits": 144,
+    "commands": 0,
+    "tasks": 0,
+    "errors": 0
+  },
+  "project": "DCC",
+  "lastInjectedSkill": null,
+  "lastInjectedAt": null
+}

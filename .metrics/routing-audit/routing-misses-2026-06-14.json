@@ -1,0 +1,53 @@
+{
+  "date": "2026-06-14",
+  "prompts_scanned": 2,
+  "strong_matches": 2,
+  "misses_count": 2,
+  "miss_rate": 1,
+  "misses": [
+    {
+      "prompt_id": 3547,
+      "ts": "2026-06-14T06:00:08.655Z",
+      "snippet": "You are the Librarian running a vault maintenance audit. Your job is to find real gaps and generate a prioritized task list. ## What to aud",
+      "candidates": [
+        {
+          "name": "vault-librarian",
+          "rank": -13.62,
+          "use_count": 30
+        },
+        {
+          "name": "customer-expert",
+          "rank": -7.83,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.52,
+          "use_count": 16
+        }
+      ]
+    },
+    {
+      "prompt_id": 3546,
+      "ts": "2026-06-13T06:00:09.328Z",
+      "snippet": "You are the Librarian running a vault maintenance audit. Your job is to find real gaps and generate a prioritized task list. ## What to aud",
+      "candidates": [
+        {
+          "name": "vault-librarian",
+          "rank": -13.62,
+          "use_count": 30
+        },
+        {
+          "name": "customer-expert",
+          "rank": -7.83,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.52,
+          "use_count": 16
+        }
+      ]
+    }
+  ]
+}

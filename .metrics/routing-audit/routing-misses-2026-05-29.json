@@ -1,0 +1,488 @@
+{
+  "date": "2026-05-29",
+  "prompts_scanned": 25,
+  "strong_matches": 22,
+  "misses_count": 22,
+  "miss_rate": 1,
+  "misses": [
+    {
+      "prompt_id": 3325,
+      "ts": "2026-05-29T06:00:10.261Z",
+      "snippet": "You are the Librarian running a vault maintenance audit. Your job is to find real gaps and generate a prioritized task list. ## What to aud",
+      "candidates": [
+        {
+          "name": "vault-librarian",
+          "rank": -13.62,
+          "use_count": 30
+        },
+        {
+          "name": "customer-expert",
+          "rank": -7.83,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.52,
+          "use_count": 12
+        }
+      ]
+    },
+    {
+      "prompt_id": 3324,
+      "ts": "2026-05-28T20:48:20.687Z",
+      "snippet": "im so confused lets just start over",
+      "candidates": [
+        {
+          "name": "code-reviewer",
+          "rank": -9.53,
+          "use_count": 0
+        },
+        {
+          "name": "session-reviewer",
+          "rank": -4.36,
+          "use_count": 2
+        },
+        {
+          "name": "dev-team",
+          "rank": -4.34,
+          "use_count": 13
+        }
+      ]
+    },
+    {
+      "prompt_id": 3320,
+      "ts": "2026-05-28T20:13:39.945Z",
+      "snippet": "i feel like the dmt routing is for the bc migration not the actual aftec api",
+      "candidates": [
+        {
+          "name": "database-optimizer",
+          "rank": -5.74,
+          "use_count": 0
+        },
+        {
+          "name": "MIGRATION_SUMMARY",
+          "rank": -4.78,
+          "use_count": 0
+        },
+        {
+          "name": "agent-migration-plan",
+          "rank": -4.76,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3319,
+      "ts": "2026-05-28T20:09:54.166Z",
+      "snippet": "so there should be something in the aftec routings that is standard routing",
+      "candidates": [
+        {
+          "name": "aftec-integration",
+          "rank": -7.63,
+          "use_count": 0
+        },
+        {
+          "name": "agent-planner",
+          "rank": -5.45,
+          "use_count": 0
+        },
+        {
+          "name": "admin-expert",
+          "rank": -4.46,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3318,
+      "ts": "2026-05-28T20:07:00.562Z",
+      "snippet": "do we have standard routings?",
+      "candidates": [
+        {
+          "name": "quoting-expert",
+          "rank": -5.34,
+          "use_count": 0
+        },
+        {
+          "name": "leadtime-planner",
+          "rank": -5.18,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.52,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3314,
+      "ts": "2026-05-28T15:17:03.990Z",
+      "snippet": "so what this form is a start of a customer coming to us for a a potential build but this form will leverage all of previous won built work",
+      "candidates": [
+        {
+          "name": "customer-expert",
+          "rank": -9.7,
+          "use_count": 0
+        },
+        {
+          "name": "session-reviewer",
+          "rank": -7.52,
+          "use_count": 2
+        },
+        {
+          "name": "sales-architect",
+          "rank": -6.05,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3312,
+      "ts": "2026-05-28T14:59:30.986Z",
+      "snippet": "which do you think is better?",
+      "candidates": [
+        {
+          "name": "quoting-expert",
+          "rank": -5.34,
+          "use_count": 0
+        },
+        {
+          "name": "security-reviewer",
+          "rank": -4.77,
+          "use_count": 1
+        },
+        {
+          "name": "quoting-architect",
+          "rank": -4.46,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3311,
+      "ts": "2026-05-28T14:23:33.767Z",
+      "snippet": "so a RGA that should roll over auto correct",
+      "candidates": [
+        {
+          "name": "minimal-change-engineer",
+          "rank": -5.76,
+          "use_count": 0
+        },
+        {
+          "name": "agent-planner",
+          "rank": -5.45,
+          "use_count": 0
+        },
+        {
+          "name": "order-flow-expert",
+          "rank": -5.37,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3310,
+      "ts": "2026-05-28T14:08:29.995Z",
+      "snippet": "RolloverOnFull │ Auto-open new pallet when capacity hits │ bool what does this mean?",
+      "candidates": [
+        {
+          "name": "order-flow-expert",
+          "rank": -6.68,
+          "use_count": 1
+        },
+        {
+          "name": "order-flow-expert",
+          "rank": -6.68,
+          "use_count": 1
+        },
+        {
+          "name": "api-contract-auditor",
+          "rank": -5.1,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3309,
+      "ts": "2026-05-28T14:04:17.066Z",
+      "snippet": "this all needs to be bucket based and dynamic which should be set up correctly",
+      "candidates": [
+        {
+          "name": "reality-checker",
+          "rank": -10.17,
+          "use_count": 0
+        },
+        {
+          "name": "quoting-architect",
+          "rank": -7.57,
+          "use_count": 0
+        },
+        {
+          "name": "agent-ado",
+          "rank": -6.2,
+          "use_count": 5
+        }
+      ]
+    },
+    {
+      "prompt_id": 3308,
+      "ts": "2026-05-28T14:03:36.361Z",
+      "snippet": "remember RGAs are build until we have full pallets",
+      "candidates": [
+        {
+          "name": "leadtime-planner",
+          "rank": -5.18,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.52,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.44,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3307,
+      "ts": "2026-05-28T14:02:30.068Z",
+      "snippet": "right if its a coinstack the coinstack number is the pallet number if its a single lot it would be the skid/order number",
+      "candidates": [
+        {
+          "name": "order-flow-expert",
+          "rank": -16.5,
+          "use_count": 1
+        },
+        {
+          "name": "order-flow-expert",
+          "rank": -16.5,
+          "use_count": 1
+        },
+        {
+          "name": "Dev-Team Pipeline (Claude Code, PSI-specific)",
+          "rank": -5.24,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3305,
+      "ts": "2026-05-28T13:52:00.888Z",
+      "snippet": "so in coinstack 2 everything is green why can i not click the complete skid button?",
+      "candidates": [
+        {
+          "name": "evidence-collector",
+          "rank": -7.48,
+          "use_count": 0
+        },
+        {
+          "name": "workflow-architect",
+          "rank": -5.38,
+          "use_count": 0
+        },
+        {
+          "name": "pr-shepherd",
+          "rank": -4.94,
+          "use_count": 8
+        }
+      ]
+    },
+    {
+      "prompt_id": 3304,
+      "ts": "2026-05-28T13:50:24.610Z",
+      "snippet": "so find a word req document and lets walk through it",
+      "candidates": [
+        {
+          "name": "agent-researcher",
+          "rank": -5.41,
+          "use_count": 0
+        },
+        {
+          "name": "document-generator",
+          "rank": -5.31,
+          "use_count": 0
+        },
+        {
+          "name": "pdf-pipeline",
+          "rank": -5.15,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3303,
+      "ts": "2026-05-28T13:49:23.197Z",
+      "snippet": "remove the task if we will not be using it",
+      "candidates": [
+        {
+          "name": "developer-database",
+          "rank": -7.01,
+          "use_count": 1
+        },
+        {
+          "name": "developer-backend",
+          "rank": -6.84,
+          "use_count": 11
+        },
+        {
+          "name": "developer-frontend",
+          "rank": -6.84,
+          "use_count": 2
+        }
+      ]
+    },
+    {
+      "prompt_id": 3300,
+      "ts": "2026-05-28T13:31:24.923Z",
+      "snippet": "lets do this lets break this down into sections of the forms",
+      "candidates": [
+        {
+          "name": "project-manager",
+          "rank": -9.99,
+          "use_count": 13
+        },
+        {
+          "name": "quoting-expert",
+          "rank": -5.34,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3299,
+      "ts": "2026-05-28T13:28:50.643Z",
+      "snippet": "lets watch it do we need to update the branch? are there comments we need to address and resolve?",
+      "candidates": [
+        {
+          "name": "psi-wiki",
+          "rank": -10.39,
+          "use_count": 21
+        },
+        {
+          "name": "test-writer",
+          "rank": -8.15,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -8.01,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3295,
+      "ts": "2026-05-28T13:03:26.788Z",
+      "snippet": "so what is the fix tell me what your doing",
+      "candidates": [
+        {
+          "name": "minimal-change-engineer",
+          "rank": -11.46,
+          "use_count": 0
+        },
+        {
+          "name": "agent-planner",
+          "rank": -6.84,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.8,
+          "use_count": 12
+        }
+      ]
+    },
+    {
+      "prompt_id": 3294,
+      "ts": "2026-05-28T13:02:27.957Z",
+      "snippet": "So I like the structure of what we have. but I want to change the structure. what i would like is a more dynamic interactive form. for examp",
+      "candidates": [
+        {
+          "name": "database-optimizer",
+          "rank": -5.74,
+          "use_count": 0
+        },
+        {
+          "name": "leadtime-planner",
+          "rank": -5.18,
+          "use_count": 0
+        },
+        {
+          "name": "agent-architecture",
+          "rank": -4.67,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3292,
+      "ts": "2026-05-28T12:30:58.315Z",
+      "snippet": "can we open the intake form",
+      "candidates": [
+        {
+          "name": "access-data-extractor",
+          "rank": -7.43,
+          "use_count": 0
+        },
+        {
+          "name": "access-data-extractor",
+          "rank": -7.43,
+          "use_count": 0
+        },
+        {
+          "name": "pr-shepherd",
+          "rank": -5.71,
+          "use_count": 8
+        }
+      ]
+    },
+    {
+      "prompt_id": 3291,
+      "ts": "2026-05-28T12:25:09.355Z",
+      "snippet": "https://psmes.progressivesurface.com/skidscan while i have coinstack 1 pulled up it still states i have 15 crates scanned but i removed crat",
+      "candidates": [
+        {
+          "name": "leadtime-planner",
+          "rank": -5.18,
+          "use_count": 0
+        },
+        {
+          "name": "frontend-dev",
+          "rank": -5.13,
+          "use_count": 1
+        },
+        {
+          "name": "api-integration",
+          "rank": -5.05,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3290,
+      "ts": "2026-05-28T06:00:09.154Z",
+      "snippet": "You are the Librarian running a vault maintenance audit. Your job is to find real gaps and generate a prioritized task list. ## What to aud",
+      "candidates": [
+        {
+          "name": "vault-librarian",
+          "rank": -13.62,
+          "use_count": 30
+        },
+        {
+          "name": "customer-expert",
+          "rank": -7.83,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.52,
+          "use_count": 12
+        }
+      ]
+    }
+  ]
+}

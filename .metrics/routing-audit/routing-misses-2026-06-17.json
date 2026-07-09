@@ -1,0 +1,417 @@
+{
+  "date": "2026-06-17",
+  "prompts_scanned": 26,
+  "strong_matches": 19,
+  "misses_count": 19,
+  "miss_rate": 1,
+  "misses": [
+    {
+      "prompt_id": 3616,
+      "ts": "2026-06-17T06:00:09.248Z",
+      "snippet": "You are the Librarian running a vault maintenance audit. Your job is to find real gaps and generate a prioritized task list. ## What to aud",
+      "candidates": [
+        {
+          "name": "vault-librarian",
+          "rank": -13.62,
+          "use_count": 32
+        },
+        {
+          "name": "customer-expert",
+          "rank": -7.83,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.52,
+          "use_count": 17
+        }
+      ]
+    },
+    {
+      "prompt_id": 3613,
+      "ts": "2026-06-16T19:14:15.614Z",
+      "snippet": "can we vector embedding",
+      "candidates": [
+        {
+          "name": "workflow-architect",
+          "rank": -5.38,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.52,
+          "use_count": 1
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.44,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3608,
+      "ts": "2026-06-16T18:41:01.195Z",
+      "snippet": "should we call it intergration brain",
+      "candidates": [
+        {
+          "name": "pattern-analyst",
+          "rank": -8.11,
+          "use_count": 17
+        },
+        {
+          "name": "agent-planner",
+          "rank": -5.45,
+          "use_count": 0
+        },
+        {
+          "name": "incident-response-commander",
+          "rank": -4.93,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3607,
+      "ts": "2026-06-16T18:38:24.103Z",
+      "snippet": "is this updatint in the backend",
+      "candidates": [
+        {
+          "name": "agent-dev-backend-api",
+          "rank": -7.45,
+          "use_count": 0
+        },
+        {
+          "name": "developer-backend",
+          "rank": -5.48,
+          "use_count": 26
+        }
+      ]
+    },
+    {
+      "prompt_id": 3605,
+      "ts": "2026-06-16T18:24:14.794Z",
+      "snippet": "So i use claude desktop and the standard chat feature is it possible we can get my chats built into vaultflwo as well?",
+      "candidates": [
+        {
+          "name": "pipeline-gateway",
+          "rank": -6.65,
+          "use_count": 39
+        },
+        {
+          "name": "Dev-Team Pipeline (Claude Code, PSI-specific)",
+          "rank": -6.09,
+          "use_count": 0
+        },
+        {
+          "name": "index",
+          "rank": -4.77,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3604,
+      "ts": "2026-06-16T18:18:07.898Z",
+      "snippet": "I want to create a program that can do and knows everything about business central it because a central source of how to from dev to front e",
+      "candidates": [
+        {
+          "name": "leadtime-planner",
+          "rank": -7.2,
+          "use_count": 0
+        },
+        {
+          "name": "workflow-architect",
+          "rank": -5.38,
+          "use_count": 0
+        },
+        {
+          "name": "quoting-expert",
+          "rank": -5.34,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3602,
+      "ts": "2026-06-16T17:02:08.746Z",
+      "snippet": "can you help me with where we left off earlier",
+      "candidates": [
+        {
+          "name": "sql-migration-validator",
+          "rank": -7.1,
+          "use_count": 2
+        },
+        {
+          "name": "sql-migration-validator",
+          "rank": -7.1,
+          "use_count": 2
+        },
+        {
+          "name": "leadtime-planner",
+          "rank": -6.63,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3600,
+      "ts": "2026-06-16T14:13:05.080Z",
+      "snippet": "keep finding safe junk",
+      "candidates": [
+        {
+          "name": "evidence-collector",
+          "rank": -7.48,
+          "use_count": 0
+        },
+        {
+          "name": "session-reviewer",
+          "rank": -5.09,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3599,
+      "ts": "2026-06-16T14:06:34.246Z",
+      "snippet": "the c drive can you look through and find any other items no just in the user folder",
+      "candidates": [
+        {
+          "name": "reviewer-code",
+          "rank": -8.49,
+          "use_count": 88
+        },
+        {
+          "name": "leadtime-planner",
+          "rank": -6.63,
+          "use_count": 0
+        },
+        {
+          "name": "debugger",
+          "rank": -6.37,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3595,
+      "ts": "2026-06-16T13:46:35.032Z",
+      "snippet": "what I would like to do is create an applicaiton that is AI agnostic. this being said as we go i will explain what i want to accomplish",
+      "candidates": [
+        {
+          "name": "database-optimizer",
+          "rank": -5.74,
+          "use_count": 0
+        },
+        {
+          "name": "quoting-expert",
+          "rank": -5.34,
+          "use_count": 0
+        },
+        {
+          "name": "agent-ado",
+          "rank": -5.02,
+          "use_count": 5
+        }
+      ]
+    },
+    {
+      "prompt_id": 3593,
+      "ts": "2026-06-16T13:17:02.074Z",
+      "snippet": "i file like i might have a lot of junk in my c drive folders can you look for junk, old files, not used old documents programs ect stuff tha",
+      "candidates": [
+        {
+          "name": "materials-expert",
+          "rank": -6.65,
+          "use_count": 1
+        },
+        {
+          "name": "materials-expert",
+          "rank": -6.65,
+          "use_count": 1
+        },
+        {
+          "name": "database-optimizer",
+          "rank": -5.74,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3592,
+      "ts": "2026-06-16T13:06:23.969Z",
+      "snippet": "im talking docx, xlxs file all this waster pdf",
+      "candidates": [
+        {
+          "name": "document-generator",
+          "rank": -7.05,
+          "use_count": 0
+        },
+        {
+          "name": "code-reviewer",
+          "rank": -5,
+          "use_count": 0
+        },
+        {
+          "name": "pipeline-gateway",
+          "rank": -4.46,
+          "use_count": 39
+        }
+      ]
+    },
+    {
+      "prompt_id": 3591,
+      "ts": "2026-06-16T12:34:11.476Z",
+      "snippet": "\"C:\\Users\\DCC\\OneDrive - Progressive Surface\" can you go through and remove documents and junk files",
+      "candidates": [
+        {
+          "name": "debugger",
+          "rank": -5.04,
+          "use_count": 0
+        },
+        {
+          "name": "agent-communicator",
+          "rank": -3.32,
+          "use_count": 20
+        },
+        {
+          "name": "developer-backend",
+          "rank": -3.32,
+          "use_count": 26
+        }
+      ]
+    },
+    {
+      "prompt_id": 3590,
+      "ts": "2026-06-16T12:06:48.669Z",
+      "snippet": "now what about documents? and just bloat from everything",
+      "candidates": [
+        {
+          "name": "psi-wiki",
+          "rank": -5.83,
+          "use_count": 25
+        },
+        {
+          "name": "developer-database",
+          "rank": -4.68,
+          "use_count": 2
+        },
+        {
+          "name": "code-reviewer",
+          "rank": -4.54,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3587,
+      "ts": "2026-06-16T11:59:10.314Z",
+      "snippet": "alright we need to ingetst the data fts and bm25 it",
+      "candidates": [
+        {
+          "name": "test-writer",
+          "rank": -8.15,
+          "use_count": 1
+        },
+        {
+          "name": "test-writer",
+          "rank": -8.01,
+          "use_count": 1
+        },
+        {
+          "name": "psi-wiki",
+          "rank": -7.36,
+          "use_count": 25
+        }
+      ]
+    },
+    {
+      "prompt_id": 3586,
+      "ts": "2026-06-16T11:57:34.686Z",
+      "snippet": "well i need those for my claude to work with vaultflow",
+      "candidates": [
+        {
+          "name": "agent-ado",
+          "rank": -7.68,
+          "use_count": 5
+        },
+        {
+          "name": "Dev-Team Pipeline (Claude Code, PSI-specific)",
+          "rank": -6.09,
+          "use_count": 0
+        },
+        {
+          "name": "mes-architect",
+          "rank": -5.94,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3585,
+      "ts": "2026-06-16T11:40:56.772Z",
+      "snippet": "can we go through tehse files and fine stuff that is bloat review it and remove it if not needed?",
+      "candidates": [
+        {
+          "name": "workflow-architect",
+          "rank": -5.38,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.52,
+          "use_count": 1
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.44,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3584,
+      "ts": "2026-06-16T11:38:40.829Z",
+      "snippet": "S:\\Dept\\Eng\\GENERAL\\STATINFO\\PROJMIN we need to look at all these folders and the documents in each one and add this into buzz",
+      "candidates": [
+        {
+          "name": "ai-data-remediation-engineer",
+          "rank": -5.27,
+          "use_count": 0
+        },
+        {
+          "name": "session-reviewer",
+          "rank": -3.76,
+          "use_count": 2
+        },
+        {
+          "name": "Dev-Team Pipeline (Claude Code, PSI-specific)",
+          "rank": -3.65,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3583,
+      "ts": "2026-06-16T06:00:08.936Z",
+      "snippet": "You are the Librarian running a vault maintenance audit. Your job is to find real gaps and generate a prioritized task list. ## What to aud",
+      "candidates": [
+        {
+          "name": "vault-librarian",
+          "rank": -13.62,
+          "use_count": 32
+        },
+        {
+          "name": "customer-expert",
+          "rank": -7.83,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.52,
+          "use_count": 17
+        }
+      ]
+    }
+  ]
+}

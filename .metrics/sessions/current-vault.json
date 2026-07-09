@@ -1,0 +1,23 @@
+{
+  "id": "d7f69224-e5f1-44fc-ade6-1b84ad3b102a",
+  "startedAt": "2026-06-16T13:31:19.822Z",
+  "endedAt": "2026-06-16T16:49:56.053Z",
+  "restoredAt": "2026-06-16T14:29:44.970Z",
+  "durationMs": 11916232,
+  "platform": "win32",
+  "cwd": "C:\\Users\\DCC\\vault",
+  "context": "claude-code",
+  "metrics": {
+    "edits": 12,
+    "commands": 0,
+    "tasks": 0,
+    "errors": 0
+  },
+  "project": "vault",
+  "model": null,
+  "modelProvider": null,
+  "cliVersion": null,
+  "lastInjectedSkill": null,
+  "lastInjectedAt": null,
+  "injectedSources": []
+}

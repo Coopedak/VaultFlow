@@ -1,0 +1,20 @@
+{
+  "id": "fb0c740e-094f-4a41-8f11-2cafbf681953",
+  "startedAt": "2026-05-05T19:00:15.321Z",
+  "endedAt": "2026-05-05T19:06:11.443Z",
+  "restoredAt": "2026-05-05T19:06:10.226Z",
+  "durationMs": 356123,
+  "platform": "win32",
+  "cwd": "C:\\GIT\\vaultflow",
+  "context": "claude-code",
+  "metrics": {
+    "edits": 0,
+    "commands": 0,
+    "tasks": 0,
+    "errors": 0
+  },
+  "project": "vaultflow",
+  "lastInjectedSkill": null,
+  "lastInjectedAt": null,
+  "injectedSources": []
+}

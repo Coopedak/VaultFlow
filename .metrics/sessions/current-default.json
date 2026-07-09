@@ -1,0 +1,23 @@
+{
+  "id": "19c21fa5-f803-474a-be37-aa5eba269aa4",
+  "startedAt": "2026-06-16T13:15:54.115Z",
+  "endedAt": null,
+  "restoredAt": "2026-06-16T13:17:02.070Z",
+  "durationMs": null,
+  "platform": "win32",
+  "cwd": "C:\\",
+  "context": "claude-code",
+  "metrics": {
+    "edits": 0,
+    "commands": 0,
+    "tasks": 0,
+    "errors": 0
+  },
+  "project": null,
+  "model": null,
+  "modelProvider": null,
+  "cliVersion": null,
+  "lastInjectedSkill": null,
+  "lastInjectedAt": null,
+  "injectedSources": []
+}

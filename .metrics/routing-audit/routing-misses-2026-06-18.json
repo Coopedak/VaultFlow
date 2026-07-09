@@ -1,0 +1,967 @@
+{
+  "date": "2026-06-18",
+  "prompts_scanned": 64,
+  "strong_matches": 46,
+  "misses_count": 44,
+  "miss_rate": 0.957,
+  "misses": [
+    {
+      "prompt_id": 3697,
+      "ts": "2026-06-18T06:00:09.382Z",
+      "snippet": "You are the Librarian running a vault maintenance audit. Your job is to find real gaps and generate a prioritized task list. ## What to aud",
+      "candidates": [
+        {
+          "name": "vault-librarian",
+          "rank": -13.65,
+          "use_count": 32
+        },
+        {
+          "name": "customer-expert",
+          "rank": -8.01,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.45,
+          "use_count": 17
+        }
+      ]
+    },
+    {
+      "prompt_id": 3692,
+      "ts": "2026-06-18T02:51:10.244Z",
+      "snippet": "leave it run and we will have the 2 am fill in the gaps?",
+      "candidates": [
+        {
+          "name": "leadtime-planner",
+          "rank": -5.32,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.64,
+          "use_count": 1
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.57,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3691,
+      "ts": "2026-06-18T02:10:49.385Z",
+      "snippet": "did we get the e drive backed up?",
+      "candidates": [
+        {
+          "name": "agent-ado",
+          "rank": -6.47,
+          "use_count": 5
+        },
+        {
+          "name": "frontend-dev",
+          "rank": -4.92,
+          "use_count": 1
+        },
+        {
+          "name": "api-integration",
+          "rank": -4.84,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3687,
+      "ts": "2026-06-17T19:32:20.794Z",
+      "snippet": "can we make a cron job that backs \"C:\\GIT\" to E:\\GIT every night",
+      "candidates": [
+        {
+          "name": "pipeline-gateway",
+          "rank": -10.34,
+          "use_count": 39
+        },
+        {
+          "name": "excalidraw-diagram",
+          "rank": -6.55,
+          "use_count": 4
+        },
+        {
+          "name": "workflow-architect",
+          "rank": -5.45,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3682,
+      "ts": "2026-06-17T18:55:45.943Z",
+      "snippet": "now are you able to go in and get the source code for the isvs and bc to see how everything is working?",
+      "candidates": [
+        {
+          "name": "pipeline-gateway",
+          "rank": -7.31,
+          "use_count": 39
+        },
+        {
+          "name": "agent-ado",
+          "rank": -6.47,
+          "use_count": 5
+        },
+        {
+          "name": "codebase-onboarding-engineer",
+          "rank": -6.18,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3681,
+      "ts": "2026-06-17T18:48:47.837Z",
+      "snippet": "\"C:\\GIT\\Atlas\" also put the project here",
+      "candidates": [
+        {
+          "name": "reviewer-code",
+          "rank": -8.22,
+          "use_count": 93
+        },
+        {
+          "name": "git-workflow-master",
+          "rank": -7.15,
+          "use_count": 0
+        },
+        {
+          "name": "session-reviewer",
+          "rank": -6.95,
+          "use_count": 2
+        }
+      ]
+    },
+    {
+      "prompt_id": 3678,
+      "ts": "2026-06-17T18:34:32.268Z",
+      "snippet": "So i want one html not multiple",
+      "candidates": [
+        {
+          "name": "developer-backend",
+          "rank": -7.88,
+          "use_count": 44
+        },
+        {
+          "name": "developer-frontend",
+          "rank": -7.88,
+          "use_count": 3
+        },
+        {
+          "name": "agent-communicator",
+          "rank": -4.31,
+          "use_count": 23
+        }
+      ]
+    },
+    {
+      "prompt_id": 3677,
+      "ts": "2026-06-17T18:25:09.294Z",
+      "snippet": "fix them all make suer you using the dev team to fix this",
+      "candidates": [
+        {
+          "name": "excalidraw-diagram",
+          "rank": -6.55,
+          "use_count": 4
+        },
+        {
+          "name": "ai-data-remediation-engineer",
+          "rank": -5.76,
+          "use_count": 0
+        },
+        {
+          "name": "minimal-change-engineer",
+          "rank": -5.38,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3676,
+      "ts": "2026-06-17T18:18:07.880Z",
+      "snippet": "alright are all the new features working in the repo",
+      "candidates": [
+        {
+          "name": "frontend-dev",
+          "rank": -9.03,
+          "use_count": 1
+        },
+        {
+          "name": "frontend-dev",
+          "rank": -9.03,
+          "use_count": 0
+        },
+        {
+          "name": "vb6-parity-auditor",
+          "rank": -6.33,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3675,
+      "ts": "2026-06-17T18:16:13.114Z",
+      "snippet": "can we make each isv its own color?",
+      "candidates": [
+        {
+          "name": "excalidraw-diagram",
+          "rank": -6.55,
+          "use_count": 4
+        },
+        {
+          "name": "workflow-architect",
+          "rank": -5.45,
+          "use_count": 0
+        },
+        {
+          "name": "developer-fullstack",
+          "rank": -4.89,
+          "use_count": 19
+        }
+      ]
+    },
+    {
+      "prompt_id": 3673,
+      "ts": "2026-06-17T18:07:13.679Z",
+      "snippet": "we need to make sure we are creating an html file that services as an obsidean value that hase the wikis, the isvs and how its all linked ar",
+      "candidates": [
+        {
+          "name": "test-writer",
+          "rank": -13.02,
+          "use_count": 1
+        },
+        {
+          "name": "test-writer",
+          "rank": -12.8,
+          "use_count": 1
+        },
+        {
+          "name": "pr-shepherd",
+          "rank": -9.6,
+          "use_count": 10
+        }
+      ]
+    },
+    {
+      "prompt_id": 3671,
+      "ts": "2026-06-17T18:01:47.561Z",
+      "snippet": "well we also need to know what all tables the isv have modified what columns belong to each isv or a custom table ect does this make sense",
+      "candidates": [
+        {
+          "name": "test-writer",
+          "rank": -8.38,
+          "use_count": 1
+        },
+        {
+          "name": "test-writer",
+          "rank": -8.24,
+          "use_count": 1
+        },
+        {
+          "name": "documenter",
+          "rank": -7.36,
+          "use_count": 21
+        }
+      ]
+    },
+    {
+      "prompt_id": 3669,
+      "ts": "2026-06-17T17:53:32.729Z",
+      "snippet": "what are you running in the back ground",
+      "candidates": [
+        {
+          "name": "project-manager",
+          "rank": -6.61,
+          "use_count": 15
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.43,
+          "use_count": 17
+        },
+        {
+          "name": "leadtime-analyst",
+          "rank": -6.03,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3668,
+      "ts": "2026-06-17T17:50:25.495Z",
+      "snippet": "well make sure we have everything then i will",
+      "candidates": [
+        {
+          "name": "pr-shepherd",
+          "rank": -9.6,
+          "use_count": 10
+        },
+        {
+          "name": "evidence-collector",
+          "rank": -7.55,
+          "use_count": 0
+        },
+        {
+          "name": "base-template-generator",
+          "rank": -6.9,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3666,
+      "ts": "2026-06-17T17:46:41.180Z",
+      "snippet": "no i need to to be used so when i ask question on how to do uploads of data how to do anything this is a reference and knows and can give my",
+      "candidates": [
+        {
+          "name": "psi-wiki",
+          "rank": -6.69,
+          "use_count": 28
+        },
+        {
+          "name": "documenter",
+          "rank": -5.89,
+          "use_count": 21
+        },
+        {
+          "name": "project-manager",
+          "rank": -5.15,
+          "use_count": 15
+        }
+      ]
+    },
+    {
+      "prompt_id": 3665,
+      "ts": "2026-06-17T17:39:04.102Z",
+      "snippet": "alright going to close and reopen to see if the mcp works",
+      "candidates": [
+        {
+          "name": "Dev-Team Pipeline (Claude Code, PSI-specific)",
+          "rank": -5.3,
+          "use_count": 0
+        },
+        {
+          "name": "debugger",
+          "rank": -5.18,
+          "use_count": 0
+        },
+        {
+          "name": "leadtime-planner",
+          "rank": -4.33,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3664,
+      "ts": "2026-06-17T17:36:01.677Z",
+      "snippet": "now can you learn everything about each isv?",
+      "candidates": [
+        {
+          "name": "psi-wiki",
+          "rank": -16.12,
+          "use_count": 28
+        },
+        {
+          "name": "evidence-collector",
+          "rank": -7.55,
+          "use_count": 0
+        },
+        {
+          "name": "leadtime-planner",
+          "rank": -6.6,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3662,
+      "ts": "2026-06-17T17:34:21.646Z",
+      "snippet": "we should use the dev enviroment",
+      "candidates": [
+        {
+          "name": "dev-team",
+          "rank": -6.48,
+          "use_count": 19
+        },
+        {
+          "name": "pipeline-gateway",
+          "rank": -5.67,
+          "use_count": 39
+        },
+        {
+          "name": "agent-planner",
+          "rank": -5.48,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3661,
+      "ts": "2026-06-17T17:32:31.790Z",
+      "snippet": "your just data collecting not running anything correct?",
+      "candidates": [
+        {
+          "name": "ai-data-remediation-engineer",
+          "rank": -12.13,
+          "use_count": 0
+        },
+        {
+          "name": "developer-database",
+          "rank": -7.06,
+          "use_count": 2
+        },
+        {
+          "name": "developer-backend",
+          "rank": -6.42,
+          "use_count": 44
+        }
+      ]
+    },
+    {
+      "prompt_id": 3658,
+      "ts": "2026-06-17T17:25:11.042Z",
+      "snippet": "how do i get the token are you able to do it for me?",
+      "candidates": [
+        {
+          "name": "quoting-expert",
+          "rank": -10.95,
+          "use_count": 0
+        },
+        {
+          "name": "agent-ado",
+          "rank": -6.47,
+          "use_count": 5
+        },
+        {
+          "name": "configure-devteam",
+          "rank": -4.84,
+          "use_count": 7
+        }
+      ]
+    },
+    {
+      "prompt_id": 3657,
+      "ts": "2026-06-17T17:22:29.272Z",
+      "snippet": "yes push to the d drive as well and make sure the drive is up to date.",
+      "candidates": [
+        {
+          "name": "pr-shepherd",
+          "rank": -8.65,
+          "use_count": 10
+        },
+        {
+          "name": "base-template-generator",
+          "rank": -6.9,
+          "use_count": 0
+        },
+        {
+          "name": "excalidraw-diagram",
+          "rank": -6.55,
+          "use_count": 4
+        }
+      ]
+    },
+    {
+      "prompt_id": 3656,
+      "ts": "2026-06-17T17:21:38.131Z",
+      "snippet": "i also have a private repo too",
+      "candidates": [
+        {
+          "name": "leadtime-planner",
+          "rank": -5.32,
+          "use_count": 0
+        },
+        {
+          "name": "researcher",
+          "rank": -3.79,
+          "use_count": 25
+        },
+        {
+          "name": "documenter",
+          "rank": -3.68,
+          "use_count": 21
+        }
+      ]
+    },
+    {
+      "prompt_id": 3654,
+      "ts": "2026-06-17T17:17:45.813Z",
+      "snippet": "do i really need to do the whole corpus again?",
+      "candidates": [
+        {
+          "name": "quoting-expert",
+          "rank": -10.95,
+          "use_count": 0
+        },
+        {
+          "name": "psi-wiki",
+          "rank": -4.76,
+          "use_count": 28
+        },
+        {
+          "name": "test-writer",
+          "rank": -3.73,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3653,
+      "ts": "2026-06-17T17:05:39.123Z",
+      "snippet": "alright now how do i get all the ivs and get them all indexed",
+      "candidates": [
+        {
+          "name": "agent-ado",
+          "rank": -6.47,
+          "use_count": 5
+        },
+        {
+          "name": "quoting-expert",
+          "rank": -5.48,
+          "use_count": 0
+        },
+        {
+          "name": "performance-benchmarker",
+          "rank": -3.53,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3651,
+      "ts": "2026-06-17T17:03:51.400Z",
+      "snippet": "how do we improve buzz running",
+      "candidates": [
+        {
+          "name": "quoting-expert",
+          "rank": -5.48,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.64,
+          "use_count": 1
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.57,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3649,
+      "ts": "2026-06-17T16:14:01.819Z",
+      "snippet": "can we look for azure",
+      "candidates": [
+        {
+          "name": "deploy-prep",
+          "rank": -5.83,
+          "use_count": 0
+        },
+        {
+          "name": "workflow-architect",
+          "rank": -5.45,
+          "use_count": 0
+        },
+        {
+          "name": "reviewer-code",
+          "rank": -4.97,
+          "use_count": 93
+        }
+      ]
+    },
+    {
+      "prompt_id": 3647,
+      "ts": "2026-06-17T15:43:09.382Z",
+      "snippet": "make this a PDF \"C:\\GIT\\STPT\\docs\\oracle-cloud-vm.md\"",
+      "candidates": [
+        {
+          "name": "agent-docs-api-openapi",
+          "rank": -7.91,
+          "use_count": 0
+        },
+        {
+          "name": "git-workflow-master",
+          "rank": -7.15,
+          "use_count": 0
+        },
+        {
+          "name": "excalidraw-diagram",
+          "rank": -6.55,
+          "use_count": 4
+        }
+      ]
+    },
+    {
+      "prompt_id": 3644,
+      "ts": "2026-06-17T15:38:11.804Z",
+      "snippet": "yes it does lets fix the discovered bug",
+      "candidates": [
+        {
+          "name": "minimal-change-engineer",
+          "rank": -11.24,
+          "use_count": 0
+        },
+        {
+          "name": "ai-data-remediation-engineer",
+          "rank": -5.76,
+          "use_count": 0
+        },
+        {
+          "name": "agent-researcher",
+          "rank": -4.85,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3643,
+      "ts": "2026-06-17T15:32:05.317Z",
+      "snippet": "explain to me what he is trying to do and why? does it make sense",
+      "candidates": [
+        {
+          "name": "quoting-expert",
+          "rank": -11.54,
+          "use_count": 0
+        },
+        {
+          "name": "documenter",
+          "rank": -4.58,
+          "use_count": 21
+        },
+        {
+          "name": "mes-architect",
+          "rank": -3.61,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3641,
+      "ts": "2026-06-17T15:27:27.650Z",
+      "snippet": "what did adam do to the repo and how was it affected",
+      "candidates": [
+        {
+          "name": "process-manager",
+          "rank": -7.45,
+          "use_count": 0
+        },
+        {
+          "name": "quoting-expert",
+          "rank": -5.48,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -3.46,
+          "use_count": 17
+        }
+      ]
+    },
+    {
+      "prompt_id": 3638,
+      "ts": "2026-06-17T15:05:36.661Z",
+      "snippet": "now how do we identify and catalog flows in projects? we should do this and each flow should have a flow chart associated on the dashboard",
+      "candidates": [
+        {
+          "name": "quoting-expert",
+          "rank": -5.48,
+          "use_count": 0
+        },
+        {
+          "name": "psi-wiki",
+          "rank": -5.43,
+          "use_count": 28
+        },
+        {
+          "name": "process-manager",
+          "rank": -5.35,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3635,
+      "ts": "2026-06-17T14:54:55.302Z",
+      "snippet": "so anything we do in a project we the process manager needs to make sure what we do will work both up and down stream. each process is a flo",
+      "candidates": [
+        {
+          "name": "test-writer",
+          "rank": -9.29,
+          "use_count": 1
+        },
+        {
+          "name": "test-writer",
+          "rank": -9.13,
+          "use_count": 1
+        },
+        {
+          "name": "quoting-expert",
+          "rank": -5.48,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3634,
+      "ts": "2026-06-17T14:09:50.471Z",
+      "snippet": "alright now i think we need to create a new agent that works with the project manager this person runs and works with the project manager.",
+      "candidates": [
+        {
+          "name": "test-writer",
+          "rank": -11.6,
+          "use_count": 1
+        },
+        {
+          "name": "test-writer",
+          "rank": -11.4,
+          "use_count": 1
+        },
+        {
+          "name": "documenter",
+          "rank": -6.85,
+          "use_count": 21
+        }
+      ]
+    },
+    {
+      "prompt_id": 3633,
+      "ts": "2026-06-17T14:07:15.703Z",
+      "snippet": "so we should update teh wiki to show the correct data",
+      "candidates": [
+        {
+          "name": "psi-wiki",
+          "rank": -12.62,
+          "use_count": 28
+        },
+        {
+          "name": "wiki-page",
+          "rank": -6.23,
+          "use_count": 0
+        },
+        {
+          "name": "session-reviewer",
+          "rank": -6.15,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3632,
+      "ts": "2026-06-17T14:06:36.845Z",
+      "snippet": "is the mcp wired and ready to work",
+      "candidates": [
+        {
+          "name": "mcp-builder",
+          "rank": -7.98,
+          "use_count": 0
+        },
+        {
+          "name": "code-reviewer",
+          "rank": -5.96,
+          "use_count": 0
+        },
+        {
+          "name": "code-reviewer",
+          "rank": -5.96,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3629,
+      "ts": "2026-06-17T13:43:06.935Z",
+      "snippet": "i just want to know everything and anything",
+      "candidates": [
+        {
+          "name": "leadtime-planner",
+          "rank": -8.92,
+          "use_count": 0
+        },
+        {
+          "name": "evidence-collector",
+          "rank": -7.55,
+          "use_count": 0
+        },
+        {
+          "name": "code-reviewer",
+          "rank": -4.62,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3628,
+      "ts": "2026-06-17T13:35:04.631Z",
+      "snippet": "can you look and make sure that we can ensure these are working also make sure that my copy of buzz is up today with the orgin i want to kno",
+      "candidates": [
+        {
+          "name": "pr-shepherd",
+          "rank": -9.6,
+          "use_count": 10
+        },
+        {
+          "name": "leadtime-planner",
+          "rank": -6.6,
+          "use_count": 0
+        },
+        {
+          "name": "excalidraw-diagram",
+          "rank": -6.55,
+          "use_count": 4
+        }
+      ]
+    },
+    {
+      "prompt_id": 3625,
+      "ts": "2026-06-17T13:19:48.900Z",
+      "snippet": "S:\\OneNote\\Employee Manual",
+      "candidates": [
+        {
+          "name": "pr-shepherd",
+          "rank": -5.08,
+          "use_count": 10
+        },
+        {
+          "name": "process-manager",
+          "rank": -4.07,
+          "use_count": 0
+        },
+        {
+          "name": "session-reviewer",
+          "rank": -3.69,
+          "use_count": 2
+        }
+      ]
+    },
+    {
+      "prompt_id": 3624,
+      "ts": "2026-06-17T13:19:37.528Z",
+      "snippet": "S:\\OneNote\\Employee Manual",
+      "candidates": [
+        {
+          "name": "pr-shepherd",
+          "rank": -5.08,
+          "use_count": 10
+        },
+        {
+          "name": "process-manager",
+          "rank": -4.07,
+          "use_count": 0
+        },
+        {
+          "name": "session-reviewer",
+          "rank": -3.69,
+          "use_count": 2
+        }
+      ]
+    },
+    {
+      "prompt_id": 3623,
+      "ts": "2026-06-17T13:19:33.465Z",
+      "snippet": "S:\\OneNote\\Employee Manual",
+      "candidates": [
+        {
+          "name": "pr-shepherd",
+          "rank": -5.08,
+          "use_count": 10
+        },
+        {
+          "name": "process-manager",
+          "rank": -4.07,
+          "use_count": 0
+        },
+        {
+          "name": "session-reviewer",
+          "rank": -3.69,
+          "use_count": 2
+        }
+      ]
+    },
+    {
+      "prompt_id": 3622,
+      "ts": "2026-06-17T13:19:24.564Z",
+      "snippet": "S:\\OneNote\\Employee Manual",
+      "candidates": [
+        {
+          "name": "pr-shepherd",
+          "rank": -5.08,
+          "use_count": 10
+        },
+        {
+          "name": "process-manager",
+          "rank": -4.07,
+          "use_count": 0
+        },
+        {
+          "name": "session-reviewer",
+          "rank": -3.69,
+          "use_count": 2
+        }
+      ]
+    },
+    {
+      "prompt_id": 3621,
+      "ts": "2026-06-17T13:14:29.274Z",
+      "snippet": "now does vault flow have a find skill feature whre it looks at the skills and picks out which skill to use before creating a new skill? we s",
+      "candidates": [
+        {
+          "name": "agent-researcher",
+          "rank": -10.29,
+          "use_count": 0
+        },
+        {
+          "name": "debugger",
+          "rank": -7.21,
+          "use_count": 0
+        },
+        {
+          "name": "leadtime-planner",
+          "rank": -5.32,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3618,
+      "ts": "2026-06-17T12:36:01.304Z",
+      "snippet": "sounds good lets do it",
+      "candidates": [
+        {
+          "name": "quoting-expert",
+          "rank": -5.48,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3616,
+      "ts": "2026-06-17T06:00:09.248Z",
+      "snippet": "You are the Librarian running a vault maintenance audit. Your job is to find real gaps and generate a prioritized task list. ## What to aud",
+      "candidates": [
+        {
+          "name": "vault-librarian",
+          "rank": -13.65,
+          "use_count": 32
+        },
+        {
+          "name": "customer-expert",
+          "rank": -8.01,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.45,
+          "use_count": 17
+        }
+      ]
+    }
+  ]
+}

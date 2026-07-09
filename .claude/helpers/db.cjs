@@ -137,6 +137,19 @@ const SCHEMA_SQL = `
     promoted    INTEGER DEFAULT 0
   );
 
+  -- Importer bookkeeping for Claude Desktop / claude.ai chat exports.
+  -- Keyed by the conversation's stable uuid so re-importing the same export
+  -- (e.g. nightly) is a no-op unless updated_at changed. See
+  -- import-claude-chats.mjs — this is the change-detection store that prevents
+  -- prompt/transcript duplication across runs.
+  CREATE TABLE IF NOT EXISTS imported_chats (
+    conversation_uuid TEXT    PRIMARY KEY,
+    updated_at        TEXT,
+    source_file       TEXT,
+    message_count     INTEGER DEFAULT 0,
+    imported_at       TEXT
+  );
+
   -- Memory entries: parsed blocks from MEMORY.md and vault files.
   -- Populated by auto-memory-hook.mjs at session start.
   CREATE TABLE IF NOT EXISTS memory_entries (
@@ -419,6 +432,54 @@ const SCHEMA_SQL = `
     last_used       TEXT
   );
 
+  -- FTS5 content table backed by vault_agents. Lets the routing audit and the
+  -- skill-injection hook score prompts against agent descriptions via BM25.
+  CREATE VIRTUAL TABLE IF NOT EXISTS vault_agents_fts USING fts5(
+    name, description, trigger_pattern,
+    content='vault_agents',
+    content_rowid='id'
+  );
+
+  CREATE TRIGGER IF NOT EXISTS vault_agents_ai
+    AFTER INSERT ON vault_agents BEGIN
+      INSERT INTO vault_agents_fts(rowid, name, description, trigger_pattern)
+      VALUES (new.id, new.name, new.description, COALESCE(new.trigger_pattern, ''));
+    END;
+
+  CREATE TRIGGER IF NOT EXISTS vault_agents_au
+    AFTER UPDATE ON vault_agents BEGIN
+      INSERT INTO vault_agents_fts(vault_agents_fts, rowid, name, description, trigger_pattern)
+        VALUES ('delete', old.id, old.name, old.description, COALESCE(old.trigger_pattern, ''));
+      INSERT INTO vault_agents_fts(rowid, name, description, trigger_pattern)
+        VALUES (new.id, new.name, new.description, COALESCE(new.trigger_pattern, ''));
+    END;
+
+  CREATE TRIGGER IF NOT EXISTS vault_agents_ad
+    AFTER DELETE ON vault_agents BEGIN
+      INSERT INTO vault_agents_fts(vault_agents_fts, rowid, name, description, trigger_pattern)
+        VALUES ('delete', old.id, old.name, old.description, COALESCE(old.trigger_pattern, ''));
+    END;
+
+  -- Skill-injection decisions. Diagnostic log for every UserPromptSubmit route:
+  -- what skill the router picked, confidence, whether it was actually injected,
+  -- and the reason (e.g. threshold-met, recently-injected, no-match). Lets the
+  -- nightly routing-coverage audit cross-check "should have fired" prompts
+  -- against the live hook's actual decisions instead of only inferring misses.
+  CREATE TABLE IF NOT EXISTS skill_injection_decisions (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp       TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    session_id      INTEGER,
+    prompt_id       INTEGER,
+    chosen_skill    TEXT,
+    confidence      REAL,
+    injected        INTEGER NOT NULL DEFAULT 0,
+    tier            TEXT,
+    reason          TEXT,
+    candidates_json TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_inj_session ON skill_injection_decisions(session_id);
+  CREATE INDEX IF NOT EXISTS idx_inj_timestamp ON skill_injection_decisions(timestamp);
+
   -- Agent verdict log. Records pass/fail/warn decisions from routing and
   -- quality-gate agents so callers can query aggregate outcomes over time.
   CREATE TABLE IF NOT EXISTS agent_verdicts (
@@ -488,13 +549,14 @@ const SCHEMA_SQL = `
   -- Code graph: symbols exported by each file + cross-file imports.
   -- Populated by code-graph.cjs from post-edit and watcher.
   CREATE TABLE IF NOT EXISTS code_symbols (
-    file       TEXT NOT NULL,
-    project    TEXT,
-    lang       TEXT,
-    kind       TEXT NOT NULL,
-    name       TEXT NOT NULL,
-    line       INTEGER NOT NULL DEFAULT 0,
-    indexed_at TEXT NOT NULL,
+    file         TEXT NOT NULL,
+    project      TEXT,
+    lang         TEXT,
+    kind         TEXT NOT NULL,
+    name         TEXT NOT NULL,
+    line         INTEGER NOT NULL DEFAULT 0,
+    indexed_at   TEXT NOT NULL,
+    content_hash TEXT,
     PRIMARY KEY (file, kind, name, line)
   );
 
@@ -595,6 +657,24 @@ const SCHEMA_SQL = `
     indexed_at TEXT NOT NULL
   );
 
+  -- Symbol embeddings — semantic search over code symbols at function/class
+  -- granularity. Hash-gated: re-embed only when symbol body content changes.
+  -- PK is (file, name, kind) because symbol names can repeat across files
+  -- and across kinds (e.g. a function "init" vs a class "init").
+  CREATE TABLE IF NOT EXISTS symbol_embeddings (
+    file         TEXT NOT NULL,
+    symbol_name  TEXT NOT NULL,
+    symbol_kind  TEXT NOT NULL,
+    vector       TEXT NOT NULL,
+    dim          INTEGER NOT NULL DEFAULT 384,
+    model        TEXT NOT NULL,
+    content_hash TEXT NOT NULL,
+    indexed_at   TEXT NOT NULL,
+    PRIMARY KEY (file, symbol_name, symbol_kind)
+  );
+  CREATE INDEX IF NOT EXISTS idx_symbol_embeddings_file ON symbol_embeddings(file);
+  CREATE INDEX IF NOT EXISTS idx_symbol_embeddings_hash ON symbol_embeddings(content_hash);
+
   -- Code call graph: who calls whom at the symbol level. Regex-based first
   -- pass (matches name( occurrences after a function definition's opening).
   CREATE TABLE IF NOT EXISTS code_calls (
@@ -608,9 +688,83 @@ const SCHEMA_SQL = `
     PRIMARY KEY (caller_file, caller_name, callee_name, line)
   );
 
+  -- Daily brain-vitals trend table. One row per (date, metric, scope) so the
+  -- nightly snapshot step overwrites rather than duplicates when re-run.
+  CREATE TABLE IF NOT EXISTS brain_snapshots (
+    snapshot_date TEXT NOT NULL,
+    metric        TEXT NOT NULL,
+    scope         TEXT NOT NULL DEFAULT '',
+    value         REAL NOT NULL,
+    PRIMARY KEY (snapshot_date, metric, scope)
+  );
+
   CREATE INDEX IF NOT EXISTS idx_code_calls_callee  ON code_calls(callee_name);
   CREATE INDEX IF NOT EXISTS idx_code_calls_caller  ON code_calls(caller_file, caller_name);
   CREATE INDEX IF NOT EXISTS idx_code_calls_project ON code_calls(project);
+
+  -- Flow catalog: end-to-end process paths ("full circles") traced over the
+  -- (approximate) call graph from an entry point. flows holds the header +
+  -- curation; flow_nodes/flow_edges hold the traced graph. Auto-discovered
+  -- flows can be hand-annotated (source='manual') without losing the curation
+  -- on re-discovery — see db.upsertFlowGraph. Flows are APPROXIMATE by design
+  -- (bare-name call resolution); truncated marks an incomplete trace.
+  CREATE TABLE IF NOT EXISTS flows (
+    id          TEXT PRIMARY KEY,
+    project     TEXT,
+    name        TEXT NOT NULL,
+    description TEXT,
+    user_notes  TEXT,
+    entry_point TEXT,
+    source      TEXT NOT NULL DEFAULT 'auto',
+    status      TEXT NOT NULL DEFAULT 'active',
+    fingerprint TEXT,
+    truncated   INTEGER DEFAULT 0,
+    confidence  REAL DEFAULT NULL,
+    created_at  TEXT,
+    updated_at  TEXT
+  );
+
+  CREATE TABLE IF NOT EXISTS flow_nodes (
+    flow_id   TEXT,
+    node_id   TEXT,
+    label     TEXT,
+    kind      TEXT,
+    file      TEXT,
+    terminal  INTEGER DEFAULT 0,
+    ambiguous INTEGER DEFAULT 0,
+    PRIMARY KEY (flow_id, node_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS flow_edges (
+    flow_id TEXT,
+    source  TEXT,
+    target  TEXT,
+    kind    TEXT,
+    PRIMARY KEY (flow_id, source, target)
+  );
+
+  -- User-declared entry points: the RECALL FLOOR for the flow catalog. Auto-
+  -- detection (detectEntryPoints) is high-confidence-only and therefore PARTIAL
+  -- — it misses HTTP routes in monolithic files and C#/attribute routes. This
+  -- table is how a user explicitly names an entry point so discovery traces it
+  -- every run regardless of what auto-detection finds. Flows traced from these
+  -- are stored with source='declared' and are EXEMPT from the stale-auto prune,
+  -- making them persistent. id is a stable hash of project+file+symbol so
+  -- re-declaring the same entry is idempotent (no duplicate row).
+  CREATE TABLE IF NOT EXISTS declared_entries (
+    id         TEXT PRIMARY KEY,
+    project    TEXT NOT NULL,
+    file       TEXT NOT NULL,
+    symbol     TEXT NOT NULL,
+    name       TEXT,
+    created_at TEXT
+  );
+  CREATE INDEX IF NOT EXISTS idx_declared_entries_project ON declared_entries(project);
+
+  CREATE INDEX IF NOT EXISTS idx_flows_project       ON flows(project);
+  CREATE INDEX IF NOT EXISTS idx_flows_fingerprint   ON flows(fingerprint);
+  CREATE INDEX IF NOT EXISTS idx_flow_nodes_flow     ON flow_nodes(flow_id);
+  CREATE INDEX IF NOT EXISTS idx_flow_edges_flow     ON flow_edges(flow_id);
   CREATE INDEX IF NOT EXISTS idx_memory_stale_flagged ON memory_stale(flagged_at);
 
   -- Performance indexes — queried on every hook fire
@@ -1208,6 +1362,19 @@ function initialize(metricsRoot, dbFile) {
     // 'tracked:*','tui:*'), corrupting routing analytics. source is now the
     // single source of truth for "which CLI generated this prompt".
     'ALTER TABLE prompts ADD COLUMN source TEXT',
+    // v4: content_hash on code_symbols — gates incremental embedding.
+    // When a symbol body's SHA-256 matches the stored hash, indexFile() skips
+    // re-enqueuing it for embedding. Existing rows get NULL (treated as miss
+    // on first re-index, so they backfill naturally).
+    'ALTER TABLE code_symbols ADD COLUMN content_hash TEXT',
+    // v5: decision_id on agent_verdicts — links a verdict to the
+    // skill_injection_decisions row that was active when the sub-agent ran,
+    // so verdict outcomes can be attributed back to the routing decision.
+    'ALTER TABLE agent_verdicts ADD COLUMN decision_id INTEGER',
+    // v6: confidence on flows — fraction of a traced flow's nodes that resolve
+    // to a real project symbol (0..1). The discovery quality gate writes it;
+    // existing rows backfill to NULL (treated as "unscored" until re-discovery).
+    'ALTER TABLE flows ADD COLUMN confidence REAL DEFAULT NULL',
   ]) {
     try { _db.exec(migration); } catch (err) {
       if (!err.message.includes('duplicate column')) {
@@ -2355,6 +2522,105 @@ function searchVaultTools(query, limit) {
   `).all(buildExpandedFtsQuery(query), limit || 10);
 }
 
+// ── symbol embeddings (hash-gated incremental) ────────────────────────────
+
+/**
+ * Return a Map of {file_symbol_kind -> content_hash} for every symbol in a
+ * file. Used by code-graph.indexFile() to skip re-embedding symbols whose
+ * body hasn't changed since last index.
+ */
+function getSymbolHashes(filePath) {
+  if (!_db) throw new Error('db.getSymbolHashes: call initialize() first');
+  const rows = _db.prepare(
+    `SELECT name, kind, content_hash FROM code_symbols WHERE file = ? AND content_hash IS NOT NULL`
+  ).all(filePath);
+  const m = new Map();
+  for (const r of rows) m.set(`${r.name} ${r.kind}`, r.content_hash);
+  return m;
+}
+
+/**
+ * Persist a symbol embedding. Called by the embed worker after sentence-
+ * transformers produces the vector. Hash is stored alongside so we can
+ * detect drift on the next re-index pass.
+ */
+function upsertSymbolEmbedding({ file, name, kind, vector, model, contentHash }) {
+  if (!_db) throw new Error('db.upsertSymbolEmbedding: call initialize() first');
+  const vec = Array.isArray(vector) ? JSON.stringify(vector) : String(vector);
+  _db.prepare(`
+    INSERT INTO symbol_embeddings (file, symbol_name, symbol_kind, vector, dim, model, content_hash, indexed_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(file, symbol_name, symbol_kind) DO UPDATE SET
+      vector = excluded.vector, dim = excluded.dim, model = excluded.model,
+      content_hash = excluded.content_hash, indexed_at = excluded.indexed_at
+  `).run(file, name, kind, vec, Array.isArray(vector) ? vector.length : 384, model, contentHash, new Date().toISOString());
+}
+
+/**
+ * Delete a file's symbol_embeddings rows. Called by clearFile() in code-graph
+ * to prevent orphans when a symbol is renamed or removed.
+ */
+function clearSymbolEmbeddings(filePath) {
+  if (!_db) throw new Error('db.clearSymbolEmbeddings: call initialize() first');
+  _db.prepare(`DELETE FROM symbol_embeddings WHERE file = ?`).run(filePath);
+}
+
+function getSymbolEmbeddingStats() {
+  if (!_db) throw new Error('db.getSymbolEmbeddingStats: call initialize() first');
+  const total = _db.prepare(`SELECT COUNT(*) AS n FROM symbol_embeddings`).get().n;
+  const symbols = _db.prepare(`SELECT COUNT(*) AS n FROM code_symbols`).get().n;
+  const distinct = _db.prepare(`SELECT COUNT(DISTINCT file || '|' || name || '|' || kind) AS n FROM code_symbols`).get().n;
+  return { embedded: total, code_symbols: symbols, distinct_symbols: distinct, coverage_pct: distinct ? +(total / distinct * 100).toFixed(2) : 0 };
+}
+
+/**
+ * Search vault_agents by BM25 across name, description, and trigger_pattern.
+ * Used by the routing-coverage audit and the skill-injection hook.
+ *
+ * @param {string} query   Plain-text query, expanded via buildExpandedFtsQuery
+ * @param {number} limit   Max results (default 5)
+ * @returns {Array} Rows ordered by relevance (most relevant first)
+ */
+function searchVaultAgents(query, limit) {
+  if (!_db) throw new Error('db.searchVaultAgents: call initialize() first');
+
+  // Routing intent is "any keyword from the prompt matches an agent description",
+  // so we use OR-by-default instead of buildExpandedFtsQuery's AND join.
+  // Take up to 10 meaningful tokens, drop stopwords, quote each, join with OR.
+  const tokens = tokenizeSearchQuery(query).slice(0, 10);
+  if (!tokens.length) return [];
+  const ftsExpr = tokens.map(quoteFtsToken).join(' OR ');
+
+  return _db.prepare(`
+    SELECT a.id,
+           a.agent_id,
+           a.name,
+           a.source,
+           a.description,
+           a.trigger_pattern,
+           a.use_count,
+           a.last_used,
+           bm25(vault_agents_fts) AS rank
+    FROM   vault_agents_fts f
+    JOIN   vault_agents a ON a.id = f.rowid
+    WHERE  vault_agents_fts MATCH ?
+    ORDER  BY rank
+    LIMIT  ?
+  `).all(ftsExpr, limit || 5);
+}
+
+/**
+ * Rebuild the vault_agents_fts index from scratch. Used after schema upgrades
+ * (when the FTS table did not exist when rows were originally inserted) and
+ * when description/trigger_pattern changes need to be reflected immediately.
+ */
+function rebuildVaultAgentsFts() {
+  if (!_db) throw new Error('db.rebuildVaultAgentsFts: call initialize() first');
+  // 'rebuild' is the FTS5 built-in command for full reindex from content table.
+  _db.exec(`INSERT INTO vault_agents_fts(vault_agents_fts) VALUES('rebuild')`);
+  return _db.prepare(`SELECT COUNT(*) AS n FROM vault_agents_fts`).get().n;
+}
+
 // ── agent registry ────────────────────────────────────────────────────────
 
 /**
@@ -2406,6 +2672,40 @@ function incrementAgentUse(agentIdOrName) {
   `).run(now, agentIdOrName, agentIdOrName);
 }
 
+/**
+ * Record a skill-injection decision. Called by the route hook on every
+ * UserPromptSubmit so the nightly routing-coverage audit can correlate
+ * BM25-derived "should have routed" candidates with what the live hook
+ * actually decided.
+ *
+ * @param {object} args
+ * @param {number|null} args.sessionId
+ * @param {number|null} args.promptId
+ * @param {string|null} args.chosenSkill
+ * @param {number}      args.confidence    0-1
+ * @param {boolean}     args.injected      Whether full instructions were injected
+ * @param {string|null} args.tier          'full' | 'description' | null
+ * @param {string}      args.reason        Short tag: 'threshold-met', 'below-threshold', 'recently-injected', 'no-match'
+ * @param {Array}       args.candidates    Optional list of {name, confidence} scored
+ */
+function recordSkillInjectionDecision(args) {
+  if (!_db) throw new Error('db.recordSkillInjectionDecision: call initialize() first');
+  const {
+    sessionId = null, promptId = null, chosenSkill = null,
+    confidence = 0, injected = false, tier = null, reason = 'unknown',
+    candidates = null,
+  } = args || {};
+  _db.prepare(`
+    INSERT INTO skill_injection_decisions
+      (session_id, prompt_id, chosen_skill, confidence, injected, tier, reason, candidates_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    sessionId, promptId, chosenSkill, confidence,
+    injected ? 1 : 0, tier, reason,
+    candidates ? JSON.stringify(candidates).slice(0, 4000) : null
+  );
+}
+
 // ── agent verdicts ────────────────────────────────────────────────────────
 
 /**
@@ -2417,19 +2717,27 @@ function incrementAgentUse(agentIdOrName) {
  * @param {string}      [reason]    Human-readable explanation (max 500 chars).
  * @param {string|null} [flaggedAt] ISO timestamp if the verdict was flagged for review.
  */
-function recordVerdict(sessionId, agentType, verdict, reason, flaggedAt) {
+function recordVerdict(sessionId, agentType, verdict, reason, flaggedAt, decisionId) {
   if (!_db) throw new Error('db.recordVerdict: call initialize() first');
   _db.prepare(
-    `INSERT INTO agent_verdicts (timestamp, session_id, agent_type, verdict, reason, flagged_at)
-     VALUES (?, ?, ?, ?, ?, ?)`
+    `INSERT INTO agent_verdicts (timestamp, session_id, agent_type, verdict, reason, flagged_at, decision_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
   ).run(
     new Date().toISOString(),
     sessionId  || null,
     String(agentType  || '').slice(0, 100),
     String(verdict    || '').slice(0, 50),
     String(reason     || '').slice(0, 500),
-    flaggedAt  || null
+    flaggedAt  || null,
+    decisionId ?? null
   );
+}
+
+/** Most recent skill_injection_decisions.id for a session, or null. */
+function getLatestDecisionId(sessionId) {
+  if (!_db || !sessionId) return null;
+  try { return _db.prepare(`SELECT id FROM skill_injection_decisions WHERE session_id = ? ORDER BY id DESC LIMIT 1`).get(sessionId)?.id ?? null; }
+  catch (_) { return null; }
 }
 
 /**
@@ -3005,6 +3313,729 @@ function close() {
   }
 }
 
+/**
+ * Build a cross-entity graph over existing edge tables for the Brain dashboard.
+ * Pure read. No schema changes — UNIONs the relationship tables vaultflow
+ * already maintains. Hard-capped so the browser never receives the full graph.
+ *
+ * @param {object} [opts]
+ * @param {string|null} [opts.center] node id "type:key"; null = overview mode
+ * @param {number} [opts.depth=1]     neighborhood depth, clamped to [1,2]
+ * @param {string[]|null} [opts.types] node-type allowlist; null = all
+ * @param {number} [opts.limit=150]   soft node cap, clamped to [1,500]
+ * @returns {{nodes:Array,edges:Array,meta:object}}
+ */
+function getBrainGraph(opts) {
+  if (!_db) throw new Error('db.getBrainGraph: call initialize() first');
+  const o      = opts || {};
+  const center = o.center || null;
+  const depth  = Math.min(2, Math.max(1, o.depth || 1));
+  const types  = Array.isArray(o.types) && o.types.length ? new Set(o.types) : null;
+  const NODE_CAP = Math.min(500, Math.max(1, o.limit || 150));
+  const EDGE_CAP = NODE_CAP * 3;
+
+  const nodes = new Map();   // id -> node
+  const edges = [];
+  const allow = (t) => !types || types.has(t);
+  const addNode = (id, type, label, weight) => {
+    if (!allow(type)) return false;
+    if (!nodes.has(id)) nodes.set(id, { id, type, label: String(label ?? id).slice(0, 80), weight: weight || 1 });
+    else if (weight && weight > nodes.get(id).weight) nodes.get(id).weight = weight;
+    return true;
+  };
+  const addEdge = (source, target, kind, weight) => {
+    if (edges.length >= EDGE_CAP) return;
+    if (nodes.has(source) && nodes.has(target)) edges.push({ source, target, kind, weight: weight || 1 });
+  };
+
+  const q = (sql, ...p) => _db.prepare(sql).all(...p);
+
+  if (center) {
+    // ── neighborhood: BFS out from the center node ─────────────────────────
+    const [ctype, ...crest] = center.split(':');
+    const ckey = crest.join(':');
+    const labelFor = (id) => id.split(':').slice(1).join(':').split(/[/\\]/).pop();
+    addNode(center, ctype, labelFor(center), 5);
+
+    const expand = (id) => {
+      const [t, ...rest] = id.split(':');
+      const key = rest.join(':');
+      if (t === 'session') {
+        for (const r of q(`SELECT DISTINCT file_path FROM edit_events WHERE session_id = ? LIMIT 50`, key)) {
+          if (addNode(`file:${r.file_path}`, 'file', String(r.file_path).split(/[/\\]/).pop(), 1))
+            addEdge(id, `file:${r.file_path}`, 'edited', 1);
+        }
+        const s = q(`SELECT project FROM sessions WHERE id = ? LIMIT 1`, key)[0];
+        if (s && s.project) { addNode(`project:${s.project}`, 'project', s.project, 1); addEdge(id, `project:${s.project}`, 'belongs', 1); }
+      } else if (t === 'file') {
+        for (const r of q(`SELECT DISTINCT session_id FROM edit_events WHERE file_path = ? LIMIT 50`, key)) {
+          if (addNode(`session:${r.session_id}`, 'session', r.session_id, 1))
+            addEdge(`session:${r.session_id}`, id, 'edited', 1);
+        }
+        try { for (const r of q(`SELECT target FROM code_imports WHERE file = ? LIMIT 50`, key)) {
+          if (addNode(`file:${r.target}`, 'file', String(r.target).split(/[/\\]/).pop(), 1)) addEdge(id, `file:${r.target}`, 'imports', 1);
+        } } catch (_) {}
+      } else if (t === 'memory') {
+        try { for (const r of q(`SELECT target FROM memory_links WHERE source = ? LIMIT 50`, key)) {
+          if (addNode(`memory:${r.target}`, 'memory', r.target, 1)) addEdge(id, `memory:${r.target}`, 'links', 1);
+        } } catch (_) {}
+        try { for (const r of q(`SELECT source FROM memory_links WHERE target = ? LIMIT 50`, key)) {
+          if (addNode(`memory:${r.source}`, 'memory', r.source, 1)) addEdge(`memory:${r.source}`, id, 'links', 1);
+        } } catch (_) {}
+      } else if (t === 'project') {
+        for (const r of q(`SELECT id, started_at FROM sessions WHERE project = ? ORDER BY started_at DESC LIMIT 30`, key)) {
+          if (addNode(`session:${r.id}`, 'session', r.id, 1)) addEdge(`session:${r.id}`, id, 'belongs', 1);
+        }
+      } else if (t === 'skill') {
+        try { for (const r of q(`SELECT pattern_key FROM patterns WHERE agent = ? LIMIT 30`, key)) {
+          if (addNode(`pattern:${r.pattern_key}`, 'pattern', r.pattern_key, 1)) addEdge(`pattern:${r.pattern_key}`, id, 'owns', 1);
+        } } catch (_) {}
+      }
+    };
+
+    let frontier = [center];
+    for (let d = 0; d < depth; d++) {
+      const next = [];
+      for (const id of frontier) { expand(id); }
+      // depth 2: expand the newly added nodes once more
+      for (const n of nodes.keys()) if (!frontier.includes(n)) next.push(n);
+      frontier = next;
+      if (depth === 1) break;
+    }
+  } else {
+  // ── overview: top-N nodes per type over the last 30 days ──────────────────
+
+  // projects by session count
+  for (const r of q(`SELECT project, COUNT(*) n FROM sessions WHERE project IS NOT NULL GROUP BY project ORDER BY n DESC LIMIT 10`))
+    addNode(`project:${r.project}`, 'project', r.project, r.n);
+  // sessions (recent)
+  for (const r of q(`SELECT id, project, started_at, COALESCE(edits,0) edits FROM sessions ORDER BY started_at DESC LIMIT 15`)) {
+    if (addNode(`session:${r.id}`, 'session', `${r.project || '?'} ${String(r.started_at).slice(0,10)}`, r.edits))
+      if (r.project) { addNode(`project:${r.project}`, 'project', r.project, 1); addEdge(`session:${r.id}`, `project:${r.project}`, 'belongs', 1); }
+  }
+  // hub files by edit frequency — exclude WAL/SHM journals that pollute the graph
+  for (const r of q(`SELECT file_path, project, COUNT(*) n FROM edit_events WHERE file_path NOT LIKE '%.wal' AND file_path NOT LIKE '%.duckdb.wal' AND file_path NOT LIKE '%.db-wal' AND file_path NOT LIKE '%.db-shm' GROUP BY file_path ORDER BY n DESC LIMIT 15`)) {
+    const base = String(r.file_path).split(/[/\\]/).pop();
+    if (addNode(`file:${r.file_path}`, 'file', base, r.n) && r.project) {
+      addNode(`project:${r.project}`, 'project', r.project, 1);
+      addEdge(`file:${r.file_path}`, `project:${r.project}`, 'belongs', 1);
+    }
+  }
+  // skills by use_count
+  try { for (const r of q(`SELECT name, COALESCE(use_count,0) uc FROM vault_agents ORDER BY uc DESC LIMIT 10`))
+    addNode(`skill:${r.name}`, 'skill', r.name, r.uc); } catch (_) {}
+  // patterns by fire_count
+  try { for (const r of q(`SELECT pattern_key, agent, COALESCE(fire_count,0) fc FROM patterns ORDER BY fc DESC LIMIT 10`)) {
+    if (addNode(`pattern:${r.pattern_key}`, 'pattern', r.pattern_key, r.fc) && r.agent) {
+      addNode(`skill:${r.agent}`, 'skill', r.agent, 1);
+      addEdge(`pattern:${r.pattern_key}`, `skill:${r.agent}`, 'owns', 1);
+    }
+  } } catch (_) {}
+  // memory entries by backlink count
+  try { for (const r of q(`SELECT m.source, m.title, COUNT(l.target) n FROM memory_entries m
+                            LEFT JOIN memory_links l ON l.target = m.source
+                            GROUP BY m.source ORDER BY n DESC LIMIT 10`))
+    addNode(`memory:${r.source}`, 'memory', r.title || r.source, r.n + 1); } catch (_) {}
+
+  // edges among selected memory nodes
+  try { for (const r of q(`SELECT source, target FROM memory_links LIMIT 500`))
+    addEdge(`memory:${r.source}`, `memory:${r.target}`, 'links', 1); } catch (_) {}
+  // edit edges among selected sessions+files
+  try { for (const r of q(`SELECT DISTINCT session_id, file_path FROM edit_events LIMIT 500`))
+    addEdge(`session:${r.session_id}`, `file:${r.file_path}`, 'edited', 1); } catch (_) {}
+  }
+
+  const truncated = nodes.size > NODE_CAP;
+  const nodeArr = Array.from(nodes.values()).sort((a, b) => b.weight - a.weight).slice(0, NODE_CAP);
+  const keep = new Set(nodeArr.map(n => n.id));
+  const edgeArr = edges.filter(e => keep.has(e.source) && keep.has(e.target));
+
+  return {
+    nodes: nodeArr,
+    edges: edgeArr,
+    meta: { mode: center ? 'neighborhood' : 'overview', truncated, nodeCount: nodeArr.length, edgeCount: edgeArr.length },
+  };
+}
+
+/**
+ * Fetch a single brain node as a readable "note" for the dashboard's
+ * Obsidian-style reader. Resolves a `<type>:<key>` graph id (the ids
+ * getBrainGraph emits) into renderable content: title, markdown body,
+ * frontmatter-style meta, tags, and the linked-mentions (backlinks) + outgoing
+ * links that make the vault feel interconnected. Read-only; returns a minimal
+ * shell for unknown ids rather than throwing — the UI always gets something.
+ */
+function getBrainNote(id) {
+  if (!_db) throw new Error('db.getBrainNote: call initialize() first');
+  const sep  = String(id || '').indexOf(':');
+  const type = sep >= 0 ? id.slice(0, sep) : 'note';
+  const key  = sep >= 0 ? id.slice(sep + 1) : String(id || '');
+  const q    = (sql, ...p) => _db.prepare(sql).all(...p);
+  const one  = (sql, ...p) => _db.prepare(sql).get(...p);
+  const base = (s) => String(s).split(/[/\\]/).pop();
+  const note = { id, type, key, title: key, body: '', tags: [], meta: [], backlinks: [], outlinks: [] };
+
+  try {
+    if (type === 'memory') {
+      let row = one(`SELECT source,title,body,tags FROM memory_entries WHERE source = ? LIMIT 1`, key);
+      if (!row) row = one(`SELECT source,title,body,tags FROM memory_entries WHERE source LIKE ? OR title = ? LIMIT 1`, `%${key}%`, key);
+      if (row) {
+        note.title = row.title || base(row.source);
+        note.body  = row.body || '';
+        note.tags  = String(row.tags || '').split(/[,\s]+/).filter(Boolean);
+        note.meta.push({ k: 'source', v: row.source });
+        for (const r of q(`SELECT DISTINCT target FROM memory_links WHERE source = ? LIMIT 100`, row.source))
+          note.outlinks.push({ id: `memory:${r.target}`, title: r.target });
+      }
+      const slug = base(key).replace(/\.md.*$/i, '').toLowerCase();
+      for (const r of q(`SELECT DISTINCT source, title FROM memory_links WHERE target = ? OR target = ? LIMIT 100`, String(key).toLowerCase(), slug))
+        note.backlinks.push({ id: `memory:${r.source}`, title: r.title || base(r.source) });
+    } else if (type === 'pattern') {
+      const row = one(`SELECT pattern_key,agent,confidence,fire_count,last_fired,promoted FROM patterns WHERE pattern_key = ? LIMIT 1`, key);
+      note.title = key;
+      if (row) {
+        note.meta.push({ k: 'agent', v: row.agent || '—' }, { k: 'fires', v: row.fire_count || 0 },
+          { k: 'confidence', v: row.confidence ?? '—' }, { k: 'promoted', v: row.promoted ? 'yes' : 'no' },
+          { k: 'last fired', v: row.last_fired || '—' });
+        note.body = `Learned pattern \`${key}\`, owned by agent **${row.agent || '—'}**. Fired ${row.fire_count || 0} times.`;
+        if (row.agent) note.outlinks.push({ id: `skill:${row.agent}`, title: row.agent });
+      }
+    } else if (type === 'skill') {
+      const row = one(`SELECT name,source,description,use_count,last_used FROM vault_agents WHERE name = ? LIMIT 1`, key);
+      note.title = key;
+      if (row) {
+        note.body = row.description || '';
+        note.meta.push({ k: 'source', v: row.source || '—' }, { k: 'uses', v: row.use_count || 0 }, { k: 'last used', v: row.last_used || '—' });
+        for (const r of q(`SELECT pattern_key FROM patterns WHERE agent = ? ORDER BY fire_count DESC LIMIT 30`, key))
+          note.outlinks.push({ id: `pattern:${r.pattern_key}`, title: r.pattern_key });
+      }
+    } else if (type === 'project') {
+      note.title = key;
+      const sc = one(`SELECT COUNT(*) n FROM sessions WHERE project = ?`, key);
+      const stacks = q(`SELECT stack_key FROM project_stacks WHERE project = ? ORDER BY confidence DESC LIMIT 12`, key).map(r => r.stack_key);
+      note.meta.push({ k: 'sessions', v: sc ? sc.n : 0 });
+      if (stacks.length) note.tags = stacks;
+      note.body = `Project hub for **${key}**.` + (stacks.length ? `\n\nDetected stack: ${stacks.join(', ')}.` : '');
+      for (const r of q(`SELECT id, started_at FROM sessions WHERE project = ? ORDER BY started_at DESC LIMIT 20`, key))
+        note.outlinks.push({ id: `session:${r.id}`, title: `${key} ${String(r.started_at).slice(0, 10)}` });
+    } else if (type === 'session') {
+      const ss = one(`SELECT session_id,project,duration_ms,top_files,patterns,summary_at FROM session_summaries WHERE session_id = ? LIMIT 1`, key);
+      const s  = one(`SELECT id,project,started_at,cli,COALESCE(edits,0) edits FROM sessions WHERE id = ? LIMIT 1`, key);
+      const proj = (ss && ss.project) || (s && s.project) || '?';
+      note.title = `Session · ${proj}`;
+      if (ss) {
+        const mins = ss.duration_ms ? Math.round(ss.duration_ms / 60000) : 0;
+        note.meta.push({ k: 'project', v: proj }, { k: 'duration', v: `${mins}m` }, { k: 'when', v: ss.summary_at || (s && s.started_at) || '—' });
+        // top_files is stored as JSON.stringify([...]) by writeSessionSummary.
+        // Parse it properly; fall back to comma/semicolon split for any legacy plain strings.
+        let files = [];
+        try { files = JSON.parse(ss.top_files || '[]'); } catch (_) {
+          files = String(ss.top_files || '').split(/[,;]+/).map(x => x.trim()).filter(Boolean);
+        }
+        // Strip any stray JSON punctuation that could appear in legacy plain-string values.
+        files = files.map(f => String(f).replace(/^["'\[]+|["'\]]+$/g, '').trim()).filter(Boolean);
+        note.body = (ss.patterns ? `Patterns: ${ss.patterns}\n\n` : '') + (files.length ? `Files touched:\n${files.map(f => `- ${f}`).join('\n')}` : 'No summary recorded.');
+      } else if (s) {
+        note.meta.push({ k: 'project', v: proj }, { k: 'edits', v: s.edits }, { k: 'when', v: s.started_at });
+        note.body = 'Session activity.';
+      }
+      if (proj && proj !== '?') note.outlinks.push({ id: `project:${proj}`, title: proj });
+      for (const r of q(`SELECT DISTINCT file_path FROM edit_events WHERE session_id = ? LIMIT 30`, key))
+        note.outlinks.push({ id: `file:${r.file_path}`, title: base(r.file_path) });
+      // Imported Claude Desktop / claude.ai chats are sessions with cli='claude-desktop'.
+      // They have no edit_events; their content lives in a memory_entries transcript.
+      // Surface the real chat title and link the node to that transcript so the
+      // Brain reader can open it. Additive only — normal CLI sessions are untouched.
+      if (s && s.cli === 'claude-desktop') {
+        const convSource = `claude-desktop:conv:${key}`;
+        const conv = one(`SELECT title FROM memory_entries WHERE source = ? LIMIT 1`, convSource);
+        if (conv && conv.title) note.title = conv.title;
+        // Only link to the transcript when the memory entry actually exists;
+        // pushing without a guard produces a dead link in the Brain reader.
+        if (conv) note.outlinks.push({ id: `memory:${convSource}`, title: 'Transcript' });
+      }
+    } else if (type === 'commit') {
+      const row = one(`SELECT sha,project,author,committed_at,subject,body FROM git_commits WHERE sha = ? OR sha LIKE ? LIMIT 1`, key, `${key}%`);
+      note.title = row ? row.subject : key;
+      if (row) {
+        note.meta.push({ k: 'project', v: row.project || '—' }, { k: 'author', v: row.author || '—' },
+          { k: 'date', v: row.committed_at || '—' }, { k: 'sha', v: String(row.sha).slice(0, 10) });
+        note.body = `**${row.subject || ''}**\n\n${row.body || ''}`;
+        if (row.project) note.outlinks.push({ id: `project:${row.project}`, title: row.project });
+      }
+    } else if (type === 'file') {
+      note.title = base(key);
+      const ec = one(`SELECT COUNT(*) n, MAX(project) project FROM edit_events WHERE file_path = ?`, key);
+      note.meta.push({ k: 'path', v: key }, { k: 'edits', v: ec ? ec.n : 0 });
+      note.body = `Source file \`${key}\`.`;
+      if (ec && ec.project) note.outlinks.push({ id: `project:${ec.project}`, title: ec.project });
+      try {
+        for (const r of q(`SELECT DISTINCT session_id FROM edit_events WHERE file_path = ? ORDER BY session_id DESC LIMIT 15`, key))
+          note.outlinks.push({ id: `session:${r.session_id}`, title: `session ${String(r.session_id).slice(0, 8)}` });
+      } catch (_) {}
+    } else {
+      note.title = key;
+    }
+  } catch (err) {
+    note.error = err.message;
+  }
+
+  const seen = new Set();
+  note.outlinks  = note.outlinks.filter(l => l.id && !seen.has(l.id) && seen.add(l.id)).slice(0, 60);
+  note.backlinks = note.backlinks.slice(0, 60);
+  return note;
+}
+
+/**
+ * Upsert a daily metric snapshot. Key is (snapshot_date, metric, scope) so
+ * re-running nightly the same day overwrites rather than duplicates.
+ * @param {string} date YYYY-MM-DD
+ * @param {string} metric dotted key e.g. 'patterns.count'
+ * @param {string} scope  '' for global, else project/agent
+ * @param {number} value
+ */
+function recordBrainSnapshot(date, metric, scope, value) {
+  if (!_db) throw new Error('db.recordBrainSnapshot: call initialize() first');
+  _db.prepare(`
+    INSERT INTO brain_snapshots (snapshot_date, metric, scope, value)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(snapshot_date, metric, scope) DO UPDATE SET value = excluded.value
+  `).run(date, metric, scope || '', Number(value) || 0);
+}
+
+/**
+ * Read a metric's trend. @returns {Array<{snapshot_date,metric,scope,value}>} ASC by date.
+ */
+function getBrainSnapshots(opts) {
+  if (!_db) throw new Error('db.getBrainSnapshots: call initialize() first');
+  const o = opts || {};
+  const days = Math.max(1, o.days || 30);
+  const cutoff = new Date(Date.now() - days * 864e5).toISOString().slice(0, 10);
+  if (o.metric) {
+    return _db.prepare(`SELECT * FROM brain_snapshots WHERE metric = ? AND scope = ? AND snapshot_date >= ? ORDER BY snapshot_date ASC`)
+      .all(o.metric, o.scope || '', cutoff);
+  }
+  return _db.prepare(`SELECT * FROM brain_snapshots WHERE snapshot_date >= ? ORDER BY metric, snapshot_date ASC`).all(cutoff);
+}
+
+const PROMOTED_TAGS = new Set(['decision', 'pattern', 'architecture', 'design', 'global']);
+const SCORE_RECENCY_PEAK_MS = 24 * 60 * 60 * 1000;   // full boost under 24h
+const SCORE_RECENCY_MAX_MS  = 30 * 24 * 60 * 60 * 1000; // decays to 0 at 30d
+
+/**
+ * 0–100 composite score for promoting a memory/pattern entry.
+ *   +30 high-signal type (decision|pattern)
+ *   +10 per cross-project reference
+ *   +5  per reference/fire
+ *   +20 if any tag is a promoted tag
+ *   +15 recency, full <24h, linear decay to 0 at 30d
+ * @param {{type?:string,crossProjectRefs?:number,references?:number,tags?:string[],ageMs?:number}} e
+ * @returns {number} integer 0..100
+ */
+function compositePromotionScore(e) {
+  let score = 0;
+  if (e.type === 'decision' || e.type === 'pattern') score += 30;
+  score += (Number(e.crossProjectRefs) || 0) * 10;
+  score += (Number(e.references) || 0) * 5;
+  if (Array.isArray(e.tags) && e.tags.some(t => PROMOTED_TAGS.has(String(t).toLowerCase()))) score += 20;
+  const age = Number(e.ageMs) || 0;
+  if (age <= SCORE_RECENCY_PEAK_MS) score += 15;
+  else if (age < SCORE_RECENCY_MAX_MS) score += Math.round(15 * (1 - (age - SCORE_RECENCY_PEAK_MS) / (SCORE_RECENCY_MAX_MS - SCORE_RECENCY_PEAK_MS)));
+  return Math.min(100, Math.max(0, Math.round(score)));
+}
+
+/**
+ * Log that a retrieved doc was injected into context (impression). useful=NULL
+ * until a nightly correlation pass resolves it. Crash-safe.
+ */
+function recordRetrievalImpression(o) {
+  if (!_db) return;
+  try {
+    _db.prepare(`INSERT INTO retrieval_feedback (batch_id, timestamp, session_id, query_text, source_type, source_id, action, rank, rerank_score, useful)
+                 VALUES (?, ?, ?, ?, ?, ?, 'injected', ?, ?, NULL)`)
+      .run(o.batchId || null, new Date().toISOString(), o.sessionId || null, o.query || null,
+           o.sourceType || 'memory', String(o.sourceId || ''), o.rank ?? null, o.rerankScore ?? null);
+  } catch (_) {}
+}
+
+/**
+ * Nightly: resolve open impressions. useful=1 if the same session later edited
+ * the doc's source file; useful=0 once the impression is >7 days old with no hit.
+ * @returns {{marked:number,expired:number}}
+ */
+function correlateRetrievalFeedback() {
+  if (!_db) throw new Error('db.correlateRetrievalFeedback: call initialize() first');
+  // The signal is "the same session edited the doc's source file" — a session +
+  // file-path match. We deliberately omit an edit-after-impression ordering predicate:
+  // this is a coincidental-positive-tolerant heuristic (the spec notes the signal
+  // "only needs to beat zero"), so strict timestamp ordering would add fragility for
+  // little gain.
+  const marked = _db.prepare(`
+    UPDATE retrieval_feedback
+       SET useful = 1
+     WHERE useful IS NULL
+       AND EXISTS (
+         SELECT 1 FROM edit_events e
+          WHERE e.session_id = retrieval_feedback.session_id
+            AND retrieval_feedback.source_id LIKE e.file_path || '%' )
+  `).run();
+  const expired = _db.prepare(`
+    UPDATE retrieval_feedback SET useful = 0
+     WHERE useful IS NULL AND timestamp < ?
+  `).run(new Date(Date.now() - 7 * 864e5).toISOString());
+  return { marked: marked.changes || 0, expired: expired.changes || 0 };
+}
+
+/**
+ * Tail recent activity using rowid watermarks (DB-as-bus for the SSE pulse).
+ * Pass the watermarks returned by the previous call; the first call (empty wm)
+ * fast-forwards to the current max so old rows aren't replayed as "new".
+ * @param {object} wm previous {prompts,tool_calls,edit_events,skill_injection_decisions}
+ * @returns {{events:Array,watermarks:object}}
+ */
+function getEventsSince(wm) {
+  if (!_db) throw new Error('db.getEventsSince: call initialize() first');
+  const prev = wm || {};
+  const maxRow = (tbl) => { try { return _db.prepare(`SELECT COALESCE(MAX(rowid),0) m FROM ${tbl}`).get().m; } catch (_) { return 0; } };
+  const out = { prompts: maxRow('prompts'), tool_calls: maxRow('tool_calls'), edit_events: maxRow('edit_events'), skill_injection_decisions: maxRow('skill_injection_decisions') };
+  const events = [];
+  // First call = caller supplied no watermark keys at all (seed/fast-forward so old
+  // rows aren't replayed). Once any key is present — even a legitimate 0 from a
+  // previously-empty DB — treat it as a resume and report new rows past the mark.
+  const firstCall = !('edit_events' in prev) && !('prompts' in prev) && !('tool_calls' in prev) && !('skill_injection_decisions' in prev);
+  if (firstCall) return { events, watermarks: out };
+
+  try { for (const r of _db.prepare(`SELECT rowid, timestamp, session_id, file_path, project FROM edit_events WHERE rowid > ? ORDER BY rowid LIMIT 100`).all(prev.edit_events || 0))
+    events.push({ kind: 'edit', ts: r.timestamp, session_id: r.session_id, project: r.project, label: String(r.file_path).split(/[/\\]/).pop(), refs: [`session:${r.session_id}`, `file:${r.file_path}`] }); } catch (_) {}
+  try { for (const r of _db.prepare(`SELECT rowid, timestamp, session_id, prompt_text, skill_routed FROM prompts WHERE rowid > ? ORDER BY rowid LIMIT 100`).all(prev.prompts || 0))
+    events.push({ kind: 'prompt', ts: r.timestamp, session_id: r.session_id, project: null, label: String(r.prompt_text || '').slice(0, 60), refs: [`session:${r.session_id}`, ...(r.skill_routed ? [`skill:${r.skill_routed}`] : [])] }); } catch (_) {}
+  try { for (const r of _db.prepare(`SELECT rowid, timestamp, session_id, tool_name FROM tool_calls WHERE rowid > ? ORDER BY rowid LIMIT 100`).all(prev.tool_calls || 0))
+    events.push({ kind: 'tool', ts: r.timestamp, session_id: r.session_id, project: null, label: r.tool_name, refs: [`session:${r.session_id}`] }); } catch (_) {}
+  try { for (const r of _db.prepare(`SELECT rowid, timestamp, session_id, chosen_skill, injected FROM skill_injection_decisions WHERE rowid > ? ORDER BY rowid LIMIT 100`).all(prev.skill_injection_decisions || 0))
+    events.push({ kind: r.injected ? 'inject' : 'route', ts: r.timestamp, session_id: r.session_id, project: null, label: r.chosen_skill, refs: [`session:${r.session_id}`, ...(r.chosen_skill ? [`skill:${r.chosen_skill}`] : [])] }); } catch (_) {}
+
+  events.sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
+  return { events, watermarks: out };
+}
+
+/**
+ * Project live sessions + scheduled jobs into one Mission Control ledger.
+ * Status derivation (vaultflow-native, modeled on the studied Wayland ledger):
+ *   running  — open session with activity in the last 10 min
+ *   zombie   — open session with no activity for 30+ min (died without SessionEnd)
+ *   done     — session ended today
+ *   scheduled/idle/failed — reserved for jobs (nightly), filled when job metadata exists
+ * @returns {{generatedAt:string, entries:Array, counts:object}}
+ */
+function getMissionControl() {
+  if (!_db) throw new Error('db.getMissionControl: call initialize() first');
+  const now = Date.now();
+  // DONE_MS: an ended session counts as "done" if it finished within the last
+  // 12h, else "idle". Recency window — NOT calendar-day equality — because a
+  // UTC-date check has a hard cliff at UTC midnight (which isn't the user's
+  // local midnight) that would flip last-evening sessions to "idle" mid-view.
+  const RUN_MS = 10 * 60 * 1000, ZOMBIE_MS = 30 * 60 * 1000, DONE_MS = 12 * 60 * 60 * 1000;
+  const entries = [];
+  const counts = { running: 0, zombie: 0, scheduled: 0, done: 0, idle: 0, failed: 0 };
+
+  const sessions = _db.prepare(`
+    SELECT s.id, s.project, s.started_at, s.ended_at,
+           (SELECT MAX(timestamp) FROM edit_events e WHERE e.session_id = s.id) AS last_edit
+      FROM sessions s
+     WHERE s.started_at >= ?
+     ORDER BY s.started_at DESC LIMIT 50
+  `).all(new Date(now - 2 * 864e5).toISOString());
+
+  for (const s of sessions) {
+    const lastTs = s.last_edit || s.started_at;
+    const sinceMs = now - new Date(lastTs).getTime();
+    let status;
+    if (s.ended_at) status = (now - new Date(s.ended_at).getTime()) <= DONE_MS ? 'done' : 'idle';
+    else if (sinceMs <= RUN_MS) status = 'running';
+    else if (sinceMs >= ZOMBIE_MS) status = 'zombie';
+    else status = 'running';
+    counts[status] = (counts[status] || 0) + 1;
+    entries.push({
+      id: `session:${s.id}`, source: 'session', title: s.project || s.id, status,
+      owner: s.project || null, detail: s.ended_at ? 'ended' : (status === 'zombie' ? 'no activity 30m+' : 'active'),
+      lastHeartbeat: new Date(lastTs).getTime(), startedAt: new Date(s.started_at).getTime(),
+      updatedAt: new Date(lastTs).getTime(),
+    });
+  }
+
+  // urgency-first ordering: zombie/failed, running, scheduled, done, idle
+  const rank = { zombie: 0, failed: 1, running: 2, scheduled: 3, done: 4, idle: 5 };
+  entries.sort((a, b) => (rank[a.status] - rank[b.status]) || (b.updatedAt - a.updatedAt));
+  return { generatedAt: new Date(now).toISOString(), entries, counts };
+}
+
+// ── flow catalog accessors ─────────────────────────────────────────────────
+// Read/write the flow catalog (flows + flow_nodes + flow_edges). CLI, server,
+// and the agent skill reuse these rather than reaching into raw SQL, so the
+// "preserve manual curation on re-discovery" rule lives in exactly one place.
+
+/**
+ * List cataloged flows, optionally scoped to a project. Each row includes a
+ * node_count so callers can summarize without fetching the full graph.
+ */
+function listFlows(project) {
+  if (!_db) throw new Error('db.listFlows: call initialize() first');
+  const where = project ? 'WHERE f.project = ?' : '';
+  const args  = project ? [project] : [];
+  return _db.prepare(`
+    SELECT f.id, f.project, f.name, f.description, f.user_notes, f.entry_point,
+           f.source, f.status, f.fingerprint, f.truncated, f.confidence, f.created_at, f.updated_at,
+           (SELECT COUNT(*) FROM flow_nodes n WHERE n.flow_id = f.id) AS node_count
+      FROM flows f
+      ${where}
+     ORDER BY f.project, f.name
+  `).all(...args);
+}
+
+/**
+ * Full flow by id: header + nodes + edges. Returns null if no such flow.
+ * @returns {{flow, nodes, edges}|null}
+ */
+function getFlow(id) {
+  if (!_db) throw new Error('db.getFlow: call initialize() first');
+  const flow = _db.prepare('SELECT * FROM flows WHERE id = ?').get(id);
+  if (!flow) return null;
+  const nodes = _db.prepare(
+    'SELECT node_id, label, kind, file, terminal, ambiguous FROM flow_nodes WHERE flow_id = ? ORDER BY node_id'
+  ).all(id);
+  const edges = _db.prepare(
+    'SELECT source, target, kind FROM flow_edges WHERE flow_id = ? ORDER BY source, target'
+  ).all(id);
+  return { flow, nodes, edges };
+}
+
+/**
+ * Write a flow header + replace its node/edge graph in one transaction.
+ *
+ * CURATION GUARD: if a flow with the same id already exists AND was hand-curated
+ * (source='manual'), its name/description/user_notes/source are preserved — only
+ * the auto-traced graph (nodes/edges/fingerprint/truncated/entry_point) is
+ * refreshed. This lets discovery re-run nightly without clobbering human edits.
+ *
+ * Self-contained transaction (raw inserts only) — must NOT call other db fns
+ * that issue their own BEGIN, or the nested-transaction would throw.
+ *
+ * @param {object} flow  {id, project, name, description?, user_notes?, entry_point?, source?, status?, fingerprint?, truncated?}
+ * @param {Array}  nodes [{id|node_id, label, kind, file, terminal, ambiguous}]
+ * @param {Array}  edges [{source, target, kind}]
+ * @returns {{id, created, preservedCuration}}
+ */
+function upsertFlowGraph(flow, nodes = [], edges = []) {
+  if (!_db) throw new Error('db.upsertFlowGraph: call initialize() first');
+  if (!flow || !flow.id || !flow.name) throw new Error('upsertFlowGraph: flow.id and flow.name required');
+
+  const now = new Date().toISOString();
+  const existing = _db.prepare('SELECT id, source, name, description, user_notes, created_at FROM flows WHERE id = ?').get(flow.id);
+  const preserveCuration = !!(existing && existing.source === 'manual');
+
+  _db.exec('BEGIN');
+  try {
+    if (existing) {
+      if (preserveCuration) {
+        // Refresh only the auto-traced fields; keep human curation intact.
+        // confidence is derived (not curated), so it refreshes here too.
+        _db.prepare(`
+          UPDATE flows SET
+            project = ?, entry_point = ?, status = ?, fingerprint = ?, truncated = ?, confidence = ?, updated_at = ?
+          WHERE id = ?
+        `).run(
+          flow.project ?? null,
+          flow.entry_point ?? null,
+          flow.status ?? 'active',
+          flow.fingerprint ?? null,
+          flow.truncated ? 1 : 0,
+          flow.confidence ?? null,
+          now,
+          flow.id
+        );
+      } else {
+        _db.prepare(`
+          UPDATE flows SET
+            project = ?, name = ?, description = ?, user_notes = ?, entry_point = ?,
+            source = ?, status = ?, fingerprint = ?, truncated = ?, confidence = ?, updated_at = ?
+          WHERE id = ?
+        `).run(
+          flow.project ?? null,
+          flow.name,
+          flow.description ?? null,
+          flow.user_notes ?? null,
+          flow.entry_point ?? null,
+          flow.source ?? 'auto',
+          flow.status ?? 'active',
+          flow.fingerprint ?? null,
+          flow.truncated ? 1 : 0,
+          flow.confidence ?? null,
+          now,
+          flow.id
+        );
+      }
+    } else {
+      _db.prepare(`
+        INSERT INTO flows
+          (id, project, name, description, user_notes, entry_point, source, status, fingerprint, truncated, confidence, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        flow.id,
+        flow.project ?? null,
+        flow.name,
+        flow.description ?? null,
+        flow.user_notes ?? null,
+        flow.entry_point ?? null,
+        flow.source ?? 'auto',
+        flow.status ?? 'active',
+        flow.fingerprint ?? null,
+        flow.truncated ? 1 : 0,
+        flow.confidence ?? null,
+        now,
+        now
+      );
+    }
+
+    // Replace the traced graph wholesale — nodes/edges are derived, never curated.
+    _db.prepare('DELETE FROM flow_nodes WHERE flow_id = ?').run(flow.id);
+    _db.prepare('DELETE FROM flow_edges WHERE flow_id = ?').run(flow.id);
+
+    const insNode = _db.prepare(`
+      INSERT OR REPLACE INTO flow_nodes (flow_id, node_id, label, kind, file, terminal, ambiguous)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const n of nodes) {
+      const nid = n.node_id ?? n.id;
+      if (!nid) continue;
+      insNode.run(flow.id, nid, n.label ?? null, n.kind ?? null, n.file ?? null, n.terminal ? 1 : 0, n.ambiguous ? 1 : 0);
+    }
+
+    const insEdge = _db.prepare(`
+      INSERT OR REPLACE INTO flow_edges (flow_id, source, target, kind)
+      VALUES (?, ?, ?, ?)
+    `);
+    for (const e of edges) {
+      if (!e.source || !e.target) continue;
+      insEdge.run(flow.id, e.source, e.target, e.kind ?? 'calls');
+    }
+
+    _db.exec('COMMIT');
+  } catch (err) {
+    _db.exec('ROLLBACK');
+    throw err;
+  }
+
+  return { id: flow.id, created: !existing, preservedCuration: preserveCuration };
+}
+
+/**
+ * Hand-annotate a flow: set human-curated fields and mark it source='manual'
+ * so future auto-discovery preserves them. Only provided fields are changed.
+ * @returns {boolean} true if a row was updated.
+ */
+function updateFlowAnnotation(id, { name, description, user_notes } = {}) {
+  if (!_db) throw new Error('db.updateFlowAnnotation: call initialize() first');
+  const existing = _db.prepare('SELECT id FROM flows WHERE id = ?').get(id);
+  if (!existing) return false;
+
+  // Build the SET clause from only the provided fields, then always stamp
+  // source='manual' + updated_at so curation survives future auto-discovery.
+  const sets = [];
+  const args = [];
+  if (name !== undefined)        { sets.push('name = ?');        args.push(name); }
+  if (description !== undefined) { sets.push('description = ?'); args.push(description); }
+  if (user_notes !== undefined)  { sets.push('user_notes = ?');  args.push(user_notes); }
+  sets.push("source = 'manual'");
+  sets.push('updated_at = ?');
+  args.push(new Date().toISOString());
+  args.push(id);
+
+  _db.prepare(`UPDATE flows SET ${sets.join(', ')} WHERE id = ?`).run(...args);
+  return true;
+}
+
+/**
+ * Delete a flow and its graph (nodes + edges) in one transaction. Used by
+ * discovery to prune stale AUTO flows that are no longer discovered (e.g. a
+ * garbage mega-flow that the quality gate now rejects). Callers must guard
+ * source='manual' themselves — this is an unconditional delete by id.
+ * @returns {boolean} true if a row was deleted.
+ */
+function deleteFlow(id) {
+  if (!_db) throw new Error('db.deleteFlow: call initialize() first');
+  const existing = _db.prepare('SELECT id FROM flows WHERE id = ?').get(id);
+  if (!existing) return false;
+  _db.exec('BEGIN');
+  try {
+    _db.prepare('DELETE FROM flow_edges WHERE flow_id = ?').run(id);
+    _db.prepare('DELETE FROM flow_nodes WHERE flow_id = ?').run(id);
+    _db.prepare('DELETE FROM flows WHERE id = ?').run(id);
+    _db.exec('COMMIT');
+  } catch (err) {
+    _db.exec('ROLLBACK');
+    throw err;
+  }
+  return true;
+}
+
+// ── declared entry points (the flow-catalog RECALL FLOOR) ───────────────────
+// User-declared entries are how a human names a flow entry point that auto-
+// detection misses (HTTP routes in monolithic files, C# attribute routes).
+// discoverFlows() loads these per project and traces them every run; the
+// resulting flows carry source='declared' and are exempt from the stale-auto
+// prune (see flow-catalog.cjs), so a declaration persists across re-discovery.
+
+/** Stable id for a declared entry: sha1 over project+file+symbol → re-declaring is idempotent. */
+function declaredEntryId(project, file, symbol) {
+  const raw = `${project || ''}::${file}::${symbol}`;
+  return 'de_' + createHash('sha1').update(raw).digest('hex').slice(0, 16);
+}
+
+/**
+ * Register (or re-register) a user-declared flow entry point. Idempotent on
+ * (project, file, symbol) — re-declaring the same entry updates the optional
+ * name and keeps the original created_at rather than inserting a duplicate.
+ * @param {{project, file, symbol, name?}} entry
+ * @returns {{id, created}}
+ */
+function addDeclaredEntry({ project, file, symbol, name } = {}) {
+  if (!_db) throw new Error('db.addDeclaredEntry: call initialize() first');
+  if (!project || !file || !symbol) {
+    throw new Error('addDeclaredEntry: project, file, and symbol are required');
+  }
+  const id = declaredEntryId(project, file, symbol);
+  const existing = _db.prepare('SELECT id, created_at FROM declared_entries WHERE id = ?').get(id);
+  const now = new Date().toISOString();
+  if (existing) {
+    // Re-declaration: refresh the optional display name, preserve created_at.
+    _db.prepare('UPDATE declared_entries SET name = ? WHERE id = ?').run(name ?? null, id);
+    return { id, created: false };
+  }
+  _db.prepare(
+    'INSERT INTO declared_entries (id, project, file, symbol, name, created_at) VALUES (?,?,?,?,?,?)'
+  ).run(id, project, file, symbol, name ?? null, now);
+  return { id, created: true };
+}
+
+/** List user-declared entry points, optionally scoped to a project. */
+function listDeclaredEntries(project) {
+  if (!_db) throw new Error('db.listDeclaredEntries: call initialize() first');
+  const where = project ? 'WHERE project = ?' : '';
+  const args  = project ? [project] : [];
+  return _db.prepare(
+    `SELECT id, project, file, symbol, name, created_at FROM declared_entries ${where} ORDER BY project, file, symbol`
+  ).all(...args);
+}
+
+/** Delete a declared entry by id. @returns {boolean} true if a row was removed. */
+function deleteDeclaredEntry(id) {
+  if (!_db) throw new Error('db.deleteDeclaredEntry: call initialize() first');
+  const existing = _db.prepare('SELECT id FROM declared_entries WHERE id = ?').get(id);
+  if (!existing) return false;
+  _db.prepare('DELETE FROM declared_entries WHERE id = ?').run(id);
+  return true;
+}
+
 // ── exports ───────────────────────────────────────────────────────────────
 function raw() { return _db; }
 
@@ -3024,6 +4055,25 @@ module.exports = {
   upsertMemoryEntry,
   replaceMemorySource,
   searchMemory,
+  getBrainGraph,
+  getBrainNote,
+  getEventsSince,
+  getMissionControl,
+  // flow catalog
+  listFlows,
+  getFlow,
+  upsertFlowGraph,
+  updateFlowAnnotation,
+  deleteFlow,
+  // declared entry points (flow recall floor)
+  addDeclaredEntry,
+  listDeclaredEntries,
+  deleteDeclaredEntry,
+  declaredEntryId,
+  // brain vitals trend snapshots
+  recordBrainSnapshot,
+  getBrainSnapshots,
+  compositePromotionScore,
   searchMemoryBacklinks,
   getMemoryLinkGraph,
   detectStaleMemory,
@@ -3039,6 +4089,8 @@ module.exports = {
   searchRetrievalDocs,
   searchToolCalls,
   recordRetrievalFeedback,
+  recordRetrievalImpression,
+  correlateRetrievalFeedback,
   runRetrievalLearningLoop,
   // prompt history + similarity
   recordPrompt,
@@ -3057,8 +4109,17 @@ module.exports = {
   // agent registry
   upsertVaultAgent,
   incrementAgentUse,
+  searchVaultAgents,
+  rebuildVaultAgentsFts,
+  recordSkillInjectionDecision,
+  // symbol embeddings (hash-gated)
+  getSymbolHashes,
+  upsertSymbolEmbedding,
+  clearSymbolEmbeddings,
+  getSymbolEmbeddingStats,
   // agent verdicts
   recordVerdict,
+  getLatestDecisionId,
   getVerdictSummary,
   // model routing
   recordModelVerdict,
@@ -3311,9 +4372,24 @@ function detectStaleVaultTools() {
   return { flagged, examined: rows.length, cleared };
 }
 
-function popEmbedQueue(limit = 200) {
+function popEmbedQueue(limit = 200, kinds = null) {
   if (!_db) throw new Error('db.popEmbedQueue: call initialize() first');
-  const rows = _db.prepare(`SELECT id, kind, target_id FROM embed_queue ORDER BY id LIMIT ?`).all(limit);
+  // Kind-aware pop. WHY: the queue has two independent consumers —
+  // processEmbedQueue (memory+prompt; fires every session-start + watcher tick)
+  // and processSymbolEmbedQueue (symbol; nightly only). popEmbedQueue deletes
+  // on pop, so an UNFILTERED pop lets the frequent memory/prompt drainer claim
+  // and discard symbol rows before the nightly drainer ever sees them — which
+  // froze symbol-embedding coverage at ~4%. Filtering by kind keeps each
+  // consumer in its own lane. `kinds = null` preserves the legacy all-kinds pop.
+  let rows;
+  if (Array.isArray(kinds) && kinds.length) {
+    const placeholders = kinds.map(() => '?').join(',');
+    rows = _db.prepare(
+      `SELECT id, kind, target_id FROM embed_queue WHERE kind IN (${placeholders}) ORDER BY id LIMIT ?`
+    ).all(...kinds, limit);
+  } else {
+    rows = _db.prepare(`SELECT id, kind, target_id FROM embed_queue ORDER BY id LIMIT ?`).all(limit);
+  }
   if (!rows.length) return [];
   const del = _db.prepare(`DELETE FROM embed_queue WHERE id = ?`);
   for (const r of rows) del.run(r.id);

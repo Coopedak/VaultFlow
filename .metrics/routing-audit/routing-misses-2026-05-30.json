@@ -1,0 +1,593 @@
+{
+  "date": "2026-05-30",
+  "prompts_scanned": 32,
+  "strong_matches": 28,
+  "misses_count": 27,
+  "miss_rate": 0.964,
+  "misses": [
+    {
+      "prompt_id": 3361,
+      "ts": "2026-05-30T06:00:09.750Z",
+      "snippet": "You are the Librarian running a vault maintenance audit. Your job is to find real gaps and generate a prioritized task list. ## What to aud",
+      "candidates": [
+        {
+          "name": "vault-librarian",
+          "rank": -13.62,
+          "use_count": 30
+        },
+        {
+          "name": "customer-expert",
+          "rank": -7.83,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.52,
+          "use_count": 12
+        }
+      ]
+    },
+    {
+      "prompt_id": 3360,
+      "ts": "2026-05-29T20:35:49.905Z",
+      "snippet": "using ms copliot 365 how do i get files to show up for work usage?",
+      "candidates": [
+        {
+          "name": "agent-ado",
+          "rank": -6.34,
+          "use_count": 5
+        },
+        {
+          "name": "ctx-opt",
+          "rank": -6.25,
+          "use_count": 562
+        },
+        {
+          "name": "rapid-prototyper",
+          "rank": -6.14,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3357,
+      "ts": "2026-05-29T20:27:13.881Z",
+      "snippet": "I want the actual project numbers not the sales project numbers",
+      "candidates": [
+        {
+          "name": "sales-architect",
+          "rank": -7.3,
+          "use_count": 0
+        },
+        {
+          "name": "developer-backend",
+          "rank": -5.97,
+          "use_count": 11
+        },
+        {
+          "name": "developer-frontend",
+          "rank": -5.97,
+          "use_count": 2
+        }
+      ]
+    },
+    {
+      "prompt_id": 3356,
+      "ts": "2026-05-29T20:20:51.643Z",
+      "snippet": "Find me machines that handle 12 by 24 inch parts roughtly 75 pounds",
+      "candidates": [
+        {
+          "name": "quoting-architect",
+          "rank": -6.13,
+          "use_count": 0
+        },
+        {
+          "name": "codebase-onboarding-engineer",
+          "rank": -5.58,
+          "use_count": 0
+        },
+        {
+          "name": "agent-researcher",
+          "rank": -5.41,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3355,
+      "ts": "2026-05-29T20:14:09.508Z",
+      "snippet": "what about project 1020? this should have been another booth",
+      "candidates": [
+        {
+          "name": "agent-planner",
+          "rank": -8.87,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -7.58,
+          "use_count": 12
+        },
+        {
+          "name": "session-reviewer",
+          "rank": -6.5,
+          "use_count": 2
+        }
+      ]
+    },
+    {
+      "prompt_id": 3354,
+      "ts": "2026-05-29T20:10:33.592Z",
+      "snippet": "What project related to graded seal?",
+      "candidates": [
+        {
+          "name": "session-reviewer",
+          "rank": -6.5,
+          "use_count": 2
+        },
+        {
+          "name": "researcher",
+          "rank": -4.76,
+          "use_count": 17
+        },
+        {
+          "name": "agent-ado",
+          "rank": -4.24,
+          "use_count": 5
+        }
+      ]
+    },
+    {
+      "prompt_id": 3353,
+      "ts": "2026-05-29T20:08:01.119Z",
+      "snippet": "S:\\APPS\\BUZZ I want you to use this to help answer questions for me. Got it?",
+      "candidates": [
+        {
+          "name": "leadtime-analyst",
+          "rank": -12.56,
+          "use_count": 0
+        },
+        {
+          "name": "leadtime-planner",
+          "rank": -11.05,
+          "use_count": 0
+        },
+        {
+          "name": "pipeline-gateway",
+          "rank": -10.73,
+          "use_count": 34
+        }
+      ]
+    },
+    {
+      "prompt_id": 3349,
+      "ts": "2026-05-29T19:36:58.698Z",
+      "snippet": "did we create an md file",
+      "candidates": [
+        {
+          "name": "session-reviewer",
+          "rank": -8.44,
+          "use_count": 2
+        },
+        {
+          "name": "test-writer",
+          "rank": -7.65,
+          "use_count": 1
+        },
+        {
+          "name": "test-writer",
+          "rank": -7.52,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3347,
+      "ts": "2026-05-29T19:27:31.270Z",
+      "snippet": "✗ Coinstack is incomplete: the following sibling skids have not been loaded into Skid Scan yet: skid #9, skid #11, skid #12. Load and scan a",
+      "candidates": [
+        {
+          "name": "leadtime-planner",
+          "rank": -5.18,
+          "use_count": 0
+        },
+        {
+          "name": "order-flow-expert",
+          "rank": -4.38,
+          "use_count": 1
+        },
+        {
+          "name": "order-flow-expert",
+          "rank": -4.38,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3346,
+      "ts": "2026-05-29T19:23:29.751Z",
+      "snippet": "so this whole thing to get a quote should come back the won job history",
+      "candidates": [
+        {
+          "name": "quoting-expert",
+          "rank": -6.37,
+          "use_count": 0
+        },
+        {
+          "name": "agent-ado",
+          "rank": -6.34,
+          "use_count": 5
+        },
+        {
+          "name": "agent-planner",
+          "rank": -5.45,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3345,
+      "ts": "2026-05-29T19:21:51.683Z",
+      "snippet": "alright so now the customer part this needs to serve as a promt/ query that find parts that are similar to the one the customer is asking ab",
+      "candidates": [
+        {
+          "name": "customer-expert",
+          "rank": -7.34,
+          "use_count": 0
+        },
+        {
+          "name": "sales-architect",
+          "rank": -6.05,
+          "use_count": 0
+        },
+        {
+          "name": "reality-checker",
+          "rank": -5.72,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3344,
+      "ts": "2026-05-29T19:21:18.633Z",
+      "snippet": "so we should do the blast radious of anyting that could cause this from other modules as well",
+      "candidates": [
+        {
+          "name": "agent-planner",
+          "rank": -5.45,
+          "use_count": 0
+        },
+        {
+          "name": "quoting-expert",
+          "rank": -5.34,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.52,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3343,
+      "ts": "2026-05-29T19:15:54.078Z",
+      "snippet": "the same modules seem to be locking users up and making the modules not accessable peridoically through out the day. can you do a deep loopi",
+      "candidates": [
+        {
+          "name": "debugger",
+          "rank": -8.87,
+          "use_count": 0
+        },
+        {
+          "name": "sales-architect",
+          "rank": -5.55,
+          "use_count": 0
+        },
+        {
+          "name": "mes-architect",
+          "rank": -5.5,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3342,
+      "ts": "2026-05-29T19:07:14.668Z",
+      "snippet": "no i do not want fixes i want an md file to send to our dev team for areas to look at and see potential issues",
+      "candidates": [
+        {
+          "name": "leadtime-analyst",
+          "rank": -7.97,
+          "use_count": 0
+        },
+        {
+          "name": "leadtime-auditor",
+          "rank": -7.81,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -7.45,
+          "use_count": 12
+        }
+      ]
+    },
+    {
+      "prompt_id": 3341,
+      "ts": "2026-05-29T18:47:51.213Z",
+      "snippet": "so what if we have a customer we have never worked with before",
+      "candidates": [
+        {
+          "name": "customer-expert",
+          "rank": -9.7,
+          "use_count": 0
+        },
+        {
+          "name": "leadtime-planner",
+          "rank": -9.39,
+          "use_count": 0
+        },
+        {
+          "name": "sales-architect",
+          "rank": -6.05,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3340,
+      "ts": "2026-05-29T18:46:29.215Z",
+      "snippet": "can you look and see what issues you might find in this repo",
+      "candidates": [
+        {
+          "name": "leadtime-planner",
+          "rank": -11.23,
+          "use_count": 0
+        },
+        {
+          "name": "evidence-collector",
+          "rank": -6.64,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.53,
+          "use_count": 12
+        }
+      ]
+    },
+    {
+      "prompt_id": 3338,
+      "ts": "2026-05-29T18:34:51.731Z",
+      "snippet": "now what about sessions",
+      "candidates": [
+        {
+          "name": "session-reviewer",
+          "rank": -5.85,
+          "use_count": 0
+        },
+        {
+          "name": "session-reviewer",
+          "rank": -5.85,
+          "use_count": 0
+        },
+        {
+          "name": "psi-wiki",
+          "rank": -5.83,
+          "use_count": 22
+        }
+      ]
+    },
+    {
+      "prompt_id": 3337,
+      "ts": "2026-05-29T18:34:51.327Z",
+      "snippet": "now what about sessions",
+      "candidates": [
+        {
+          "name": "session-reviewer",
+          "rank": -5.85,
+          "use_count": 0
+        },
+        {
+          "name": "session-reviewer",
+          "rank": -5.85,
+          "use_count": 0
+        },
+        {
+          "name": "psi-wiki",
+          "rank": -5.83,
+          "use_count": 22
+        }
+      ]
+    },
+    {
+      "prompt_id": 3336,
+      "ts": "2026-05-29T18:33:17.437Z",
+      "snippet": "blob:https://teams.microsoft.com/2a12cb02-971a-4bc4-a23e-42b45e8754ec how can this file be locked",
+      "candidates": [
+        {
+          "name": "workflow-architect",
+          "rank": -5.38,
+          "use_count": 0
+        },
+        {
+          "name": "pipeline-gateway",
+          "rank": -4.46,
+          "use_count": 34
+        },
+        {
+          "name": "session-reviewer",
+          "rank": -4.36,
+          "use_count": 2
+        }
+      ]
+    },
+    {
+      "prompt_id": 3335,
+      "ts": "2026-05-29T18:32:17.203Z",
+      "snippet": "did you run the sql as well",
+      "candidates": [
+        {
+          "name": "sql-migration-validator",
+          "rank": -10.67,
+          "use_count": 0
+        },
+        {
+          "name": "sql-migration-validator",
+          "rank": -10.67,
+          "use_count": 0
+        },
+        {
+          "name": "dev-team",
+          "rank": -6.19,
+          "use_count": 16
+        }
+      ]
+    },
+    {
+      "prompt_id": 3333,
+      "ts": "2026-05-29T17:06:18.088Z",
+      "snippet": "can you mkae sure we have all the updates from psi all",
+      "candidates": [
+        {
+          "name": "leadtime-planner",
+          "rank": -11.81,
+          "use_count": 0
+        },
+        {
+          "name": "sql-migration-validator",
+          "rank": -6.07,
+          "use_count": 0
+        },
+        {
+          "name": "sql-migration-validator",
+          "rank": -6.07,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3332,
+      "ts": "2026-05-29T15:48:07.087Z",
+      "snippet": "well how about for coinstack 2 we just clean slate it and rescan",
+      "candidates": [
+        {
+          "name": "psi-wiki",
+          "rank": -5.83,
+          "use_count": 22
+        },
+        {
+          "name": "developer-database",
+          "rank": -4.68,
+          "use_count": 1
+        },
+        {
+          "name": "code-reviewer",
+          "rank": -4.54,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3331,
+      "ts": "2026-05-29T15:44:18.987Z",
+      "snippet": "how do we fix the failures",
+      "candidates": [
+        {
+          "name": "ai-data-remediation-engineer",
+          "rank": -5.66,
+          "use_count": 0
+        },
+        {
+          "name": "quoting-expert",
+          "rank": -5.34,
+          "use_count": 0
+        },
+        {
+          "name": "minimal-change-engineer",
+          "rank": -5.28,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3330,
+      "ts": "2026-05-29T15:44:18.625Z",
+      "snippet": "how do we fix the failures",
+      "candidates": [
+        {
+          "name": "ai-data-remediation-engineer",
+          "rank": -5.66,
+          "use_count": 0
+        },
+        {
+          "name": "quoting-expert",
+          "rank": -5.34,
+          "use_count": 0
+        },
+        {
+          "name": "minimal-change-engineer",
+          "rank": -5.28,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3329,
+      "ts": "2026-05-29T15:42:56.298Z",
+      "snippet": "is this repo running its cron jobs and staying up today",
+      "candidates": [
+        {
+          "name": "pipeline-gateway",
+          "rank": -10.05,
+          "use_count": 34
+        },
+        {
+          "name": "developer-fullstack",
+          "rank": -4.75,
+          "use_count": 4
+        }
+      ]
+    },
+    {
+      "prompt_id": 3328,
+      "ts": "2026-05-29T15:42:55.897Z",
+      "snippet": "is this repo running its cron jobs and staying up today",
+      "candidates": [
+        {
+          "name": "pipeline-gateway",
+          "rank": -10.05,
+          "use_count": 34
+        },
+        {
+          "name": "developer-fullstack",
+          "rank": -4.75,
+          "use_count": 4
+        }
+      ]
+    },
+    {
+      "prompt_id": 3325,
+      "ts": "2026-05-29T06:00:10.261Z",
+      "snippet": "You are the Librarian running a vault maintenance audit. Your job is to find real gaps and generate a prioritized task list. ## What to aud",
+      "candidates": [
+        {
+          "name": "vault-librarian",
+          "rank": -13.62,
+          "use_count": 30
+        },
+        {
+          "name": "customer-expert",
+          "rank": -7.83,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.52,
+          "use_count": 12
+        }
+      ]
+    }
+  ]
+}

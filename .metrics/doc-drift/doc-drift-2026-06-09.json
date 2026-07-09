@@ -1,0 +1,16 @@
+{
+  "date": "2026-06-09",
+  "generated_at": "2026-06-09T07:00:39.780Z",
+  "repo_root": "C:\\GIT\\vaultflow",
+  "ok": true,
+  "drifts": [],
+  "summary": {
+    "endpoints": 44,
+    "skill_dirs": 134,
+    "agents": {
+      "enabled": 15,
+      "disabled": 119
+    },
+    "helpers_on_disk": 44
+  }
+}

@@ -1,0 +1,1109 @@
+{
+  "date": "2026-05-28",
+  "prompts_scanned": 100,
+  "strong_matches": 77,
+  "misses_count": 73,
+  "miss_rate": 0.948,
+  "misses": [
+    {
+      "prompt_id": 3290,
+      "ts": "2026-05-28T06:00:09.154Z",
+      "snippet": "You are the Librarian running a vault maintenance audit. Your job is to find real gaps and generate a prioritized task list. ## What to aud",
+      "candidates": [
+        {
+          "name": "vault-librarian",
+          "rank": -13.62,
+          "use_count": 30
+        },
+        {
+          "name": "customer-expert",
+          "rank": -7.83,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.52,
+          "use_count": 12
+        }
+      ]
+    },
+    {
+      "prompt_id": 3288,
+      "ts": "2026-05-27T20:10:12.913Z",
+      "snippet": "by pass with permission",
+      "candidates": [
+        {
+          "name": "admin-expert",
+          "rank": -6.18,
+          "use_count": 0
+        },
+        {
+          "name": "admin-expert",
+          "rank": -6.18,
+          "use_count": 0
+        },
+        {
+          "name": "codebase-onboarding-engineer",
+          "rank": -5.58,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3287,
+      "ts": "2026-05-27T20:03:40.756Z",
+      "snippet": "run it and clean it then",
+      "candidates": [
+        {
+          "name": "tdd-test-first",
+          "rank": -6.45,
+          "use_count": 23
+        },
+        {
+          "name": "leadtime-planner",
+          "rank": -4.22,
+          "use_count": 0
+        },
+        {
+          "name": "loop-expert",
+          "rank": -4.01,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3286,
+      "ts": "2026-05-27T19:59:21.680Z",
+      "snippet": "alright lets do this then onces its done we need to update or add to the wikis and also update buzz brain html",
+      "candidates": [
+        {
+          "name": "tdd-test-first",
+          "rank": -6.45,
+          "use_count": 23
+        },
+        {
+          "name": "quoting-expert",
+          "rank": -5.34,
+          "use_count": 0
+        },
+        {
+          "name": "developer-fullstack",
+          "rank": -4.75,
+          "use_count": 4
+        }
+      ]
+    },
+    {
+      "prompt_id": 3285,
+      "ts": "2026-05-27T19:49:42.731Z",
+      "snippet": "well i think we keep going",
+      "candidates": [
+        {
+          "name": "session-reviewer",
+          "rank": -5.09,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.52,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.44,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3283,
+      "ts": "2026-05-27T19:32:38.787Z",
+      "snippet": "we need to come up with rules to make this be dynamic and use the data buzz data base to help fill this out",
+      "candidates": [
+        {
+          "name": "test-writer",
+          "rank": -8.15,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -8.01,
+          "use_count": 0
+        },
+        {
+          "name": "excalidraw-diagram",
+          "rank": -6.47,
+          "use_count": 3
+        }
+      ]
+    },
+    {
+      "prompt_id": 3282,
+      "ts": "2026-05-27T19:31:20.394Z",
+      "snippet": "well i think we may have fixed it just need to fine tune it back",
+      "candidates": [
+        {
+          "name": "leadtime-planner",
+          "rank": -5.18,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.52,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.44,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3281,
+      "ts": "2026-05-27T19:24:38.243Z",
+      "snippet": "well you should know where the req forms are its a word document tht sales gives to propsal",
+      "candidates": [
+        {
+          "name": "leadtime-planner",
+          "rank": -8.11,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -7.31,
+          "use_count": 12
+        },
+        {
+          "name": "agent-planner",
+          "rank": -5.45,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3280,
+      "ts": "2026-05-27T19:17:18.255Z",
+      "snippet": "alright well lets sketch the form fields. first one customer, contact name , number, email, ship to address or billing address. this is al",
+      "candidates": [
+        {
+          "name": "customer-expert",
+          "rank": -6.68,
+          "use_count": 0
+        },
+        {
+          "name": "access-data-extractor",
+          "rank": -3.72,
+          "use_count": 0
+        },
+        {
+          "name": "access-data-extractor",
+          "rank": -3.72,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3279,
+      "ts": "2026-05-27T19:04:14.470Z",
+      "snippet": "what are you thinking",
+      "candidates": [
+        {
+          "name": "pattern-analyst",
+          "rank": -6.53,
+          "use_count": 12
+        },
+        {
+          "name": "leadtime-analyst",
+          "rank": -6.14,
+          "use_count": 0
+        },
+        {
+          "name": "psi-wiki",
+          "rank": -3.72,
+          "use_count": 20
+        }
+      ]
+    },
+    {
+      "prompt_id": 3278,
+      "ts": "2026-05-27T19:02:45.441Z",
+      "snippet": "so what im imaginig we have form or rfq and it is dynamicly filling out then its a prompt at the end does this make sense?",
+      "candidates": [
+        {
+          "name": "leadtime-planner",
+          "rank": -5.18,
+          "use_count": 0
+        },
+        {
+          "name": "code-reviewer",
+          "rank": -5,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.52,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3277,
+      "ts": "2026-05-27T18:42:13.802Z",
+      "snippet": "your right so now it says i have 15 scanned in but only 14 are being counded for coinstack 1",
+      "candidates": [
+        {
+          "name": "ai-data-remediation-engineer",
+          "rank": -5.27,
+          "use_count": 0
+        },
+        {
+          "name": "leadtime-planner",
+          "rank": -5.18,
+          "use_count": 0
+        },
+        {
+          "name": "grid-specialist",
+          "rank": -4.14,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3276,
+      "ts": "2026-05-27T18:40:51.136Z",
+      "snippet": "well we would want customer supplier parts we fill this in height, weidth, diameter weight and if they have a drawing a place to insert the ",
+      "candidates": [
+        {
+          "name": "customer-expert",
+          "rank": -7.34,
+          "use_count": 0
+        },
+        {
+          "name": "sales-architect",
+          "rank": -6.05,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.52,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3275,
+      "ts": "2026-05-27T18:38:52.206Z",
+      "snippet": "just won work should be in this because we would have drawings and reference",
+      "candidates": [
+        {
+          "name": "code-reviewer",
+          "rank": -6.84,
+          "use_count": 0
+        },
+        {
+          "name": "quoting-architect",
+          "rank": -6.13,
+          "use_count": 0
+        },
+        {
+          "name": "code-reviewer",
+          "rank": -5.68,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3274,
+      "ts": "2026-05-27T18:34:07.161Z",
+      "snippet": "gotcha well how do we fix because now the crates and pcs do not balance at all",
+      "candidates": [
+        {
+          "name": "ai-data-remediation-engineer",
+          "rank": -5.66,
+          "use_count": 0
+        },
+        {
+          "name": "quoting-expert",
+          "rank": -5.34,
+          "use_count": 0
+        },
+        {
+          "name": "minimal-change-engineer",
+          "rank": -5.28,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3273,
+      "ts": "2026-05-27T18:32:06.367Z",
+      "snippet": "sales eng would fill this out this form would give a build list that would give 3-5 jobs we have done in the past but also get a median pric",
+      "candidates": [
+        {
+          "name": "sales-architect",
+          "rank": -7.3,
+          "use_count": 0
+        },
+        {
+          "name": "access-data-extractor",
+          "rank": -3.72,
+          "use_count": 0
+        },
+        {
+          "name": "access-data-extractor",
+          "rank": -3.72,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3272,
+      "ts": "2026-05-27T18:26:53.303Z",
+      "snippet": "essential all the form would be a prompt based on questions this form would replace a rfq",
+      "candidates": [
+        {
+          "name": "legacy-modernization-auditor",
+          "rank": -6.49,
+          "use_count": 0
+        },
+        {
+          "name": "legacy-modernization-auditor",
+          "rank": -6.49,
+          "use_count": 0
+        },
+        {
+          "name": "MIGRATION_SUMMARY",
+          "rank": -5.2,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3270,
+      "ts": "2026-05-27T18:21:25.626Z",
+      "snippet": "so what if i also want to create a form that uses this to generate a sales quote",
+      "candidates": [
+        {
+          "name": "agent-ado",
+          "rank": -8.3,
+          "use_count": 5
+        },
+        {
+          "name": "leadtime-planner",
+          "rank": -7.72,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -7.13,
+          "use_count": 12
+        }
+      ]
+    },
+    {
+      "prompt_id": 3269,
+      "ts": "2026-05-27T18:15:57.925Z",
+      "snippet": "well my question is the front end where a user would enter a prompt to work this out and how do they are able to reason and get good answers",
+      "candidates": [
+        {
+          "name": "project-manager",
+          "rank": -9.28,
+          "use_count": 13
+        },
+        {
+          "name": "developer-fullstack",
+          "rank": -8.97,
+          "use_count": 4
+        },
+        {
+          "name": "developer-frontend",
+          "rank": -7.51,
+          "use_count": 2
+        }
+      ]
+    },
+    {
+      "prompt_id": 3260,
+      "ts": "2026-05-27T17:56:24.345Z",
+      "snippet": "well how do we get the bm25 and vector in parallel",
+      "candidates": [
+        {
+          "name": "agent-ado",
+          "rank": -6.34,
+          "use_count": 5
+        },
+        {
+          "name": "quoting-expert",
+          "rank": -5.34,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.52,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3259,
+      "ts": "2026-05-27T17:48:02.121Z",
+      "snippet": "Final CI poll on PR #231. Run `GH_HOST=progressivesurface.ghe.com gh pr checks 231`. If Build Frontend green, report both PRs ready to merge",
+      "candidates": [
+        {
+          "name": "pr-shepherd",
+          "rank": -15.07,
+          "use_count": 7
+        },
+        {
+          "name": "git-workflow-master",
+          "rank": -5.86,
+          "use_count": 0
+        },
+        {
+          "name": "agent-code-review-swarm",
+          "rank": -5.66,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3257,
+      "ts": "2026-05-27T17:44:02.088Z",
+      "snippet": "Check final CI status on PR #231 (https://ProgressiveSurface.ghe.com/ProgressiveSurface/PRGJSMES/pull/231). Run `GH_HOST=progressivesurface.",
+      "candidates": [
+        {
+          "name": "pr-shepherd",
+          "rank": -12.55,
+          "use_count": 7
+        },
+        {
+          "name": "reviewer-code",
+          "rank": -7.97,
+          "use_count": 56
+        },
+        {
+          "name": "deploy-prep",
+          "rank": -6.8,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3255,
+      "ts": "2026-05-27T17:40:35.176Z",
+      "snippet": "once you have looked into the comments and made corrects go ahead and resolve the comments",
+      "candidates": [
+        {
+          "name": "leadtime-planner",
+          "rank": -8.11,
+          "use_count": 0
+        },
+        {
+          "name": "sql-migration-validator",
+          "rank": -5.89,
+          "use_count": 0
+        },
+        {
+          "name": "sql-migration-validator",
+          "rank": -5.89,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3254,
+      "ts": "2026-05-27T17:39:31.183Z",
+      "snippet": "alright lets get keep auditing and improving we can do that in the background lets discuss going and moving it into sql database vs sqlite",
+      "candidates": [
+        {
+          "name": "performance-benchmarker",
+          "rank": -7.35,
+          "use_count": 0
+        },
+        {
+          "name": "agent-ado",
+          "rank": -6.34,
+          "use_count": 5
+        },
+        {
+          "name": "session-reviewer",
+          "rank": -5.09,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3253,
+      "ts": "2026-05-27T17:36:26.008Z",
+      "snippet": "so pull out the fliers and recalculate also dont include retro fits",
+      "candidates": [
+        {
+          "name": "agent-ado",
+          "rank": -9.62,
+          "use_count": 5
+        },
+        {
+          "name": "researcher",
+          "rank": -3.69,
+          "use_count": 17
+        },
+        {
+          "name": "documenter",
+          "rank": -3.58,
+          "use_count": 10
+        }
+      ]
+    },
+    {
+      "prompt_id": 3252,
+      "ts": "2026-05-27T17:34:57.106Z",
+      "snippet": "is this even will all the manufacturing boms because those have all the lower level builds",
+      "candidates": [
+        {
+          "name": "mes-architect",
+          "rank": -6.53,
+          "use_count": 0
+        },
+        {
+          "name": "mes-architect",
+          "rank": -6.53,
+          "use_count": 0
+        },
+        {
+          "name": "frontend-dev",
+          "rank": -5.78,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3251,
+      "ts": "2026-05-27T17:31:45.285Z",
+      "snippet": "S:\\APPS\\BUZZ using this data base how many work orders on average is for a won job sales project",
+      "candidates": [
+        {
+          "name": "document-generator",
+          "rank": -8.61,
+          "use_count": 0
+        },
+        {
+          "name": "psi-wiki",
+          "rank": -7.36,
+          "use_count": 20
+        },
+        {
+          "name": "ctx-opt",
+          "rank": -6.25,
+          "use_count": 562
+        }
+      ]
+    },
+    {
+      "prompt_id": 3250,
+      "ts": "2026-05-27T17:30:03.940Z",
+      "snippet": "alright lets get these fied",
+      "candidates": [
+        {
+          "name": "agent-ado",
+          "rank": -6.34,
+          "use_count": 5
+        },
+        {
+          "name": "pr-shepherd",
+          "rank": -4.39,
+          "use_count": 7
+        },
+        {
+          "name": "reviewer-code",
+          "rank": -4.29,
+          "use_count": 56
+        }
+      ]
+    },
+    {
+      "prompt_id": 3248,
+      "ts": "2026-05-27T17:29:02.141Z",
+      "snippet": "Check final CI status on PR #232 (https://ProgressiveSurface.ghe.com/ProgressiveSurface/PRGJSMES/pull/232). Run `GH_HOST=progressivesurface.",
+      "candidates": [
+        {
+          "name": "pr-shepherd",
+          "rank": -12.55,
+          "use_count": 7
+        },
+        {
+          "name": "reviewer-code",
+          "rank": -7.97,
+          "use_count": 56
+        },
+        {
+          "name": "deploy-prep",
+          "rank": -6.8,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3247,
+      "ts": "2026-05-27T17:25:01.950Z",
+      "snippet": "Check CI status on PR #232 (https://ProgressiveSurface.ghe.com/ProgressiveSurface/PRGJSMES/pull/232). Run `GH_HOST=progressivesurface.ghe.co",
+      "candidates": [
+        {
+          "name": "pr-shepherd",
+          "rank": -15.07,
+          "use_count": 7
+        },
+        {
+          "name": "reviewer-code",
+          "rank": -7.97,
+          "use_count": 56
+        },
+        {
+          "name": "deploy-prep",
+          "rank": -6.8,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3244,
+      "ts": "2026-05-27T17:09:48.404Z",
+      "snippet": "yes i want you to do all of this Want me to: 1. Let the audit finish + commit working-tree drift 2. Start prototyping the MCP server (op",
+      "candidates": [
+        {
+          "name": "leadtime-analyst",
+          "rank": -11.31,
+          "use_count": 0
+        },
+        {
+          "name": "leadtime-auditor",
+          "rank": -11.08,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -10.58,
+          "use_count": 12
+        }
+      ]
+    },
+    {
+      "prompt_id": 3243,
+      "ts": "2026-05-27T17:06:55.657Z",
+      "snippet": "so lets add to this https://psmes.progressivesurface.com/skidscan the scan progress seems likes its doubling the crate counts can you confir",
+      "candidates": [
+        {
+          "name": "agent-communicator",
+          "rank": -6.84,
+          "use_count": 18
+        },
+        {
+          "name": "dev-team",
+          "rank": -4.88,
+          "use_count": 13
+        },
+        {
+          "name": "agent-coder",
+          "rank": -4.24,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3241,
+      "ts": "2026-05-27T16:55:23.226Z",
+      "snippet": "what happened to the single skid 13?",
+      "candidates": [
+        {
+          "name": "session-reviewer",
+          "rank": -8.06,
+          "use_count": 2
+        },
+        {
+          "name": "pipeline-gateway",
+          "rank": -5.03,
+          "use_count": 34
+        },
+        {
+          "name": "quality-expert",
+          "rank": -4.46,
+          "use_count": 29
+        }
+      ]
+    },
+    {
+      "prompt_id": 3239,
+      "ts": "2026-05-27T16:48:43.743Z",
+      "snippet": "alright lets audit this deeper",
+      "candidates": [
+        {
+          "name": "security-auditor",
+          "rank": -5.14,
+          "use_count": 0
+        },
+        {
+          "name": "model-qa",
+          "rank": -4.1,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -3.39,
+          "use_count": 12
+        }
+      ]
+    },
+    {
+      "prompt_id": 3233,
+      "ts": "2026-05-27T14:28:01.404Z",
+      "snippet": "Check deploy status: `GH_HOST=progressivesurface.ghe.com gh run view 67845201 --json status,conclusion,jobs --jq '{status, conclusion, jobs:",
+      "candidates": [
+        {
+          "name": "deploy-prep",
+          "rank": -9.93,
+          "use_count": 0
+        },
+        {
+          "name": "mes-architect",
+          "rank": -4.83,
+          "use_count": 0
+        },
+        {
+          "name": "mes-architect",
+          "rank": -4.83,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3229,
+      "ts": "2026-05-27T14:17:01.712Z",
+      "snippet": "Check CI status on PR #230 (https://ProgressiveSurface.ghe.com/ProgressiveSurface/PRGJSMES/pull/230). Run `GH_HOST=progressivesurface.ghe.co",
+      "candidates": [
+        {
+          "name": "pr-shepherd",
+          "rank": -15.07,
+          "use_count": 7
+        },
+        {
+          "name": "reviewer-code",
+          "rank": -7.97,
+          "use_count": 56
+        },
+        {
+          "name": "deploy-prep",
+          "rank": -6.8,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3228,
+      "ts": "2026-05-27T14:14:59.344Z",
+      "snippet": "can i get an update on where we are with the embedding",
+      "candidates": [
+        {
+          "name": "agent-ado",
+          "rank": -6.34,
+          "use_count": 5
+        },
+        {
+          "name": "psi-wiki",
+          "rank": -5.7,
+          "use_count": 20
+        },
+        {
+          "name": "workflow-architect",
+          "rank": -5.38,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3227,
+      "ts": "2026-05-27T14:12:01.942Z",
+      "snippet": "Check CI status on PR #230 (https://ProgressiveSurface.ghe.com/ProgressiveSurface/PRGJSMES/pull/230). Run `GH_HOST=progressivesurface.ghe.co",
+      "candidates": [
+        {
+          "name": "pr-shepherd",
+          "rank": -15.07,
+          "use_count": 7
+        },
+        {
+          "name": "reviewer-code",
+          "rank": -7.97,
+          "use_count": 56
+        },
+        {
+          "name": "deploy-prep",
+          "rank": -6.8,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3225,
+      "ts": "2026-05-27T13:58:17.375Z",
+      "snippet": "can we do these while we are waiting",
+      "candidates": [
+        {
+          "name": "test-writer",
+          "rank": -9.04,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -8.88,
+          "use_count": 0
+        },
+        {
+          "name": "workflow-architect",
+          "rank": -5.38,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3224,
+      "ts": "2026-05-27T13:54:46.636Z",
+      "snippet": "@C:\\GIT\\BUZZ\\data\\_buzz_llm_prompt_574f99a776d34b09b67e2f29a8fc0a2a.txt",
+      "candidates": [
+        {
+          "name": "git-workflow-master",
+          "rank": -7.09,
+          "use_count": 0
+        },
+        {
+          "name": "developer-backend",
+          "rank": -6.1,
+          "use_count": 11
+        },
+        {
+          "name": "sql-migration-validator",
+          "rank": -4.98,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3223,
+      "ts": "2026-05-27T13:54:18.501Z",
+      "snippet": "@C:\\GIT\\BUZZ\\data\\_buzz_llm_prompt_c085c3c7791c49cc9b1c8b794401ef05.txt",
+      "candidates": [
+        {
+          "name": "git-workflow-master",
+          "rank": -7.09,
+          "use_count": 0
+        },
+        {
+          "name": "developer-backend",
+          "rank": -6.1,
+          "use_count": 11
+        },
+        {
+          "name": "sql-migration-validator",
+          "rank": -4.98,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3222,
+      "ts": "2026-05-27T13:53:50.402Z",
+      "snippet": "@C:\\GIT\\BUZZ\\data\\_buzz_llm_prompt_838e0dbc5cde4eed97b00b97da66bb49.txt",
+      "candidates": [
+        {
+          "name": "git-workflow-master",
+          "rank": -7.09,
+          "use_count": 0
+        },
+        {
+          "name": "developer-backend",
+          "rank": -6.1,
+          "use_count": 11
+        },
+        {
+          "name": "sql-migration-validator",
+          "rank": -4.98,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3221,
+      "ts": "2026-05-27T13:52:59.431Z",
+      "snippet": "@C:\\GIT\\BUZZ\\data\\_buzz_llm_prompt_f85702374e9b4feab851df82ed3b96e5.txt",
+      "candidates": [
+        {
+          "name": "git-workflow-master",
+          "rank": -7.09,
+          "use_count": 0
+        },
+        {
+          "name": "developer-backend",
+          "rank": -6.1,
+          "use_count": 11
+        },
+        {
+          "name": "sql-migration-validator",
+          "rank": -4.98,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3220,
+      "ts": "2026-05-27T13:52:20.669Z",
+      "snippet": "@C:\\GIT\\BUZZ\\data\\_buzz_llm_prompt_a6fbb162c4e44a80963ab23bc77bef14.txt",
+      "candidates": [
+        {
+          "name": "git-workflow-master",
+          "rank": -7.09,
+          "use_count": 0
+        },
+        {
+          "name": "developer-backend",
+          "rank": -6.1,
+          "use_count": 11
+        },
+        {
+          "name": "sql-migration-validator",
+          "rank": -4.98,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3219,
+      "ts": "2026-05-27T13:51:42.481Z",
+      "snippet": "@C:\\GIT\\BUZZ\\data\\_buzz_llm_prompt_1f1a0475cc4d4a059b9e7b6e7dab61a0.txt",
+      "candidates": [
+        {
+          "name": "git-workflow-master",
+          "rank": -7.09,
+          "use_count": 0
+        },
+        {
+          "name": "developer-backend",
+          "rank": -6.1,
+          "use_count": 11
+        },
+        {
+          "name": "sql-migration-validator",
+          "rank": -4.98,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3218,
+      "ts": "2026-05-27T13:50:03.647Z",
+      "snippet": "@C:\\GIT\\BUZZ\\data\\_buzz_llm_prompt_17a8d3d7d4ad42c2991633459d6593a1.txt",
+      "candidates": [
+        {
+          "name": "git-workflow-master",
+          "rank": -7.09,
+          "use_count": 0
+        },
+        {
+          "name": "developer-backend",
+          "rank": -6.1,
+          "use_count": 11
+        },
+        {
+          "name": "sql-migration-validator",
+          "rank": -4.98,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3217,
+      "ts": "2026-05-27T13:49:28.248Z",
+      "snippet": "@C:\\GIT\\BUZZ\\data\\_buzz_llm_prompt_516418c3a215487ab5a757e150845679.txt",
+      "candidates": [
+        {
+          "name": "git-workflow-master",
+          "rank": -7.09,
+          "use_count": 0
+        },
+        {
+          "name": "developer-backend",
+          "rank": -6.1,
+          "use_count": 11
+        },
+        {
+          "name": "sql-migration-validator",
+          "rank": -4.98,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3216,
+      "ts": "2026-05-27T13:48:45.931Z",
+      "snippet": "@C:\\GIT\\BUZZ\\data\\_buzz_llm_prompt_78b984653d8742fa819d67234eb97222.txt",
+      "candidates": [
+        {
+          "name": "git-workflow-master",
+          "rank": -7.09,
+          "use_count": 0
+        },
+        {
+          "name": "developer-backend",
+          "rank": -6.1,
+          "use_count": 11
+        },
+        {
+          "name": "sql-migration-validator",
+          "rank": -4.98,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3215,
+      "ts": "2026-05-27T13:48:05.200Z",
+      "snippet": "@C:\\GIT\\BUZZ\\data\\_buzz_llm_prompt_ab3c1cd8ad4e485dbe6d03d57b432c2c.txt",
+      "candidates": [
+        {
+          "name": "git-workflow-master",
+          "rank": -7.09,
+          "use_count": 0
+        },
+        {
+          "name": "developer-backend",
+          "rank": -6.1,
+          "use_count": 11
+        },
+        {
+          "name": "sql-migration-validator",
+          "rank": -4.98,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3214,
+      "ts": "2026-05-27T13:47:32.733Z",
+      "snippet": "@C:\\GIT\\BUZZ\\data\\_buzz_llm_prompt_ccf91c32bdde41e1a38834efce013f33.txt",
+      "candidates": [
+        {
+          "name": "git-workflow-master",
+          "rank": -7.09,
+          "use_count": 0
+        },
+        {
+          "name": "developer-backend",
+          "rank": -6.1,
+          "use_count": 11
+        },
+        {
+          "name": "sql-migration-validator",
+          "rank": -4.98,
+          "use_count": 0
+        }
+      ]
+    }
+  ]
+}

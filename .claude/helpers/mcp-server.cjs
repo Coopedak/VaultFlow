@@ -48,6 +48,43 @@ function getDb() {
   return _db;
 }
 
+// ── search helpers ────────────────────────────────────────────────────────
+
+/**
+ * Reciprocal Rank Fusion across heterogeneous ranked source lists.
+ * Each source provides its own top-N (already sorted, best first). RRF only
+ * uses rank position — score scales across sources are incomparable in raw form.
+ *
+ *   rrf(doc) = Σ over sources where doc appears of 1 / (k + rank_in_source)
+ *
+ * k=60 is the standard from Cormack & Buettcher (2009) — prevents the top
+ * result of any single source from dominating, while still rewarding cross-
+ * source agreement strongly. Higher rrf score = more relevant.
+ *
+ * @param {Array<Array<{_docId:string}>>} sourceLists  per-source results, sorted best-first
+ * @param {number} k  RRF constant (default 60)
+ * @returns merged list of {…originalFields, _rrfScore} sorted by _rrfScore desc
+ */
+function mergeRRF(sourceLists, k = 60) {
+  const scores = new Map(); // docId -> { score, item }
+  for (const list of sourceLists) {
+    if (!Array.isArray(list)) continue;
+    list.forEach((item, idx) => {
+      if (!item || !item._docId) return;
+      const contribution = 1 / (k + idx + 1);
+      const existing = scores.get(item._docId);
+      if (existing) {
+        existing.score += contribution;
+      } else {
+        scores.set(item._docId, { score: contribution, item });
+      }
+    });
+  }
+  return [...scores.values()]
+    .sort((a, b) => b.score - a.score)
+    .map(({ score, item }) => ({ ...item, _rrfScore: score }));
+}
+
 // ── tool definitions ──────────────────────────────────────────────────────
 
 const TOOLS = [
@@ -128,6 +165,23 @@ const TOOLS = [
       type: 'object',
       properties: {
         query: { type: 'string', description: 'Tool name, category, or description fragment' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'search_skills',
+    description:
+      'Search existing skills before authoring a NEW skill. ALWAYS call this ' +
+      'before creating a new skill — reuse or modify an existing one rather than ' +
+      'building from scratch. Skills are the skill-equivalent of vault tools: ' +
+      'agents, pipelines, and procedures registered in vault_agents. Returns ' +
+      'ranked matches with an advisory REUSE / MODIFY / BUILD-NEW-OK verdict.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'What the new skill would do (task, capability, or description fragment)' },
+        limit: { type: 'number', description: 'Max results (default 10)' },
       },
       required: ['query'],
     },
@@ -238,6 +292,25 @@ const TOOLS = [
         project: { type: 'string', description: 'Optional project filter' },
       },
       required: ['name'],
+    },
+  },
+  {
+    name: 'impact',
+    description:
+      'Change-impact report for a file or symbol: DOWNSTREAM consumers a change ' +
+      'could break, UPSTREAM dependencies a root cause could come from, and which ' +
+      'cataloged FLOWS the change reaches (classified affected / handoff / verify, ' +
+      'with the human-curated user_notes surfaced). Use BEFORE editing to see what ' +
+      'breaks, or in debug mode to point root-cause investigation upstream. ' +
+      'APPROXIMATE — bare-name call graph; curated flows/user_notes are more trustworthy.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        file:    { type: 'string', description: 'Path to the changed file (file-level impact)' },
+        symbol:  { type: 'string', description: 'Symbol name (function/class) — finer-grained impact' },
+        project: { type: 'string', description: 'Optional project filter (auto-scoped from the symbol/file)' },
+        mode:    { type: 'string', enum: ['impact', 'debug'], description: "'impact' (default) or 'debug' (emphasize root-cause direction)" },
+      },
     },
   },
 ];
@@ -402,6 +475,35 @@ async function callTool(name, args) {
       };
     }
 
+    case 'search_skills': {
+      const skillReuse = require('./skill-reuse.cjs');
+      const query = String(args.query || '').trim();
+      if (!query) return { content: [{ type: 'text', text: 'Missing required arg: query' }] };
+      const limit = Math.min(Math.max(1, Math.floor(args.limit || 10)), 25);
+
+      const rows   = db.searchVaultAgents(query, limit) || [];
+      const scored = skillReuse.scoreSkillRows(query, rows);
+
+      // BM25 ranks; overlap only buckets. Render in BM25 order with the verdict.
+      const lines = scored.map(r =>
+        `[${r.verdict}] ${r.name} (${r.source})${r.description ? ` — ${String(r.description).slice(0, 200)}` : ''}`
+      );
+
+      const noStrongMatch = scored.length === 0 || scored.every(r => r.verdict === 'BUILD-NEW-OK');
+      const thin = scored.length > 0 && scored.length < 3;
+
+      const header = scored.length
+        ? `**Existing skills for "${query}"** (${scored.length}, verdict is advisory — BM25-ranked):`
+        : `No existing skills matched "${query}".`;
+
+      const footer = [];
+      if (thin) footer.push('_Note: few results — the registry may be thin for this query._');
+      if (noStrongMatch) footer.push('No strong match — OK to build new.');
+
+      const text = [header, ...lines, ...(footer.length ? ['', ...footer] : [])].join('\n');
+      return { content: [{ type: 'text', text }] };
+    }
+
     case 'blast_radius': {
       const codeGraph = require('./code-graph.cjs');
       const file = String(args.file || '');
@@ -445,39 +547,97 @@ async function callTool(name, args) {
       const limit = Math.min(Math.max(1, Math.floor(args.limit || 5)), 20);
       if (!q) return { content: [{ type: 'text', text: 'Empty query' }] };
 
-      const sections = [];
-      // Memory
+      // Fetch each source's top-N independently. RRF only needs rank position.
+      const sourceLists = [];
+      const fetchedAt = Date.now();
       try {
-        const mem = db.searchMemory(q, limit);
-        if (mem.length) sections.push(['### Memory', mem.map(r => `- **${r.title}** — ${r.source}\n  ${String(r.body || '').slice(0, 200)}`).join('\n')].join('\n'));
+        const mem = db.searchMemory(q, limit) || [];
+        sourceLists.push(mem.map(r => ({
+          _source: 'memory',
+          _docId: `memory:${r.id || r.title}`,
+          _render: `- **${r.title}** — ${r.source}\n  ${String(r.body || '').slice(0, 200)}`,
+        })));
       } catch (_) {}
-      // Symbols
       try {
         const cg = require('./code-graph.cjs');
-        const syms = cg.searchSymbols(db, q, limit);
-        if (syms.length) sections.push(['### Code symbols', syms.map(s => `- \`${s.name}\` (${s.kind}) — ${s.file}:${s.line}`).join('\n')].join('\n'));
+        const syms = cg.searchSymbols(db, q, limit) || [];
+        sourceLists.push(syms.map(s => ({
+          _source: 'symbol',
+          _docId: `symbol:${s.file}:${s.name}`,
+          _render: `- \`${s.name}\` (${s.kind}) — ${s.file}:${s.line}`,
+        })));
       } catch (_) {}
-      // Commits
       try {
         const ci = require('./commit-indexer.cjs');
-        const cm = ci.searchCommits(db, q, limit);
-        if (cm.length) sections.push(['### Git commits', cm.map(c => `- \`${c.sha.slice(0,7)}\` [${c.project}] ${c.subject}`).join('\n')].join('\n'));
+        const cm = ci.searchCommits(db, q, limit) || [];
+        sourceLists.push(cm.map(c => ({
+          _source: 'commit',
+          _docId: `commit:${c.sha}`,
+          _render: `- \`${c.sha.slice(0, 7)}\` [${c.project}] ${c.subject}`,
+        })));
       } catch (_) {}
-      // Dictionary
       try {
-        const dict = db.searchDictionary ? db.searchDictionary(q, limit) : [];
-        const filtered = (dict || []).filter(d => d.category !== 'pattern');
-        if (filtered.length) sections.push(['### Dictionary', filtered.map(d => `- **${d.term}** (${d.category}) — ${String(d.definition || '').slice(0, 160)}`).join('\n')].join('\n'));
+        const dict = db.searchDictionary ? (db.searchDictionary(q, limit) || []).filter(d => d.category !== 'pattern') : [];
+        sourceLists.push(dict.map(d => ({
+          _source: 'dictionary',
+          _docId: `dict:${d.id || d.term}`,
+          _render: `- **${d.term}** (${d.category}) — ${String(d.definition || '').slice(0, 160)}`,
+        })));
       } catch (_) {}
-      // Vault tools
       try {
-        const tools = db.searchVaultTools ? db.searchVaultTools(q, limit) : [];
-        if (tools.length) sections.push(['### Vault tools', tools.map(t => `- **${t.name}** — ${t.description || ''}`).join('\n')].join('\n'));
+        const tools = db.searchVaultTools ? (db.searchVaultTools(q, limit) || []) : [];
+        sourceLists.push(tools.map(t => ({
+          _source: 'tool',
+          _docId: `tool:${t.id || t.name}`,
+          _render: `- **${t.name}** — ${t.description || ''}`,
+        })));
+      } catch (_) {}
+      try {
+        const skills = db.searchVaultAgents ? (db.searchVaultAgents(q, limit) || []) : [];
+        sourceLists.push(skills.map(r => ({
+          _source: 'skill',
+          _docId: `skill:${r.agent_id}`,
+          _render: `- **${r.name}** — ${r.description || ''}`,
+        })));
       } catch (_) {}
 
-      const text = sections.length
-        ? `# Unified search: "${q}"\n\n${sections.join('\n\n')}`
-        : `No results across memory, symbols, commits, dictionary, or vault tools for "${q}".`;
+      // 6th source: semantic symbol search. Cosine over symbol_embeddings —
+      // finds code whose intent matches the query even without keyword overlap.
+      // Heavier than the other sources (one embed call + N cosines), so the
+      // _await_ here adds latency but it's parallelizable in a future refactor.
+      try {
+        const emb = await import('./embeddings.mjs');
+        const syms = await emb.semanticSymbolSearch(q, { limit, threshold: 0.25 });
+        sourceLists.push(syms.map(s => ({
+          _source: 'symbol-semantic',
+          _docId: `symbol-sem:${s.file}:${s.name}`,
+          _render: `- 🧠 \`${s.name}\` (${s.kind}) — ${s.file} (cos=${s.score.toFixed(2)})`,
+        })));
+      } catch (_) { /* silent — emb may be unavailable */ }
+
+      // RRF merge: rrf(d) = Σ over sources where d appears of 1 / (k + rank_in_source)
+      // k=60 is the standard, prevents top-1 items from dominating.
+      const merged = mergeRRF(sourceLists, 60);
+
+      // Diagnostics — log to stderr; also attach as trailing metadata
+      const top5 = merged.slice(0, 5);
+      const sourcesInTop5 = new Set(top5.map(r => r._source)).size;
+      const mergeMs = Date.now() - fetchedAt;
+      process.stderr.write(
+        `[vaultflow-mcp] unified_search rrf q="${q.slice(0,60)}" ` +
+        `sources=${sourceLists.length} merged=${merged.length} ` +
+        `sources_in_top5=${sourcesInTop5} ms=${mergeMs}\n`
+      );
+
+      if (!merged.length) {
+        return { content: [{ type: 'text', text: `No results across memory, symbols, commits, dictionary, or vault tools for "${q}".` }] };
+      }
+
+      const body = merged.slice(0, limit).map((r, i) => {
+        const tag = `[${r._source}]`;
+        return r._render.replace(/^- /, `- ${tag} `);
+      }).join('\n');
+      const text = `# Unified search: "${q}" (RRF, ${sourcesInTop5} sources in top 5)\n\n${body}`;
       return { content: [{ type: 'text', text }] };
     }
 
@@ -519,6 +679,22 @@ async function callTool(name, args) {
       const lines = rows.slice(0, 50).map(r => `- ${r.caller_file}:${r.line} — in \`${r.caller_name}\` [${r.lang}]`);
       const more = rows.length > 50 ? `\n…and ${rows.length - 50} more` : '';
       return { content: [{ type: 'text', text: `**Callers of "${name}"** (${rows.length}):\n\n${lines.join('\n')}${more}` }] };
+    }
+
+    case 'impact': {
+      const fi = require('./flow-impact.cjs');
+      const file = args.file ? String(args.file) : null;
+      const symbol = args.symbol ? String(args.symbol) : null;
+      if (!file && !symbol) {
+        return { content: [{ type: 'text', text: 'Missing required arg: provide file and/or symbol.' }] };
+      }
+      const rep = fi.analyzeImpact(db, {
+        file,
+        symbol,
+        project: args.project || null,
+        mode: args.mode === 'debug' ? 'debug' : 'impact',
+      });
+      return { content: [{ type: 'text', text: fi.renderImpact(rep) }] };
     }
 
     default:

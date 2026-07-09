@@ -1,0 +1,419 @@
+{
+  "date": "2026-05-24",
+  "prompts_scanned": 50,
+  "strong_matches": 22,
+  "misses_count": 20,
+  "miss_rate": 0.909,
+  "misses": [
+    {
+      "prompt_id": 3077,
+      "ts": "2026-05-24T06:00:09.660Z",
+      "snippet": "You are the Librarian running a vault maintenance audit. Your job is to find real gaps and generate a prioritized task list. ## What to aud",
+      "candidates": [
+        {
+          "name": "vault-librarian",
+          "rank": -13.62,
+          "use_count": 30
+        },
+        {
+          "name": "customer-expert",
+          "rank": -7.83,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.52,
+          "use_count": 11
+        }
+      ]
+    },
+    {
+      "prompt_id": 3070,
+      "ts": "2026-05-23T06:00:08.387Z",
+      "snippet": "You are the Librarian running a vault maintenance audit. Your job is to find real gaps and generate a prioritized task list. ## What to aud",
+      "candidates": [
+        {
+          "name": "vault-librarian",
+          "rank": -13.62,
+          "use_count": 30
+        },
+        {
+          "name": "customer-expert",
+          "rank": -7.83,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.52,
+          "use_count": 11
+        }
+      ]
+    },
+    {
+      "prompt_id": 3068,
+      "ts": "2026-05-23T02:52:27.099Z",
+      "snippet": "fill embedding we have a lot of htis already done unless these are new chunks i dont want to do more more we just add on to it",
+      "candidates": [
+        {
+          "name": "materials-expert",
+          "rank": -6.65,
+          "use_count": 0
+        },
+        {
+          "name": "materials-expert",
+          "rank": -6.65,
+          "use_count": 0
+        },
+        {
+          "name": "debugger",
+          "rank": -5.49,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3067,
+      "ts": "2026-05-23T02:50:50.384Z",
+      "snippet": "so when we make a pick that is the pick date. price at time of pick. assume we want a 5% gain so we monitor if the high gets to what 5% incr",
+      "candidates": [
+        {
+          "name": "logistics-expert",
+          "rank": -12.06,
+          "use_count": 2
+        },
+        {
+          "name": "logistics-expert",
+          "rank": -12.06,
+          "use_count": 1
+        },
+        {
+          "name": "excalidraw-diagram",
+          "rank": -8.57,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3066,
+      "ts": "2026-05-23T02:47:46.588Z",
+      "snippet": "no i want everything in order done ill be gone over the weekend so we can just run",
+      "candidates": [
+        {
+          "name": "evidence-collector",
+          "rank": -7.48,
+          "use_count": 0
+        },
+        {
+          "name": "order-flow-expert",
+          "rank": -5.77,
+          "use_count": 1
+        },
+        {
+          "name": "order-flow-expert",
+          "rank": -5.77,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3060,
+      "ts": "2026-05-23T02:44:26.697Z",
+      "snippet": "well lets plan this out for the extraction in an order once this done lets we bm25 fts, embed and vector",
+      "candidates": [
+        {
+          "name": "order-flow-expert",
+          "rank": -5.77,
+          "use_count": 1
+        },
+        {
+          "name": "order-flow-expert",
+          "rank": -5.77,
+          "use_count": 1
+        },
+        {
+          "name": "workflow-expert",
+          "rank": -4.57,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3059,
+      "ts": "2026-05-23T02:43:50.174Z",
+      "snippet": "well why is the md's outdated? we need to ensure all the mds are updated daily everything get updated nightly right?",
+      "candidates": [
+        {
+          "name": "test-writer",
+          "rank": -8.15,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -8.01,
+          "use_count": 0
+        },
+        {
+          "name": "psi-wiki",
+          "rank": -4.69,
+          "use_count": 19
+        }
+      ]
+    },
+    {
+      "prompt_id": 3058,
+      "ts": "2026-05-23T02:43:49.826Z",
+      "snippet": "well why is the md's outdated? we need to ensure all the mds are updated daily everything get updated nightly right?",
+      "candidates": [
+        {
+          "name": "test-writer",
+          "rank": -8.15,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -8.01,
+          "use_count": 0
+        },
+        {
+          "name": "psi-wiki",
+          "rank": -4.69,
+          "use_count": 19
+        }
+      ]
+    },
+    {
+      "prompt_id": 3051,
+      "ts": "2026-05-23T02:32:59.432Z",
+      "snippet": "so these should be added to the refresh",
+      "candidates": [
+        {
+          "name": "sql-migration-validator",
+          "rank": -5.59,
+          "use_count": 0
+        },
+        {
+          "name": "sql-migration-validator",
+          "rank": -5.59,
+          "use_count": 0
+        },
+        {
+          "name": "agent-planner",
+          "rank": -5.45,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3049,
+      "ts": "2026-05-23T02:32:40.050Z",
+      "snippet": "<task-notification> <task-id>bdctu9gao</task-id> <summary>Monitor event: \"PR #221 deploy run 64452751 — job state changes\"</summary> <event>",
+      "candidates": [
+        {
+          "name": "MIGRATION_SUMMARY",
+          "rank": -6.25,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3048,
+      "ts": "2026-05-23T02:32:29.527Z",
+      "snippet": "<task-notification> <task-id>bdctu9gao</task-id> <summary>Monitor event: \"PR #221 deploy run 64452751 — job state changes\"</summary> <event>",
+      "candidates": [
+        {
+          "name": "MIGRATION_SUMMARY",
+          "rank": -6.25,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3047,
+      "ts": "2026-05-23T02:25:21.650Z",
+      "snippet": "<task-notification> <task-id>bdctu9gao</task-id> <summary>Monitor event: \"PR #221 deploy run 64452751 — job state changes\"</summary> <event>",
+      "candidates": [
+        {
+          "name": "MIGRATION_SUMMARY",
+          "rank": -6.25,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3042,
+      "ts": "2026-05-23T02:22:00.734Z",
+      "snippet": "any comments we need to look into",
+      "candidates": [
+        {
+          "name": "test-writer",
+          "rank": -8.15,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -8.01,
+          "use_count": 0
+        },
+        {
+          "name": "pr-shepherd",
+          "rank": -4.94,
+          "use_count": 7
+        }
+      ]
+    },
+    {
+      "prompt_id": 3040,
+      "ts": "2026-05-23T02:20:46.426Z",
+      "snippet": "K:\\PROJECT\\2401\\sw\\PRIMS lot for this should be the same for almost every project can you confirm? might also find something called CITS",
+      "candidates": [
+        {
+          "name": "materials-expert",
+          "rank": -6.65,
+          "use_count": 0
+        },
+        {
+          "name": "materials-expert",
+          "rank": -6.65,
+          "use_count": 0
+        },
+        {
+          "name": "debugger",
+          "rank": -5.49,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3024,
+      "ts": "2026-05-23T00:51:03.105Z",
+      "snippet": "DID YOU CHECK THE I DRIVE THE S DRIVE THE X DRIVE FOR NEW INFOMATION TO PULL AS WELL AS THE APIS AND TABLES WE ARE LINKED TO?",
+      "candidates": [
+        {
+          "name": "sql-migration-validator",
+          "rank": -5.27,
+          "use_count": 0
+        },
+        {
+          "name": "sql-migration-validator",
+          "rank": -5.27,
+          "use_count": 0
+        },
+        {
+          "name": "agent-reviewer",
+          "rank": -3.89,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3023,
+      "ts": "2026-05-23T00:50:15.568Z",
+      "snippet": "WATACH FOR COMMENTS AND REVIEW THEM AND UPDATE THEM AS THEY COME IN",
+      "candidates": [
+        {
+          "name": "debugger",
+          "rank": -8.21,
+          "use_count": 0
+        },
+        {
+          "name": "pipeline-gateway",
+          "rank": -8.19,
+          "use_count": 32
+        },
+        {
+          "name": "debugger",
+          "rank": -8.07,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3022,
+      "ts": "2026-05-23T00:49:45.336Z",
+      "snippet": "ALRIGHT SO IF I JUST WANT A SCREEN THAT IS A SLAVE UNIT AND WILL WORK WHAT WOULD BE A GOOD UNIT",
+      "candidates": [
+        {
+          "name": "leadtime-planner",
+          "rank": -7.72,
+          "use_count": 0
+        },
+        {
+          "name": "Dev-Team Pipeline (Claude Code, PSI-specific)",
+          "rank": -5.24,
+          "use_count": 0
+        },
+        {
+          "name": "code-reviewer",
+          "rank": -4.54,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3020,
+      "ts": "2026-05-23T00:45:43.891Z",
+      "snippet": "https://nbtmarine.com/ whatt is different about nbt marine then how do these work",
+      "candidates": [
+        {
+          "name": "tdd-test-first",
+          "rank": -6.45,
+          "use_count": 22
+        },
+        {
+          "name": "psi-wiki",
+          "rank": -5.83,
+          "use_count": 19
+        },
+        {
+          "name": "developer-database",
+          "rank": -4.68,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3018,
+      "ts": "2026-05-23T00:42:39.172Z",
+      "snippet": "so for this pr are there comments we need to review",
+      "candidates": [
+        {
+          "name": "pr-shepherd",
+          "rank": -12.07,
+          "use_count": 7
+        },
+        {
+          "name": "test-writer",
+          "rank": -8.15,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -8.01,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3017,
+      "ts": "2026-05-23T00:41:19.893Z",
+      "snippet": "how about we commit and push",
+      "candidates": [
+        {
+          "name": "psi-wiki",
+          "rank": -5.83,
+          "use_count": 19
+        },
+        {
+          "name": "code-reviewer",
+          "rank": -5.46,
+          "use_count": 0
+        },
+        {
+          "name": "code-reviewer",
+          "rank": -5.46,
+          "use_count": 0
+        }
+      ]
+    }
+  ]
+}

@@ -18,7 +18,7 @@
 import { createRequire }  from 'node:module';
 import { readFileSync, existsSync } from 'node:fs';
 import path               from 'node:path';
-import { fileURLToPath }  from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { glob }           from 'glob';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -49,6 +49,54 @@ function parseFrontmatter(raw) {
     description: typeof parsed.description === 'string' ? parsed.description.trim() : '',
     name:        typeof parsed.name        === 'string' ? parsed.name.trim()        : '',
   };
+}
+
+/**
+ * True when a frontmatter description is a stub the search can't match on:
+ * empty, too short to carry signal (<30 chars), or the auto-generated
+ * "Agent skill for X - invoke with $" placeholder. Stub descriptions give
+ * searchVaultAgents nothing useful to match, so callers fall back to body text.
+ */
+function isStubDescription(desc) {
+  const d = String(desc || '').trim();
+  if (d.length < 30) return true;
+  return /^Agent skill for .* - invoke with \$/.test(d);
+}
+
+/**
+ * Pull the first non-frontmatter paragraph (up to ~200 chars) from a skill
+ * markdown body. Used as a description fallback when the frontmatter
+ * `description` is a stub. Tolerant: returns '' if there's no readable body.
+ */
+function firstBodyParagraph(raw) {
+  if (!raw) return '';
+  let body = raw;
+  if (raw.startsWith('---')) {
+    const end = raw.indexOf('\n---', 3);
+    if (end !== -1) {
+      // Skip past the closing '---' line itself.
+      const after = raw.indexOf('\n', end + 1);
+      body = after !== -1 ? raw.slice(after + 1) : '';
+    }
+  }
+  // First non-empty block: collapse to the first run of non-blank lines, strip
+  // leading markdown headings/markers, and cap length.
+  const para = body
+    .split(/\n\s*\n/)
+    .map(p => p.trim())
+    .find(p => p.length > 0) || '';
+  return para.replace(/^#+\s*/, '').replace(/\s+/g, ' ').trim().slice(0, 200);
+}
+
+/**
+ * Resolve the best description for a skill: keep the frontmatter description
+ * unless it's a stub, in which case fall back to the first body paragraph.
+ * Always returns whatever non-empty text it can; never throws.
+ */
+function resolveSkillDescription(frontmatterDesc, raw) {
+  if (!isStubDescription(frontmatterDesc)) return frontmatterDesc;
+  const body = firstBodyParagraph(raw);
+  return body || frontmatterDesc || '';
 }
 
 // ── config ────────────────────────────────────────────────────────────────
@@ -423,6 +471,10 @@ async function backfillAgents(cfg, dryRun) {
     const require = createRequire(import.meta.url);
     const fs = require('fs');
     let userCount = 0;
+    // Track every agent_id registered this run so orphans (skills that were
+    // renamed or deleted) can be pruned from vault_agents after the loop.
+    const registeredUserSkillIds = new Set();
+
     for (const entry of fs.readdirSync(userSkillsDir, { withFileTypes: true })) {
       let skillName = null;
       let descText  = '';
@@ -446,10 +498,13 @@ async function backfillAgents(cfg, dryRun) {
       }
       if (raw) {
         const fm = parseFrontmatter(raw);
-        descText = fm.description.slice(0, 500);
+        // Stub descriptions (empty / too short / auto-generated) give the FTS
+        // search nothing to match on — fall back to the skill's body text.
+        descText = resolveSkillDescription(fm.description, raw).slice(0, 500);
       }
 
       if (!skillName) continue;
+      registeredUserSkillIds.add(skillName);
       if (!dryRun) {
         try {
           // Pass descText as BOTH description and trigger_pattern. Skills don't
@@ -466,6 +521,33 @@ async function backfillAgents(cfg, dryRun) {
       }
     }
     console.log(`[backfill] User skills registered: ${userCount}${dryRun ? ' (dry-run)' : ''}`);
+
+    // ── Orphan prune: remove user-skill rows whose agent_id no longer maps to
+    // any skill on disk (e.g. a renamed or deleted skill directory). SAFETY
+    // GUARD: only prune when the scan found a healthy number of skills.
+    // A failed or partial scan (empty dir, permission error) must NOT nuke the
+    // table, so we abort the prune entirely when fewer than the minimum were seen.
+    const MIN_USER_SKILLS_FOR_PRUNE = 5; // never prune on a failed/partial scan
+    if (!dryRun && registeredUserSkillIds.size >= MIN_USER_SKILLS_FOR_PRUNE) {
+      const raw = db.raw();
+      const existing = raw.prepare(
+        `SELECT agent_id FROM vault_agents WHERE source='user-skill'`
+      ).all().map(r => r.agent_id);
+      const orphans = existing.filter(id => !registeredUserSkillIds.has(id));
+      if (orphans.length > 0) {
+        const placeholders = orphans.map(() => '?').join(', ');
+        raw.prepare(
+          `DELETE FROM vault_agents WHERE source='user-skill' AND agent_id IN (${placeholders})`
+        ).run(...orphans);
+        console.log(`[backfill] User-skill orphans pruned: ${orphans.length} (${orphans.join(', ')})`);
+      } else {
+        console.log(`[backfill] User-skill orphans pruned: 0`);
+      }
+    } else if (!dryRun) {
+      process.stderr.write(
+        `[backfill] Orphan prune skipped — scan returned only ${registeredUserSkillIds.size} skills (< ${MIN_USER_SKILLS_FOR_PRUNE}). Partial scan guard triggered.\n`
+      );
+    }
   }
 
   // ── Project agents from C:/GIT/*/.claude/agents/*.md ─────────────────
@@ -497,7 +579,8 @@ async function backfillAgents(cfg, dryRun) {
       try {
         const raw = readFileSync(agentFile, 'utf8');
         const fm  = parseFrontmatter(raw);
-        descText  = fm.description.slice(0, 500);
+        // Stub-description fallback to body text — same reasoning as user skills.
+        descText  = resolveSkillDescription(fm.description, raw).slice(0, 500);
       } catch (_) {}
 
       if (!dryRun) {
@@ -579,6 +662,7 @@ function backfillTools(cfg, dryRun) {
  * @param {boolean} [options.dryRun=false]     Parse and report but skip DB writes.
  * @param {boolean} [options.skillsOnly=false] Only backfill vault_agents registry.
  * @param {boolean} [options.toolsOnly=false]  Only backfill vault_tools registry.
+ * @param {boolean} [options.keepOpen=false]   Leave the DB connection open for callers.
  * @param {object}  [options.config]           Pre-parsed config (skip file read).
  * @returns {Promise<{total: number, entries: number, skipped: number, agents: number, tools: number}>}
  */
@@ -587,6 +671,7 @@ export async function runBackfill(options = {}) {
   const dryRun     = options.dryRun     || false;
   const skillsOnly = options.skillsOnly || false;
   const toolsOnly  = options.toolsOnly  || false;
+  const keepOpen   = options.keepOpen   || false;
 
   const metricsRoot = cfg?.paths?.metrics_root;
   const dbFile      = cfg?.storage?.db_file;
@@ -603,13 +688,13 @@ export async function runBackfill(options = {}) {
   // ── registry-only modes ───────────────────────────────────────────────
   if (skillsOnly) {
     agentsResult = await backfillAgents(cfg, dryRun);
-    if (!dryRun) db.close();
+    if (!dryRun && !keepOpen) db.close();
     return { total: 0, entries: 0, skipped: 0, agents: agentsResult.registered, tools: 0 };
   }
 
   if (toolsOnly) {
     toolsResult = backfillTools(cfg, dryRun);
-    if (!dryRun) db.close();
+    if (!dryRun && !keepOpen) db.close();
     return { total: 0, entries: 0, skipped: 0, agents: 0, tools: toolsResult.registered };
   }
 
@@ -672,7 +757,7 @@ export async function runBackfill(options = {}) {
     }
   }
 
-  if (!dryRun) {
+  if (!dryRun && !keepOpen) {
     db.close();
   }
 
@@ -683,6 +768,8 @@ export async function runBackfill(options = {}) {
 
   return { total, entries: entriesCount, skipped, agents: agentsResult.registered, tools: toolsResult.registered };
 }
+
+export { resolveSkillDescription, isStubDescription, firstBodyParagraph, parseFrontmatter };
 
 // ── main entrypoint ───────────────────────────────────────────────────────
 
@@ -704,4 +791,9 @@ async function main() {
   }
 }
 
-main();
+// Run only when invoked directly as a script — NOT when imported (the module's
+// docblock advertises `import { runBackfill }`). Importing previously triggered
+// a full backfill against the real DB as a side effect.
+if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
+  main();
+}

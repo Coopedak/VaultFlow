@@ -1,0 +1,23 @@
+{
+  "id": "ec10f699-6eef-4d0f-b8a2-5ca78ef2fea5",
+  "startedAt": "2026-06-16T13:46:06.801Z",
+  "endedAt": "2026-06-16T16:51:13.226Z",
+  "restoredAt": "2026-06-16T13:46:35.029Z",
+  "durationMs": 11106426,
+  "platform": "win32",
+  "cwd": "C:\\GIT",
+  "context": "claude-code",
+  "metrics": {
+    "edits": 0,
+    "commands": 0,
+    "tasks": 0,
+    "errors": 0
+  },
+  "project": null,
+  "model": null,
+  "modelProvider": null,
+  "cliVersion": null,
+  "lastInjectedSkill": null,
+  "lastInjectedAt": null,
+  "injectedSources": []
+}

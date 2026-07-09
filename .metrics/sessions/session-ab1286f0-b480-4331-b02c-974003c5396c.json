@@ -1,0 +1,23 @@
+{
+  "id": "ab1286f0-b480-4331-b02c-974003c5396c",
+  "startedAt": "2026-06-17T19:23:11.819Z",
+  "endedAt": "2026-06-17T19:30:35.683Z",
+  "restoredAt": null,
+  "durationMs": 443865,
+  "platform": "win32",
+  "cwd": "C:\\GIT\\BusinessCentral",
+  "context": "claude-code",
+  "metrics": {
+    "edits": 0,
+    "commands": 0,
+    "tasks": 0,
+    "errors": 0
+  },
+  "project": "BusinessCentral",
+  "model": null,
+  "modelProvider": null,
+  "cliVersion": null,
+  "lastInjectedSkill": null,
+  "lastInjectedAt": null,
+  "injectedSources": []
+}

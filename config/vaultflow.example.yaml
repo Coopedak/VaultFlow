@@ -27,6 +27,13 @@ paths:
   # Projects to exclude from wiki/CLAUDE.md backfill (folder name matching)
   exclude_projects: []
 
+  # Path prefixes to exclude from code-graph indexing (forward slashes, case-insensitive).
+  # Add snapshot/mirror copies of repos here so their symbols don't pollute impact analysis.
+  # Example: C:/GIT/vaultflow and E:/GIT/vaultflow are sibling copies of this D:/vaultflow snapshot.
+  exclude_index_prefixes:
+    - "C:/GIT/vaultflow"
+    - "E:/GIT/vaultflow"
+
   # Vault tool registry
   vault_tools_index: "C:/Users/YOU/vault/tools/index.md"
 
@@ -35,6 +42,11 @@ paths:
 
   # Domain knowledge directory — auto-imported into dictionary
   vault_domain_dir: "C:/Users/YOU/vault/domain"
+
+  # Watched folder for Claude Desktop / claude.ai chat exports. Drop Anthropic's
+  # account data export here (a conversations.json, or an unzipped export folder
+  # containing one); the nightly run imports new/changed chats automatically.
+  claude_export_dir: "C:/Users/YOU/Downloads/claude-exports"
 
   # ruflo .agents/ directory (Codex CLI skills)
   agents_dir: "C:/GIT/vaultflow/.agents"

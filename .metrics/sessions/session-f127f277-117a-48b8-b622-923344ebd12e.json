@@ -1,0 +1,23 @@
+{
+  "id": "f127f277-117a-48b8-b622-923344ebd12e",
+  "startedAt": "2026-05-13T13:45:32.422Z",
+  "endedAt": "2026-05-13T13:55:13.449Z",
+  "restoredAt": "2026-05-13T13:54:38.644Z",
+  "durationMs": 581048,
+  "platform": "win32",
+  "cwd": "C:\\GIT\\PRGJSMES",
+  "context": "claude-code",
+  "metrics": {
+    "edits": 4,
+    "commands": 0,
+    "tasks": 0,
+    "errors": 0
+  },
+  "project": "PRGJSMES",
+  "model": null,
+  "modelProvider": null,
+  "cliVersion": null,
+  "lastInjectedSkill": null,
+  "lastInjectedAt": null,
+  "injectedSources": []
+}

@@ -1,0 +1,334 @@
+{
+  "date": "2026-06-11",
+  "prompts_scanned": 23,
+  "strong_matches": 15,
+  "misses_count": 15,
+  "miss_rate": 1,
+  "misses": [
+    {
+      "prompt_id": 3496,
+      "ts": "2026-06-11T06:00:08.109Z",
+      "snippet": "You are the Librarian running a vault maintenance audit. Your job is to find real gaps and generate a prioritized task list. ## What to aud",
+      "candidates": [
+        {
+          "name": "vault-librarian",
+          "rank": -13.62,
+          "use_count": 30
+        },
+        {
+          "name": "customer-expert",
+          "rank": -7.83,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.52,
+          "use_count": 15
+        }
+      ]
+    },
+    {
+      "prompt_id": 3486,
+      "ts": "2026-06-10T19:04:33.463Z",
+      "snippet": "\"Dim-Hgt-Var\" we need to make the same flow for \"Dim-Hgt-Var\"",
+      "candidates": [
+        {
+          "name": "test-writer",
+          "rank": -8.15,
+          "use_count": 1
+        },
+        {
+          "name": "test-writer",
+          "rank": -8.01,
+          "use_count": 1
+        },
+        {
+          "name": "excalidraw-diagram",
+          "rank": -6.47,
+          "use_count": 4
+        }
+      ]
+    },
+    {
+      "prompt_id": 3485,
+      "ts": "2026-06-10T18:49:07.671Z",
+      "snippet": "now we added cosmo consult to out business central enviroment i think this will impact the js file we currently have",
+      "candidates": [
+        {
+          "name": "sql-migration-validator",
+          "rank": -5.59,
+          "use_count": 2
+        },
+        {
+          "name": "sql-migration-validator",
+          "rank": -5.59,
+          "use_count": 2
+        },
+        {
+          "name": "api-contract-auditor",
+          "rank": -4.94,
+          "use_count": 5
+        }
+      ]
+    },
+    {
+      "prompt_id": 3484,
+      "ts": "2026-06-10T18:48:14.912Z",
+      "snippet": "so find everything you can about the high x-dim shipment flow",
+      "candidates": [
+        {
+          "name": "psi-wiki",
+          "rank": -9.55,
+          "use_count": 25
+        },
+        {
+          "name": "evidence-collector",
+          "rank": -7.48,
+          "use_count": 0
+        },
+        {
+          "name": "leadtime-planner",
+          "rank": -6.63,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3483,
+      "ts": "2026-06-10T18:38:40.224Z",
+      "snippet": "I want to review the links the the bc links and after and how they can cross talk",
+      "candidates": [
+        {
+          "name": "leadtime-auditor",
+          "rank": -7.3,
+          "use_count": 0
+        },
+        {
+          "name": "leadtime-planner",
+          "rank": -5.89,
+          "use_count": 0
+        },
+        {
+          "name": "code-reviewer",
+          "rank": -5.87,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3482,
+      "ts": "2026-06-10T18:35:19.007Z",
+      "snippet": "\"S:\\Dept\\JobShop\\IC Production\\Production Planning\\Production Scheduling\\Scheduling Programs\\Quality\\QALabelDashBoard - Copy.accdb\" look ",
+      "candidates": [
+        {
+          "name": "order-flow-expert",
+          "rank": -11.37,
+          "use_count": 4
+        },
+        {
+          "name": "order-flow-expert",
+          "rank": -11.37,
+          "use_count": 4
+        },
+        {
+          "name": "mes-architect",
+          "rank": -8.19,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3480,
+      "ts": "2026-06-10T18:21:19.258Z",
+      "snippet": "https://progressivesurface.ghe.com/ProgressiveSurface/erp-migration-tool now pull this one down",
+      "candidates": [
+        {
+          "name": "agent-ado",
+          "rank": -6.34,
+          "use_count": 5
+        },
+        {
+          "name": "project-manager",
+          "rank": -5,
+          "use_count": 14
+        }
+      ]
+    },
+    {
+      "prompt_id": 3479,
+      "ts": "2026-06-10T18:16:06.494Z",
+      "snippet": "\"C:\\GIT\\ERPMigrationTool\" delete this folder please",
+      "candidates": [
+        {
+          "name": "git-workflow-master",
+          "rank": -7.09,
+          "use_count": 0
+        },
+        {
+          "name": "session-reviewer",
+          "rank": -4.36,
+          "use_count": 2
+        },
+        {
+          "name": "agent-communicator",
+          "rank": -3.32,
+          "use_count": 18
+        }
+      ]
+    },
+    {
+      "prompt_id": 3478,
+      "ts": "2026-06-10T18:09:39.842Z",
+      "snippet": "https://progressivesurface.ghe.com/ProgressiveSurface/erp-migration-tool look at this and update the erp migration tool",
+      "candidates": [
+        {
+          "name": "tool-engineer",
+          "rank": -7.04,
+          "use_count": 0
+        },
+        {
+          "name": "psi-wiki",
+          "rank": -5.7,
+          "use_count": 25
+        },
+        {
+          "name": "Dev-Team Pipeline (Claude Code, PSI-specific)",
+          "rank": -5.24,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3476,
+      "ts": "2026-06-10T17:23:41.962Z",
+      "snippet": "lets make sure that this file folder is up to date with the git hub repo",
+      "candidates": [
+        {
+          "name": "pr-shepherd",
+          "rank": -9.33,
+          "use_count": 10
+        },
+        {
+          "name": "excalidraw-diagram",
+          "rank": -6.47,
+          "use_count": 4
+        },
+        {
+          "name": "frontend-dev",
+          "rank": -5.13,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3475,
+      "ts": "2026-06-10T17:23:31.468Z",
+      "snippet": "lets make sure that this file folder is up to date",
+      "candidates": [
+        {
+          "name": "pr-shepherd",
+          "rank": -9.33,
+          "use_count": 10
+        },
+        {
+          "name": "excalidraw-diagram",
+          "rank": -6.47,
+          "use_count": 4
+        },
+        {
+          "name": "frontend-dev",
+          "rank": -5.13,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3474,
+      "ts": "2026-06-10T17:14:52.591Z",
+      "snippet": "can you fix it for me",
+      "candidates": [
+        {
+          "name": "ai-data-remediation-engineer",
+          "rank": -9.43,
+          "use_count": 0
+        },
+        {
+          "name": "sql-migration-validator",
+          "rank": -7.1,
+          "use_count": 2
+        },
+        {
+          "name": "sql-migration-validator",
+          "rank": -7.1,
+          "use_count": 2
+        }
+      ]
+    },
+    {
+      "prompt_id": 3473,
+      "ts": "2026-06-10T16:56:53.867Z",
+      "snippet": "\"S:\\Dept\\JobShop\\IC Production\\Production Planning\\Production Scheduling\\Scheduling Programs\\Line5\\4-Argo\\5-ArgoLabel - Copy.accdb\" error on",
+      "candidates": [
+        {
+          "name": "order-flow-expert",
+          "rank": -11.37,
+          "use_count": 4
+        },
+        {
+          "name": "order-flow-expert",
+          "rank": -11.37,
+          "use_count": 4
+        },
+        {
+          "name": "mes-architect",
+          "rank": -8.19,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3468,
+      "ts": "2026-06-10T12:29:00.520Z",
+      "snippet": "can you look and ensure everything is working properly",
+      "candidates": [
+        {
+          "name": "sql-migration-validator",
+          "rank": -9.45,
+          "use_count": 2
+        },
+        {
+          "name": "sql-migration-validator",
+          "rank": -9.45,
+          "use_count": 2
+        },
+        {
+          "name": "evidence-collector",
+          "rank": -7.48,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3465,
+      "ts": "2026-06-10T06:00:10.898Z",
+      "snippet": "You are the Librarian running a vault maintenance audit. Your job is to find real gaps and generate a prioritized task list. ## What to aud",
+      "candidates": [
+        {
+          "name": "vault-librarian",
+          "rank": -13.62,
+          "use_count": 30
+        },
+        {
+          "name": "customer-expert",
+          "rank": -7.83,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.52,
+          "use_count": 15
+        }
+      ]
+    }
+  ]
+}

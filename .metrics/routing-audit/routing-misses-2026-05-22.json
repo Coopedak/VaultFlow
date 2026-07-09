@@ -1,0 +1,1099 @@
+{
+  "date": "2026-05-22",
+  "prompts_scanned": 135,
+  "strong_matches": 101,
+  "misses_count": 100,
+  "miss_rate": 0.99,
+  "misses": [
+    {
+      "prompt_id": 2964,
+      "ts": "2026-05-22T06:00:09.409Z",
+      "snippet": "You are the Librarian running a vault maintenance audit. Your job is to find real gaps and generate a prioritized task list. ## What to aud",
+      "candidates": [
+        {
+          "name": "vault-librarian",
+          "rank": -13.62,
+          "use_count": 28
+        },
+        {
+          "name": "customer-expert",
+          "rank": -7.83,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.52,
+          "use_count": 11
+        }
+      ]
+    },
+    {
+      "prompt_id": 2960,
+      "ts": "2026-05-22T01:53:23.106Z",
+      "snippet": "monitor pr 210 look at comment as well because we will need to resolve this as well fix if we need to",
+      "candidates": [
+        {
+          "name": "reviewer-code",
+          "rank": -10.16,
+          "use_count": 49
+        },
+        {
+          "name": "pr-shepherd",
+          "rank": -7.14,
+          "use_count": 4
+        },
+        {
+          "name": "agent-code-review-swarm",
+          "rank": -5.66,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2959,
+      "ts": "2026-05-22T01:52:25.194Z",
+      "snippet": "yes how do coinstacks function",
+      "candidates": [
+        {
+          "name": "agent-coder",
+          "rank": -7.19,
+          "use_count": 0
+        },
+        {
+          "name": "quoting-expert",
+          "rank": -5.34,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2953,
+      "ts": "2026-05-22T01:32:34.562Z",
+      "snippet": "https://psmes.progressivesurface.com/qa/dashboard lot audit looking at coinstack 1 looking at the printe crates why are there 33 printed sho",
+      "candidates": [
+        {
+          "name": "materials-expert",
+          "rank": -6.65,
+          "use_count": 0
+        },
+        {
+          "name": "materials-expert",
+          "rank": -6.65,
+          "use_count": 0
+        },
+        {
+          "name": "debugger",
+          "rank": -5.49,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2950,
+      "ts": "2026-05-22T01:23:36.851Z",
+      "snippet": "do what you think is best",
+      "candidates": [
+        {
+          "name": "researcher",
+          "rank": -8.54,
+          "use_count": 16
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.53,
+          "use_count": 11
+        },
+        {
+          "name": "git-workflow-master",
+          "rank": -6.39,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2949,
+      "ts": "2026-05-22T01:23:36.530Z",
+      "snippet": "do what you think is best",
+      "candidates": [
+        {
+          "name": "researcher",
+          "rank": -8.54,
+          "use_count": 16
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.53,
+          "use_count": 11
+        },
+        {
+          "name": "git-workflow-master",
+          "rank": -6.39,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2941,
+      "ts": "2026-05-22T01:17:14.397Z",
+      "snippet": "i like idea 1 and 2 we should audit then reaudit plan and execute those we should also get metrics",
+      "candidates": [
+        {
+          "name": "leadtime-planner",
+          "rank": -9.39,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -7.57,
+          "use_count": 11
+        },
+        {
+          "name": "tdd-test-first",
+          "rank": -6.45,
+          "use_count": 20
+        }
+      ]
+    },
+    {
+      "prompt_id": 2940,
+      "ts": "2026-05-22T01:17:14.064Z",
+      "snippet": "i like idea 1 and 2 we should audit then reaudit plan and execute those we should also get metrics",
+      "candidates": [
+        {
+          "name": "leadtime-planner",
+          "rank": -9.39,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -7.57,
+          "use_count": 11
+        },
+        {
+          "name": "tdd-test-first",
+          "rank": -6.45,
+          "use_count": 20
+        }
+      ]
+    },
+    {
+      "prompt_id": 2939,
+      "ts": "2026-05-22T01:16:22.474Z",
+      "snippet": "well i dont think my mcp is working right",
+      "candidates": [
+        {
+          "name": "mcp-builder",
+          "rank": -7.9,
+          "use_count": 0
+        },
+        {
+          "name": "reviewer-code",
+          "rank": -4.29,
+          "use_count": 49
+        },
+        {
+          "name": "agent-ado",
+          "rank": -4.08,
+          "use_count": 2
+        }
+      ]
+    },
+    {
+      "prompt_id": 2938,
+      "ts": "2026-05-22T01:16:22.095Z",
+      "snippet": "well i dont think my mcp is working right",
+      "candidates": [
+        {
+          "name": "mcp-builder",
+          "rank": -7.9,
+          "use_count": 0
+        },
+        {
+          "name": "reviewer-code",
+          "rank": -4.29,
+          "use_count": 49
+        },
+        {
+          "name": "agent-ado",
+          "rank": -4.08,
+          "use_count": 2
+        }
+      ]
+    },
+    {
+      "prompt_id": 2934,
+      "ts": "2026-05-22T01:10:24.369Z",
+      "snippet": "all three in paraell if possible",
+      "candidates": [
+        {
+          "name": "vb6-parity-auditor",
+          "rank": -6.35,
+          "use_count": 0
+        },
+        {
+          "name": "minimal-change-engineer",
+          "rank": -5.76,
+          "use_count": 0
+        },
+        {
+          "name": "Dev-Team Pipeline (Claude Code, PSI-specific)",
+          "rank": -5.24,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2933,
+      "ts": "2026-05-22T01:10:24.365Z",
+      "snippet": "all three in paraell if possible",
+      "candidates": [
+        {
+          "name": "vb6-parity-auditor",
+          "rank": -6.35,
+          "use_count": 0
+        },
+        {
+          "name": "minimal-change-engineer",
+          "rank": -5.76,
+          "use_count": 0
+        },
+        {
+          "name": "Dev-Team Pipeline (Claude Code, PSI-specific)",
+          "rank": -5.24,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2932,
+      "ts": "2026-05-22T01:08:22.663Z",
+      "snippet": "now with this do yous forsee front end erros",
+      "candidates": [
+        {
+          "name": "project-manager",
+          "rank": -9.28,
+          "use_count": 12
+        },
+        {
+          "name": "developer-fullstack",
+          "rank": -8.97,
+          "use_count": 4
+        },
+        {
+          "name": "developer-frontend",
+          "rank": -7.51,
+          "use_count": 2
+        }
+      ]
+    },
+    {
+      "prompt_id": 2931,
+      "ts": "2026-05-22T01:08:05.885Z",
+      "snippet": "now with this do you forsure front end erros",
+      "candidates": [
+        {
+          "name": "project-manager",
+          "rank": -12.12,
+          "use_count": 12
+        },
+        {
+          "name": "developer-fullstack",
+          "rank": -8.97,
+          "use_count": 4
+        },
+        {
+          "name": "developer-frontend",
+          "rank": -7.51,
+          "use_count": 2
+        }
+      ]
+    },
+    {
+      "prompt_id": 2928,
+      "ts": "2026-05-22T01:05:38.061Z",
+      "snippet": "so should we do fts every day as we add data as part of our loops",
+      "candidates": [
+        {
+          "name": "test-writer",
+          "rank": -7.52,
+          "use_count": 0
+        },
+        {
+          "name": "agent-planner",
+          "rank": -5.45,
+          "use_count": 0
+        },
+        {
+          "name": "quoting-expert",
+          "rank": -5.34,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2927,
+      "ts": "2026-05-22T01:05:37.684Z",
+      "snippet": "so should we do fts every day as we add data as part of our loops",
+      "candidates": [
+        {
+          "name": "test-writer",
+          "rank": -7.52,
+          "use_count": 0
+        },
+        {
+          "name": "agent-planner",
+          "rank": -5.45,
+          "use_count": 0
+        },
+        {
+          "name": "quoting-expert",
+          "rank": -5.34,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2926,
+      "ts": "2026-05-22T01:04:32.884Z",
+      "snippet": "alright lets correct and resolve",
+      "candidates": [
+        {
+          "name": "agent-reviewer",
+          "rank": -5.8,
+          "use_count": 0
+        },
+        {
+          "name": "quality-expert",
+          "rank": -4.09,
+          "use_count": 16
+        },
+        {
+          "name": "quality-expert",
+          "rank": -4.09,
+          "use_count": 3
+        }
+      ]
+    },
+    {
+      "prompt_id": 2925,
+      "ts": "2026-05-22T01:00:27.265Z",
+      "snippet": "lets review the 209 pr comments",
+      "candidates": [
+        {
+          "name": "pr-shepherd",
+          "rank": -12.07,
+          "use_count": 4
+        },
+        {
+          "name": "agent-code-review-swarm",
+          "rank": -9.96,
+          "use_count": 0
+        },
+        {
+          "name": "reviewer-code",
+          "rank": -9.18,
+          "use_count": 49
+        }
+      ]
+    },
+    {
+      "prompt_id": 2922,
+      "ts": "2026-05-21T23:41:11.014Z",
+      "snippet": "yes can we also add a metric that see agent calls?",
+      "candidates": [
+        {
+          "name": "workflow-architect",
+          "rank": -5.38,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.52,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.44,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2921,
+      "ts": "2026-05-21T23:41:11.002Z",
+      "snippet": "yes can we also add a metric that see agent calls?",
+      "candidates": [
+        {
+          "name": "workflow-architect",
+          "rank": -5.38,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.52,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.44,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2920,
+      "ts": "2026-05-21T23:40:04.914Z",
+      "snippet": "well i feel like we dont use the agents to the fullest currently",
+      "candidates": [
+        {
+          "name": "database-optimizer",
+          "rank": -5.74,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.52,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.44,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2919,
+      "ts": "2026-05-21T23:40:04.902Z",
+      "snippet": "well i feel like we dont use the agents to the fullest currently",
+      "candidates": [
+        {
+          "name": "database-optimizer",
+          "rank": -5.74,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.52,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.44,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2918,
+      "ts": "2026-05-21T23:39:02.166Z",
+      "snippet": "now how do make our session envoke our agents we have created?",
+      "candidates": [
+        {
+          "name": "excalidraw-diagram",
+          "rank": -6.47,
+          "use_count": 1
+        },
+        {
+          "name": "session-reviewer",
+          "rank": -5.92,
+          "use_count": 2
+        },
+        {
+          "name": "session-reviewer",
+          "rank": -5.55,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2917,
+      "ts": "2026-05-21T23:39:01.816Z",
+      "snippet": "now how do make our session envoke our agents we have created?",
+      "candidates": [
+        {
+          "name": "excalidraw-diagram",
+          "rank": -6.47,
+          "use_count": 1
+        },
+        {
+          "name": "session-reviewer",
+          "rank": -5.92,
+          "use_count": 2
+        },
+        {
+          "name": "session-reviewer",
+          "rank": -5.55,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2916,
+      "ts": "2026-05-21T23:38:37.651Z",
+      "snippet": "alright lets push this as a new r",
+      "candidates": [
+        {
+          "name": "code-reviewer",
+          "rank": -5.46,
+          "use_count": 0
+        },
+        {
+          "name": "code-reviewer",
+          "rank": -5.46,
+          "use_count": 0
+        },
+        {
+          "name": "threat-detection-engineer",
+          "rank": -5.24,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2911,
+      "ts": "2026-05-21T23:31:53.978Z",
+      "snippet": "alright now know that priot to implementation process was defined and this is the audit do one last check to make sure the checks are what w",
+      "candidates": [
+        {
+          "name": "leadtime-planner",
+          "rank": -8,
+          "use_count": 0
+        },
+        {
+          "name": "incident-response-commander",
+          "rank": -4.67,
+          "use_count": 0
+        },
+        {
+          "name": "automation-governance-architect",
+          "rank": -4.1,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2910,
+      "ts": "2026-05-21T23:31:21.106Z",
+      "snippet": "alright get them and the data and add to vault flow",
+      "candidates": [
+        {
+          "name": "agent-ado",
+          "rank": -8.21,
+          "use_count": 2
+        },
+        {
+          "name": "debugger",
+          "rank": -6.75,
+          "use_count": 0
+        },
+        {
+          "name": "sales-architect",
+          "rank": -5.1,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2909,
+      "ts": "2026-05-21T23:31:21.082Z",
+      "snippet": "alright get them and the data and add to vault flow",
+      "candidates": [
+        {
+          "name": "agent-ado",
+          "rank": -8.21,
+          "use_count": 2
+        },
+        {
+          "name": "debugger",
+          "rank": -6.75,
+          "use_count": 0
+        },
+        {
+          "name": "sales-architect",
+          "rank": -5.1,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2908,
+      "ts": "2026-05-21T22:59:08.108Z",
+      "snippet": "now the thermal spray stuff correct?",
+      "candidates": [
+        {
+          "name": "thermal-expert",
+          "rank": -9.36,
+          "use_count": 0
+        },
+        {
+          "name": "thermal-expert",
+          "rank": -9.36,
+          "use_count": 0
+        },
+        {
+          "name": "quality-expert",
+          "rank": -7.49,
+          "use_count": 16
+        }
+      ]
+    },
+    {
+      "prompt_id": 2904,
+      "ts": "2026-05-21T22:57:42.287Z",
+      "snippet": "do a deep audit to see what we can harvest also after the 3 agents ran are they now schedule to run nightly?",
+      "candidates": [
+        {
+          "name": "quoting-expert",
+          "rank": -12.06,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.79,
+          "use_count": 11
+        },
+        {
+          "name": "mes-architect",
+          "rank": -5.66,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2905,
+      "ts": "2026-05-21T22:57:41.965Z",
+      "snippet": "do a deep audit to see what we can harvest also after the 3 agents ran are they now schedule to run nightly?",
+      "candidates": [
+        {
+          "name": "quoting-expert",
+          "rank": -12.06,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.79,
+          "use_count": 11
+        },
+        {
+          "name": "mes-architect",
+          "rank": -5.66,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2903,
+      "ts": "2026-05-21T22:49:18.018Z",
+      "snippet": "now audit and make sure everything works all the buttons work all the modals the math and balacning all check out coinstack or single, box o",
+      "candidates": [
+        {
+          "name": "pr-shepherd",
+          "rank": -9.33,
+          "use_count": 4
+        },
+        {
+          "name": "evidence-collector",
+          "rank": -7.48,
+          "use_count": 0
+        },
+        {
+          "name": "excalidraw-diagram",
+          "rank": -6.47,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 2900,
+      "ts": "2026-05-21T22:39:31.103Z",
+      "snippet": "are the nightly loops running and training and updating the data to make my sessions smarter?",
+      "candidates": [
+        {
+          "name": "loop-expert",
+          "rank": -7.89,
+          "use_count": 0
+        },
+        {
+          "name": "materials-expert",
+          "rank": -4.54,
+          "use_count": 0
+        },
+        {
+          "name": "materials-expert",
+          "rank": -4.54,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2899,
+      "ts": "2026-05-21T22:39:30.717Z",
+      "snippet": "are the nightly loops running and training and updating the data to make my sessions smarter?",
+      "candidates": [
+        {
+          "name": "loop-expert",
+          "rank": -7.89,
+          "use_count": 0
+        },
+        {
+          "name": "materials-expert",
+          "rank": -4.54,
+          "use_count": 0
+        },
+        {
+          "name": "materials-expert",
+          "rank": -4.54,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2898,
+      "ts": "2026-05-21T22:38:43.463Z",
+      "snippet": "is vault flow working as intended? seems like im having to tell my ai terminal rules that this should know and be a reference for?",
+      "candidates": [
+        {
+          "name": "threat-detection-engineer",
+          "rank": -5.24,
+          "use_count": 0
+        },
+        {
+          "name": "vault-librarian",
+          "rank": -4.44,
+          "use_count": 28
+        },
+        {
+          "name": "mes-architect",
+          "rank": -3.87,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2897,
+      "ts": "2026-05-21T22:38:43.125Z",
+      "snippet": "is vault flow working as intended? seems like im having to tell my ai terminal rules that this should know and be a reference for?",
+      "candidates": [
+        {
+          "name": "threat-detection-engineer",
+          "rank": -5.24,
+          "use_count": 0
+        },
+        {
+          "name": "vault-librarian",
+          "rank": -4.44,
+          "use_count": 28
+        },
+        {
+          "name": "mes-architect",
+          "rank": -3.87,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2895,
+      "ts": "2026-05-21T22:25:29.846Z",
+      "snippet": "alright so the audit knowing coinstacks are ran as the siblings grouped together what does your new audit say looking at everything we did t",
+      "candidates": [
+        {
+          "name": "security-auditor",
+          "rank": -5.14,
+          "use_count": 0
+        },
+        {
+          "name": "model-qa",
+          "rank": -4.1,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -3.39,
+          "use_count": 11
+        }
+      ]
+    },
+    {
+      "prompt_id": 2894,
+      "ts": "2026-05-21T22:20:25.206Z",
+      "snippet": "coinstacks should be handled as the coinstack grouped with all siblings together a single skid/order would process as its own.",
+      "candidates": [
+        {
+          "name": "agent-planner",
+          "rank": -5.45,
+          "use_count": 0
+        },
+        {
+          "name": "threat-detection-engineer",
+          "rank": -5.24,
+          "use_count": 0
+        },
+        {
+          "name": "order-flow-expert",
+          "rank": -4.38,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 2893,
+      "ts": "2026-05-21T22:17:47.623Z",
+      "snippet": "so myquestion is why do you keep insisiting coinstack siblings a coinstack is a coinstack you need to this burn into your memory im sick of ",
+      "candidates": [
+        {
+          "name": "quoting-expert",
+          "rank": -5.34,
+          "use_count": 0
+        },
+        {
+          "name": "session-reviewer",
+          "rank": -5.09,
+          "use_count": 0
+        },
+        {
+          "name": "psi-wiki",
+          "rank": -3.72,
+          "use_count": 18
+        }
+      ]
+    },
+    {
+      "prompt_id": 2890,
+      "ts": "2026-05-21T22:08:30.385Z",
+      "snippet": "in the skid scan module assume the logic and everything works audit and find bugs. i want to makw sure the scans work the buttons work the m",
+      "candidates": [
+        {
+          "name": "evidence-collector",
+          "rank": -7.48,
+          "use_count": 0
+        },
+        {
+          "name": "sales-architect",
+          "rank": -4.93,
+          "use_count": 0
+        },
+        {
+          "name": "dev-team",
+          "rank": -4.88,
+          "use_count": 13
+        }
+      ]
+    },
+    {
+      "prompt_id": 2889,
+      "ts": "2026-05-21T20:06:41.306Z",
+      "snippet": "can we clear out all the skid scan data in sql to start clean as if the lots just got to skid scan this would mean clearing out the shipping",
+      "candidates": [
+        {
+          "name": "workflow-architect",
+          "rank": -8.13,
+          "use_count": 0
+        },
+        {
+          "name": "documenter",
+          "rank": -5.01,
+          "use_count": 9
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.52,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2884,
+      "ts": "2026-05-21T19:40:21.403Z",
+      "snippet": "pr185 i see a comment can you look and disuss it with me",
+      "candidates": [
+        {
+          "name": "leadtime-planner",
+          "rank": -6.63,
+          "use_count": 0
+        },
+        {
+          "name": "sql-migration-validator",
+          "rank": -6.07,
+          "use_count": 0
+        },
+        {
+          "name": "sql-migration-validator",
+          "rank": -6.07,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2883,
+      "ts": "2026-05-21T19:38:45.896Z",
+      "snippet": "did the 183 deploy complete",
+      "candidates": [
+        {
+          "name": "deploy-prep",
+          "rank": -7.2,
+          "use_count": 0
+        },
+        {
+          "name": "MIGRATION_SUMMARY",
+          "rank": -6.88,
+          "use_count": 0
+        },
+        {
+          "name": "workflow-architect",
+          "rank": -5.3,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2881,
+      "ts": "2026-05-21T19:37:35.031Z",
+      "snippet": "sorry it would eb the good-60 value under rga for the shipment travler",
+      "candidates": [
+        {
+          "name": "automation-governance-architect",
+          "rank": -5.7,
+          "use_count": 0
+        },
+        {
+          "name": "configure-devteam",
+          "rank": -4.03,
+          "use_count": 5
+        },
+        {
+          "name": "quality-expert",
+          "rank": -3.81,
+          "use_count": 16
+        }
+      ]
+    },
+    {
+      "prompt_id": 2880,
+      "ts": "2026-05-21T19:36:03.425Z",
+      "snippet": "so rga should only be non conforming, prg scrap label types",
+      "candidates": [
+        {
+          "name": "agent-planner",
+          "rank": -5.45,
+          "use_count": 0
+        },
+        {
+          "name": "session-reviewer",
+          "rank": -5.06,
+          "use_count": 0
+        },
+        {
+          "name": "codebase-onboarding-engineer",
+          "rank": -4.63,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2877,
+      "ts": "2026-05-21T19:30:59.434Z",
+      "snippet": "when verify button is clicked it should auto math correct?",
+      "candidates": [
+        {
+          "name": "api-contract-auditor",
+          "rank": -6.79,
+          "use_count": 1
+        },
+        {
+          "name": "api-contract-auditor",
+          "rank": -6.79,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -5.77,
+          "use_count": 11
+        }
+      ]
+    },
+    {
+      "prompt_id": 2873,
+      "ts": "2026-05-21T19:27:30.900Z",
+      "snippet": "pr184 monitor the merge/deploy",
+      "candidates": [
+        {
+          "name": "deploy-prep",
+          "rank": -7.2,
+          "use_count": 0
+        },
+        {
+          "name": "configure-devteam",
+          "rank": -5.31,
+          "use_count": 5
+        }
+      ]
+    },
+    {
+      "prompt_id": 2871,
+      "ts": "2026-05-21T19:23:33.871Z",
+      "snippet": "https://psmes.progressivesurface.com/qa/dashboard lot audit for skid 13 when i complete nd it makes the shipment traveler the rga has good l",
+      "candidates": [
+        {
+          "name": "debugger",
+          "rank": -6.95,
+          "use_count": 0
+        },
+        {
+          "name": "MIGRATION_SUMMARY",
+          "rank": -6.88,
+          "use_count": 0
+        },
+        {
+          "name": "materials-expert",
+          "rank": -6.65,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 2868,
+      "ts": "2026-05-21T19:01:49.964Z",
+      "snippet": "so pr 183 what is this doing explain it to me like im a 5th grader",
+      "candidates": [
+        {
+          "name": "pr-shepherd",
+          "rank": -7.14,
+          "use_count": 4
+        },
+        {
+          "name": "agent-code-review-swarm",
+          "rank": -5.66,
+          "use_count": 0
+        },
+        {
+          "name": "reviewer-code",
+          "rank": -5.34,
+          "use_count": 49
+        }
+      ]
+    },
+    {
+      "prompt_id": 2865,
+      "ts": "2026-05-21T18:53:08.245Z",
+      "snippet": "Invalid column name 'ArgoCrateId'. waht pr fixed this",
+      "candidates": [
+        {
+          "name": "pr-shepherd",
+          "rank": -7.14,
+          "use_count": 4
+        },
+        {
+          "name": "grid-specialist",
+          "rank": -6.79,
+          "use_count": 0
+        },
+        {
+          "name": "tool-engineer",
+          "rank": -6.66,
+          "use_count": 0
+        }
+      ]
+    }
+  ]
+}

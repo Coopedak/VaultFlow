@@ -37,14 +37,21 @@ function loadConfig() {
 function getSessionsDir() {
   if (_sessionsDir) return _sessionsDir;
 
-  const cfg         = loadConfig();
-  // sessions_dir is under storage (relative to metrics_root), not under paths
-  const metricsRoot = (cfg && cfg.paths   && cfg.paths.metrics_root)      || '';
-  const subDir      = (cfg && cfg.storage && cfg.storage.sessions_dir)    || 'sessions';
+  // Explicit override beats config — lets tests run against a temp dir
+  // instead of the live session store.
+  const envDir = process.env.VAULTFLOW_SESSIONS_DIR;
+  if (envDir) {
+    _sessionsDir = envDir;
+  } else {
+    const cfg         = loadConfig();
+    // sessions_dir is under storage (relative to metrics_root), not under paths
+    const metricsRoot = (cfg && cfg.paths   && cfg.paths.metrics_root)      || '';
+    const subDir      = (cfg && cfg.storage && cfg.storage.sessions_dir)    || 'sessions';
 
-  _sessionsDir = metricsRoot
-    ? path.join(metricsRoot, subDir)
-    : path.join(os.homedir(), 'vault', 'methodology', '.metrics', 'sessions');
+    _sessionsDir = metricsRoot
+      ? path.join(metricsRoot, subDir)
+      : path.join(os.homedir(), 'vault', 'methodology', '.metrics', 'sessions');
+  }
 
   if (!fs.existsSync(_sessionsDir)) {
     fs.mkdirSync(_sessionsDir, { recursive: true });
@@ -53,8 +60,33 @@ function getSessionsDir() {
 }
 
 // ── internal helpers ──────────────────────────────────────────────────────
+// One continuity file PER PROJECT. A single global current.json meant a
+// recent session from any other project could be restored into a session
+// launched elsewhere — e.g. a StockPicker session bleeding into a vaultflow
+// conversation, mislabeling its git context and all downstream telemetry.
+function projectSlug() {
+  const cwd  = process.cwd();
+  const name = deriveProject(cwd) || path.basename(cwd) || 'default';
+  return String(name).replace(/[^A-Za-z0-9._-]/g, '_').slice(0, 60);
+}
+
 function currentJsonPath() {
+  return path.join(getSessionsDir(), `current-${projectSlug()}.json`);
+}
+
+function legacyJsonPath() {
   return path.join(getSessionsDir(), 'current.json');
+}
+
+function sameCwd(sessionCwd) {
+  if (!sessionCwd) return false;
+  const a = path.resolve(String(sessionCwd));
+  const b = path.resolve(process.cwd());
+  // Windows paths are case-insensitive; two hooks in the same repo can see
+  // different casing (C:\GIT vs c:\git) depending on how claude was launched.
+  return os.platform() === 'win32'
+    ? a.toLowerCase() === b.toLowerCase()
+    : a === b;
 }
 
 function archivePath(id) {
@@ -176,11 +208,24 @@ function dbUpsert(session) {
 function start() {
   if (_session) return _session;
 
+  // Drop the pre-per-project global store if it still exists. Nothing reads
+  // it anymore, and leaving it around invites exactly the cross-project
+  // restore bug the per-project files were introduced to kill.
+  try {
+    const legacy = legacyJsonPath();
+    if (fs.existsSync(legacy)) fs.unlinkSync(legacy);
+  } catch (_) { /* best-effort cleanup */ }
+
   const existing = readCurrentJson();
   // Use restoredAt (last activity) when available so long sessions (> 10 min)
   // don't create orphan sessions on every hook invocation.
   const checkTime = (existing && (existing.restoredAt || existing.startedAt)) || null;
-  if (existing && checkTime && isRecent(checkTime)) {
+  // Restore only a session that (a) hasn't ended — end() writes the closed
+  // state back precisely so this check is possible, (b) belongs to this
+  // working directory, and (c) was active recently. Without (a) and (b) a
+  // closed session from another repo gets resurrected and every event in the
+  // new conversation is attributed to the wrong project.
+  if (existing && !existing.endedAt && sameCwd(existing.cwd) && checkTime && isRecent(checkTime)) {
     existing.restoredAt = new Date().toISOString();
     _session = existing;
     writeCurrentJson(_session);

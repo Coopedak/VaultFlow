@@ -174,6 +174,38 @@ function readStdin() {
 
 async function dispatch(event) {
   switch (event) {
+    case 'pre-skill': {
+      // PreToolUse:Skill — Claude Code is about to dispatch a Skill. Record
+      // the invocation in tool_calls and credit the agent's use_count.
+      // Without this, vault_agents.use_count only reflects auto-injection
+      // hits and misses the most important signal: what Claude actually ran.
+      const raw = await readStdin();
+      let input = {};
+      try { input = JSON.parse(raw); } catch (_) {}
+      const skillName = sanitizeString(
+        (input.tool_input && (input.tool_input.skill || input.tool_input.skill_name || input.tool_input.name)) || '',
+        200
+      );
+      const args = sanitizeString(
+        (input.tool_input && (input.tool_input.args || input.tool_input.arguments || input.tool_input.prompt)) || '',
+        1000
+      );
+      try {
+        const db      = require('./db.cjs');
+        const session = require('./session.cjs');
+        db.initialize(null, null);
+        const sess = session.get();
+        if (sess) {
+          db.recordToolCall(sess.id, 'Skill', JSON.stringify({ skill: skillName, args }));
+          if (skillName) db.incrementAgentUse(skillName);
+        }
+        process.stderr.write(`[vaultflow] pre-skill: recorded "${skillName}"\n`);
+      } catch (err) {
+        process.stderr.write(`[vaultflow] pre-skill: ${err.message}\n`);
+      }
+      break;
+    }
+
     case 'pre-bash': {
       const raw = await readStdin();
       let input = {};
@@ -249,6 +281,13 @@ async function dispatch(event) {
       // Injects skill instructions into the system context via additionalContext.
       // Only fires if confidence >= threshold and the skill wasn't recently injected.
       let additionalContext = null;
+      let injectionDecision = {
+        chosenSkill: routing.skill || null,
+        confidence: Number(routing.confidence) || 0,
+        injected: false,
+        tier: null,
+        reason: 'no-skill',
+      };
       try {
         const { buildInjection } = await import('./skill-loader.mjs');
         const session            = require('./session.cjs');
@@ -257,12 +296,38 @@ async function dispatch(event) {
         if (inj) {
           additionalContext = inj.text;  // just the skill content, NOT the full prompt
           session.setInjectedSkill(routing.skill);
+          injectionDecision.injected = true;
+          injectionDecision.tier     = inj.tier;
+          injectionDecision.reason   = 'threshold-met';
           process.stderr.write(
             `[vaultflow] route: injecting ${routing.skill} (${inj.tier}, confidence ${routing.confidence})\n`
           );
+        } else if (routing.skill && skill === routing.skill) {
+          injectionDecision.reason = 'recently-injected';
+        } else if (routing.skill) {
+          injectionDecision.reason = 'below-threshold';
         }
       } catch (err) {
+        injectionDecision.reason = 'error:' + err.message.slice(0, 80);
         process.stderr.write(`[vaultflow] route: skill-loader error — ${err.message}\n`);
+      }
+
+      // ── log the decision for nightly routing-coverage audit ────────────
+      try {
+        const db = require('./db.cjs');
+        // sessionId was set above when the prompt was recorded; fall through if null
+        db.recordSkillInjectionDecision({
+          sessionId,
+          promptId: null, // recordPrompt doesn't return id today; nightly joins by timestamp
+          chosenSkill: injectionDecision.chosenSkill,
+          confidence:  injectionDecision.confidence,
+          injected:    injectionDecision.injected,
+          tier:        injectionDecision.tier,
+          reason:      injectionDecision.reason,
+          candidates:  null, // future: log the top-N BM25 candidates here
+        });
+      } catch (err) {
+        process.stderr.write(`[vaultflow] route: decision-log error — ${err.message}\n`);
       }
 
       process.stderr.write(
@@ -528,7 +593,8 @@ async function dispatch(event) {
         const session = require('./session.cjs');
         db.initialize(null, null);
         const sess = session.get();
-        db.recordVerdict(sess ? sess.id : null, agentType, verdict, reason, flaggedAt);
+        const decisionId = db.getLatestDecisionId(sess ? sess.id : null);
+        db.recordVerdict(sess ? sess.id : null, agentType, verdict, reason, flaggedAt, decisionId);
         process.stderr.write(`[vaultflow] clear-review: verdict recorded — ${verdict} (${agentType})\n`);
       } catch (err) {
         process.stderr.write(`[vaultflow] clear-review: verdict record error — ${err.message}\n`);
@@ -779,6 +845,23 @@ async function dispatch(event) {
         const _db = require('./db.cjs');
         _db.initialize(null, null);
         _db.incrementAgentUse(agentType);
+
+        // Gap 3: record the Task dispatch in tool_calls so subagent activity
+        // is visible to nightly analytics. The subagent's *internal* tool
+        // calls still aren't captured (parent's session doesn't see them),
+        // but the dispatch itself + description + prompt is now logged.
+        const _session = require('./session.cjs');
+        const sess = _session.get();
+        if (sess) {
+          const desc   = sanitizeString((payload.tool_input && payload.tool_input.description) || '', 300);
+          const prompt = sanitizeString((payload.tool_input && payload.tool_input.prompt) || '', 2000);
+          _db.recordToolCall(sess.id, 'Task', JSON.stringify({
+            subagent_type: agentType,
+            description: desc,
+            prompt_excerpt: prompt.slice(0, 500),
+            dispatched_at: new Date().toISOString(),
+          }));
+        }
       } catch (_) {}
 
       try {

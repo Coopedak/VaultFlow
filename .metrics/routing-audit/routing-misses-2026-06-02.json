@@ -1,0 +1,229 @@
+{
+  "date": "2026-06-02",
+  "prompts_scanned": 18,
+  "strong_matches": 11,
+  "misses_count": 10,
+  "miss_rate": 0.909,
+  "misses": [
+    {
+      "prompt_id": 3394,
+      "ts": "2026-06-02T06:00:08.370Z",
+      "snippet": "You are the Librarian running a vault maintenance audit. Your job is to find real gaps and generate a prioritized task list. ## What to aud",
+      "candidates": [
+        {
+          "name": "vault-librarian",
+          "rank": -13.62,
+          "use_count": 30
+        },
+        {
+          "name": "customer-expert",
+          "rank": -7.83,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.52,
+          "use_count": 12
+        }
+      ]
+    },
+    {
+      "prompt_id": 3393,
+      "ts": "2026-06-02T02:31:58.567Z",
+      "snippet": "now shipping does this work as intended? is the paperwork all set up correctly?",
+      "candidates": [
+        {
+          "name": "agent-ado",
+          "rank": -6.71,
+          "use_count": 5
+        },
+        {
+          "name": "developer-database",
+          "rank": -6,
+          "use_count": 1
+        },
+        {
+          "name": "workflow-expert",
+          "rank": -5.94,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3390,
+      "ts": "2026-06-01T17:32:47.133Z",
+      "snippet": "can i get a desktop link to see",
+      "candidates": [
+        {
+          "name": "agent-ado",
+          "rank": -6.34,
+          "use_count": 5
+        },
+        {
+          "name": "workflow-architect",
+          "rank": -5.38,
+          "use_count": 0
+        },
+        {
+          "name": "ai-data-remediation-engineer",
+          "rank": -3.76,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3384,
+      "ts": "2026-06-01T17:09:48.614Z",
+      "snippet": "check it and leet me know",
+      "candidates": [
+        {
+          "name": "leadtime-planner",
+          "rank": -5.18,
+          "use_count": 0
+        },
+        {
+          "name": "agent-reviewer",
+          "rank": -3.89,
+          "use_count": 0
+        },
+        {
+          "name": "debugger",
+          "rank": -3.86,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3373,
+      "ts": "2026-06-01T14:24:49.665Z",
+      "snippet": "can we look at this and see if it is running also review to see what you think we can do better to get stronger picks",
+      "candidates": [
+        {
+          "name": "leadtime-planner",
+          "rank": -7.91,
+          "use_count": 0
+        },
+        {
+          "name": "workflow-architect",
+          "rank": -5.38,
+          "use_count": 0
+        },
+        {
+          "name": "Dev-Team Pipeline (Claude Code, PSI-specific)",
+          "rank": -5.24,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3368,
+      "ts": "2026-06-01T13:04:57.113Z",
+      "snippet": "can you look at pr 250",
+      "candidates": [
+        {
+          "name": "reviewer-code",
+          "rank": -10.16,
+          "use_count": 63
+        },
+        {
+          "name": "pr-shepherd",
+          "rank": -7.14,
+          "use_count": 8
+        },
+        {
+          "name": "leadtime-planner",
+          "rank": -6.63,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3367,
+      "ts": "2026-06-01T13:00:41.695Z",
+      "snippet": "so they go through thermal as there own orders then onces at argo they get combined",
+      "candidates": [
+        {
+          "name": "quality-expert",
+          "rank": -6.95,
+          "use_count": 45
+        },
+        {
+          "name": "quality-expert",
+          "rank": -6.95,
+          "use_count": 32
+        },
+        {
+          "name": "materials-expert",
+          "rank": -6.15,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3366,
+      "ts": "2026-06-01T12:28:02.103Z",
+      "snippet": "when are all 4 loaded this is a coinstack should coinstacks be all of them?",
+      "candidates": [
+        {
+          "name": "quoting-architect",
+          "rank": -6.91,
+          "use_count": 0
+        },
+        {
+          "name": "sales-architect",
+          "rank": -6.24,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -5.77,
+          "use_count": 12
+        }
+      ]
+    },
+    {
+      "prompt_id": 3365,
+      "ts": "2026-06-01T12:23:03.876Z",
+      "snippet": "skid 10 is also part of this coinstack",
+      "candidates": [
+        {
+          "name": "documenter",
+          "rank": -6.81,
+          "use_count": 10
+        },
+        {
+          "name": "security-reviewer",
+          "rank": -5.37,
+          "use_count": 1
+        },
+        {
+          "name": "quality-expert",
+          "rank": -4.46,
+          "use_count": 45
+        }
+      ]
+    },
+    {
+      "prompt_id": 3363,
+      "ts": "2026-06-01T06:00:12.014Z",
+      "snippet": "You are the Librarian running a vault maintenance audit. Your job is to find real gaps and generate a prioritized task list. ## What to aud",
+      "candidates": [
+        {
+          "name": "vault-librarian",
+          "rank": -13.62,
+          "use_count": 30
+        },
+        {
+          "name": "customer-expert",
+          "rank": -7.83,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.52,
+          "use_count": 12
+        }
+      ]
+    }
+  ]
+}

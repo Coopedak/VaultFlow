@@ -1,0 +1,230 @@
+{
+  "last_run_at": "2026-07-09T14:36:50.087Z",
+  "results": {
+    "stale": {
+      "closed": 0,
+      "examined": 0
+    },
+    "summaries": {
+      "backfilled": 0,
+      "examined": 0
+    },
+    "aggregates": {
+      "updated": 909
+    },
+    "promotion": {
+      "promoted": 0,
+      "eligible": 0
+    },
+    "scorePromote": {
+      "scanned": 994,
+      "promoted": 45
+    },
+    "snapshot": {
+      "metrics": 9
+    },
+    "feedback": {
+      "marked": 0,
+      "expired": 0
+    },
+    "learning": {
+      "batchesReviewed": 2,
+      "strategiesReviewed": 1,
+      "promotedPatterns": [],
+      "topStrategies": [
+        {
+          "project": "vaultflow",
+          "cli": "copilot",
+          "source_type": "tool_call",
+          "command_family": "shell",
+          "sample_count": 2,
+          "success_count": 1,
+          "success_rate": 0.5
+        }
+      ],
+      "topFailures": [
+        {
+          "project": "vaultflow",
+          "cli": "codex",
+          "query_text": "Reply with exactly: vf-refine-codex",
+          "failure_count": 1
+        }
+      ]
+    },
+    "noise": {
+      "deleted": 0
+    },
+    "stacks": {
+      "projects": 4,
+      "stacks": 6
+    },
+    "graph": {
+      "projects": 6,
+      "files": 125
+    },
+    "codeGraphPurge": {
+      "filesPurged": 9745,
+      "junkFiles": 99,
+      "missingFiles": 9646,
+      "vacuumed": true
+    },
+    "flows": {
+      "projects": 6,
+      "created": 35,
+      "updated": 0,
+      "pruned": 11,
+      "perProject": [
+        {
+          "project": "vaultflow",
+          "created": 0,
+          "updated": 0,
+          "pruned": 11
+        },
+        {
+          "project": "QuotingTemplate",
+          "created": 35,
+          "updated": 0,
+          "pruned": 0
+        },
+        {
+          "project": "Quoting Template Obsidian Vault",
+          "created": 0,
+          "updated": 0,
+          "pruned": 0
+        },
+        {
+          "project": "content",
+          "created": 0,
+          "updated": 0,
+          "pruned": 0
+        },
+        {
+          "project": "master-wiki-project.zip",
+          "created": 0,
+          "updated": 0,
+          "pruned": 0
+        },
+        {
+          "project": "master-wiki-project",
+          "created": 0,
+          "updated": 0,
+          "pruned": 0
+        }
+      ]
+    },
+    "staleMemory": {
+      "flagged": 7728,
+      "examined": 7738,
+      "cleared": 0
+    },
+    "staleTools": {
+      "flagged": 79,
+      "examined": 79,
+      "cleared": 0
+    },
+    "commits": {
+      "projects": 1,
+      "commits": 61,
+      "results": [
+        {
+          "project": "vaultflow",
+          "indexed": 61
+        }
+      ]
+    },
+    "claudeChats": {
+      "files": 0,
+      "conversations": 0,
+      "imported": 0,
+      "skipped": 0,
+      "changed": 0,
+      "prompts": 0,
+      "errors": 0
+    },
+    "embeddings": {
+      "indexed": 0,
+      "skipped": "all-up-to-date"
+    },
+    "symbolEmbeds": {
+      "processed": 10,
+      "failed": 0,
+      "batch": 500,
+      "stats": {
+        "embedded": 10,
+        "code_symbols": 445,
+        "distinct_symbols": 445,
+        "coverage_pct": 2.25
+      }
+    },
+    "symbolBackfill": {
+      "enqueued": 435,
+      "processed": 425,
+      "failed": 0
+    },
+    "embedHygiene": {
+      "memory_orphans": 0,
+      "prompt_orphans": 0,
+      "freelist_pages": 424
+    },
+    "librarian": {
+      "dict_imported": 0,
+      "tools_registered": 0,
+      "agents_registered": 15,
+      "dict_noise_purged": 0
+    },
+    "patterns": {
+      "total": 1759,
+      "promoteNow": 0,
+      "nullAgent": 1477,
+      "promoted": 809,
+      "promotedThisRun": 0
+    },
+    "agentUsage": {
+      "registered": 155,
+      "ever_used": 53,
+      "active_24h": 0,
+      "total_invocations": 1310,
+      "top": 25,
+      "never": 102
+    },
+    "routingAudit": {
+      "prompts_scanned": 45,
+      "strong_matches": 40,
+      "misses": 40,
+      "miss_rate": 1,
+      "method": "bm25"
+    },
+    "ftsMaint": {
+      "skipped": "not-scheduled-today"
+    },
+    "docDrift": {
+      "ok": false,
+      "drift_count": 3,
+      "sections": [
+        "endpoint-count",
+        "file-map-missing-in-doc"
+      ],
+      "summary": {
+        "endpoints": 57,
+        "skill_dirs": 134,
+        "agents": {
+          "enabled": 15,
+          "disabled": 119
+        },
+        "helpers_on_disk": 48
+      }
+    },
+    "parquet": {
+      "edits": {
+        "editsFlushed": 6,
+        "sessionsFlushed": 0
+      },
+      "telemetry": {
+        "toolCallsFlushed": 0,
+        "promptsFlushed": 0,
+        "retrievalFeedbackFlushed": 0
+      }
+    }
+  },
+  "host": "FALKLT-DCOOPER"
+}

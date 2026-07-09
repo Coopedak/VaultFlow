@@ -1,0 +1,23 @@
+{
+  "id": "f0f0cf98-2f18-40fc-8089-ce95dec4fb96",
+  "startedAt": "2026-05-29T19:07:14.664Z",
+  "endedAt": "2026-05-29T19:38:54.264Z",
+  "restoredAt": "2026-05-29T19:36:58.692Z",
+  "durationMs": 1899601,
+  "platform": "win32",
+  "cwd": "C:\\GIT\\AFTECScanner",
+  "context": "claude-code",
+  "metrics": {
+    "edits": 13,
+    "commands": 0,
+    "tasks": 0,
+    "errors": 0
+  },
+  "project": "AFTECScanner",
+  "model": null,
+  "modelProvider": null,
+  "cliVersion": null,
+  "lastInjectedSkill": null,
+  "lastInjectedAt": null,
+  "injectedSources": []
+}

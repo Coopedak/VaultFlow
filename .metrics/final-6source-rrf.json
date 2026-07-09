@@ -1,0 +1,602 @@
+{
+  "date": "2026-05-22T01:37:12.554Z",
+  "baseline": {
+    "queries": [
+      {
+        "q": "RRF reciprocal rank fusion",
+        "result": {
+          "ms": 46.47,
+          "counts": {
+            "memory": 2,
+            "symbols": 0,
+            "commits": 0,
+            "dictionary": 0,
+            "tools": 0
+          },
+          "top5": [
+            {
+              "source": "memory",
+              "ref": "Phase 3: Hybrid FTS5 + sqlite-vec with RRF [M — 2-3 days]  · 🟡 IN PROGRESS"
+            },
+            {
+              "source": "memory",
+              "ref": "Methodologies"
+            }
+          ],
+          "sources_in_top5": 1
+        }
+      },
+      {
+        "q": "FTS5 BM25",
+        "result": {
+          "ms": 31.45,
+          "counts": {
+            "memory": 5,
+            "symbols": 0,
+            "commits": 1,
+            "dictionary": 0,
+            "tools": 0
+          },
+          "top5": [
+            {
+              "source": "memory",
+              "ref": "Critical Architecture Rules"
+            },
+            {
+              "source": "memory",
+              "ref": "Phase 1: FTS5 over RawText [M — 1-2 days]  · ⛔ SUPERSEDED"
+            },
+            {
+              "source": "memory",
+              "ref": "2026-05-07 — wiki reconciliation against live brain state"
+            },
+            {
+              "source": "memory",
+              "ref": "Tech Stack"
+            },
+            {
+              "source": "memory",
+              "ref": "Phase 3: Hybrid FTS5 + sqlite-vec with RRF [M — 2-3 days]  · 🟡 IN PROGRESS"
+            }
+          ],
+          "sources_in_top5": 1
+        }
+      },
+      {
+        "q": "searchMemory",
+        "result": {
+          "ms": 15.9,
+          "counts": {
+            "memory": 0,
+            "symbols": 5,
+            "commits": 1,
+            "dictionary": 0,
+            "tools": 0
+          },
+          "top5": [
+            {
+              "source": "symbols",
+              "ref": "searchMemory"
+            },
+            {
+              "source": "symbols",
+              "ref": "searchMemory"
+            },
+            {
+              "source": "symbols",
+              "ref": "searchMemory"
+            },
+            {
+              "source": "symbols",
+              "ref": "searchMemory"
+            },
+            {
+              "source": "symbols",
+              "ref": "searchMemoryTool"
+            }
+          ],
+          "sources_in_top5": 1
+        }
+      },
+      {
+        "q": "hook-handler session start",
+        "result": {
+          "ms": 43.14,
+          "counts": {
+            "memory": 1,
+            "symbols": 0,
+            "commits": 0,
+            "dictionary": 0,
+            "tools": 0
+          },
+          "top5": [
+            {
+              "source": "memory",
+              "ref": "File Map"
+            }
+          ],
+          "sources_in_top5": 1
+        }
+      },
+      {
+        "q": "parquet flush duckdb",
+        "result": {
+          "ms": 53.99,
+          "counts": {
+            "memory": 3,
+            "symbols": 0,
+            "commits": 0,
+            "dictionary": 0,
+            "tools": 0
+          },
+          "top5": [
+            {
+              "source": "memory",
+              "ref": "vaultflow Integration"
+            },
+            {
+              "source": "memory",
+              "ref": "File Map"
+            },
+            {
+              "source": "memory",
+              "ref": "Reusable Tools (Flat Structure)"
+            }
+          ],
+          "sources_in_top5": 1
+        }
+      },
+      {
+        "q": "skill injection router",
+        "result": {
+          "ms": 50.24,
+          "counts": {
+            "memory": 2,
+            "symbols": 0,
+            "commits": 0,
+            "dictionary": 0,
+            "tools": 0
+          },
+          "top5": [
+            {
+              "source": "memory",
+              "ref": "File Map"
+            },
+            {
+              "source": "memory",
+              "ref": "Reusable Tools (Flat Structure)"
+            }
+          ],
+          "sources_in_top5": 1
+        }
+      },
+      {
+        "q": "stack detector tech stack",
+        "result": {
+          "ms": 44.96,
+          "counts": {
+            "memory": 1,
+            "symbols": 0,
+            "commits": 0,
+            "dictionary": 0,
+            "tools": 0
+          },
+          "top5": [
+            {
+              "source": "memory",
+              "ref": "File Map"
+            }
+          ],
+          "sources_in_top5": 1
+        }
+      },
+      {
+        "q": "unified search merge",
+        "result": {
+          "ms": 56.26,
+          "counts": {
+            "memory": 1,
+            "symbols": 0,
+            "commits": 0,
+            "dictionary": 0,
+            "tools": 0
+          },
+          "top5": [
+            {
+              "source": "memory",
+              "ref": "Reusable Tools (Flat Structure)"
+            }
+          ],
+          "sources_in_top5": 1
+        }
+      },
+      {
+        "q": "watcher chokidar file tracking",
+        "result": {
+          "ms": 35.46,
+          "counts": {
+            "memory": 2,
+            "symbols": 0,
+            "commits": 0,
+            "dictionary": 0,
+            "tools": 0
+          },
+          "top5": [
+            {
+              "source": "memory",
+              "ref": "File Map"
+            },
+            {
+              "source": "memory",
+              "ref": "Reusable Tools (Flat Structure)"
+            }
+          ],
+          "sources_in_top5": 1
+        }
+      },
+      {
+        "q": "embedding similarity prompt dedup",
+        "result": {
+          "ms": 32.58,
+          "counts": {
+            "memory": 0,
+            "symbols": 0,
+            "commits": 0,
+            "dictionary": 0,
+            "tools": 0
+          },
+          "top5": [],
+          "sources_in_top5": 0
+        }
+      }
+    ],
+    "avg_sources_in_top5": 0.9,
+    "avg_latency_ms": 41.05
+  },
+  "rrf_6source": {
+    "avg_sources_in_top5": 2.1,
+    "avg_latency_ms": 88.65,
+    "per_query": [
+      {
+        "q": "RRF reciprocal rank fusion",
+        "ms": 318.05,
+        "total": 6,
+        "sources_in_top5": 2,
+        "top5": [
+          {
+            "_source": "memory",
+            "_docId": "memory:135884",
+            "_rrfScore": 0.01639344262295082
+          },
+          {
+            "_source": "symbol-semantic",
+            "_docId": "symbol-sem:C:\\GIT\\vaultflow\\.claude\\helpers\\mcp-server.cjs:getDb",
+            "_rrfScore": 0.01639344262295082
+          },
+          {
+            "_source": "memory",
+            "_docId": "memory:135746",
+            "_rrfScore": 0.016129032258064516
+          },
+          {
+            "_source": "symbol-semantic",
+            "_docId": "symbol-sem:C:\\GIT\\vaultflow\\tmp_postchange.mjs:mergeRRF",
+            "_rrfScore": 0.016129032258064516
+          },
+          {
+            "_source": "symbol-semantic",
+            "_docId": "symbol-sem:C:\\GIT\\vaultflow\\tmp_postchange.mjs:rrfSearch",
+            "_rrfScore": 0.015873015873015872
+          }
+        ]
+      },
+      {
+        "q": "FTS5 BM25",
+        "ms": 56.96,
+        "total": 11,
+        "sources_in_top5": 3,
+        "top5": [
+          {
+            "_source": "memory",
+            "_docId": "memory:126794",
+            "_rrfScore": 0.01639344262295082
+          },
+          {
+            "_source": "commit",
+            "_docId": "commit:0fb2b76ba1351c25f446acd52c3f0200743ee9a3",
+            "_rrfScore": 0.01639344262295082
+          },
+          {
+            "_source": "symbol-semantic",
+            "_docId": "symbol-sem:C:\\GIT\\vaultflow\\.claude\\helpers\\db.cjs:sha256",
+            "_rrfScore": 0.01639344262295082
+          },
+          {
+            "_source": "memory",
+            "_docId": "memory:135882",
+            "_rrfScore": 0.016129032258064516
+          },
+          {
+            "_source": "symbol-semantic",
+            "_docId": "symbol-sem:C:\\GIT\\vaultflow\\.claude\\helpers\\db.cjs:popEmbedQueue",
+            "_rrfScore": 0.016129032258064516
+          }
+        ]
+      },
+      {
+        "q": "searchMemory",
+        "ms": 39.39,
+        "total": 9,
+        "sources_in_top5": 3,
+        "top5": [
+          {
+            "_source": "symbol",
+            "_docId": "symbol:C:/GIT/vaultflow/.claude/helpers/db.cjs:searchMemory",
+            "_rrfScore": 0.03252247488101534
+          },
+          {
+            "_source": "symbol",
+            "_docId": "symbol:C:\\GIT\\vaultflow\\.claude\\helpers\\db.cjs:searchMemory",
+            "_rrfScore": 0.03149801587301587
+          },
+          {
+            "_source": "commit",
+            "_docId": "commit:dc8463872da64ddde618084f859f0a5a5d3fa275",
+            "_rrfScore": 0.01639344262295082
+          },
+          {
+            "_source": "symbol-semantic",
+            "_docId": "symbol-sem:C:\\GIT\\vaultflow\\.claude\\helpers\\db.cjs:searchMemory",
+            "_rrfScore": 0.01639344262295082
+          },
+          {
+            "_source": "symbol-semantic",
+            "_docId": "symbol-sem:C:\\GIT\\vaultflow\\.claude\\helpers\\db.cjs:searchSessionSummaries",
+            "_rrfScore": 0.016129032258064516
+          }
+        ]
+      },
+      {
+        "q": "hook-handler session start",
+        "ms": 62.95,
+        "total": 6,
+        "sources_in_top5": 2,
+        "top5": [
+          {
+            "_source": "memory",
+            "_docId": "memory:126795",
+            "_rrfScore": 0.01639344262295082
+          },
+          {
+            "_source": "symbol-semantic",
+            "_docId": "symbol-sem:C:\\GIT\\vaultflow\\.claude\\helpers\\session.cjs:start",
+            "_rrfScore": 0.01639344262295082
+          },
+          {
+            "_source": "symbol-semantic",
+            "_docId": "symbol-sem:C:\\GIT\\vaultflow\\.claude\\helpers\\db.cjs:normalizeModelName",
+            "_rrfScore": 0.016129032258064516
+          },
+          {
+            "_source": "symbol-semantic",
+            "_docId": "symbol-sem:C:\\GIT\\vaultflow\\.claude\\helpers\\watcher.mjs:ensureSession",
+            "_rrfScore": 0.015873015873015872
+          },
+          {
+            "_source": "symbol-semantic",
+            "_docId": "symbol-sem:C:\\GIT\\vaultflow\\.claude\\helpers\\watcher.mjs:shutdown",
+            "_rrfScore": 0.015625
+          }
+        ]
+      },
+      {
+        "q": "parquet flush duckdb",
+        "ms": 77.38,
+        "total": 7,
+        "sources_in_top5": 2,
+        "top5": [
+          {
+            "_source": "symbol-semantic",
+            "_docId": "symbol-sem:C:\\GIT\\vaultflow\\.claude\\helpers\\db.cjs:flushToParquet",
+            "_rrfScore": 0.03177805800756621
+          },
+          {
+            "_source": "memory",
+            "_docId": "memory:127208",
+            "_rrfScore": 0.01639344262295082
+          },
+          {
+            "_source": "memory",
+            "_docId": "memory:126795",
+            "_rrfScore": 0.016129032258064516
+          },
+          {
+            "_source": "symbol-semantic",
+            "_docId": "symbol-sem:C:\\GIT\\vaultflow\\.claude\\helpers\\db.cjs:hasParquetArchive",
+            "_rrfScore": 0.016129032258064516
+          },
+          {
+            "_source": "memory",
+            "_docId": "memory:128426",
+            "_rrfScore": 0.015873015873015872
+          }
+        ]
+      },
+      {
+        "q": "skill injection router",
+        "ms": 74.1,
+        "total": 7,
+        "sources_in_top5": 2,
+        "top5": [
+          {
+            "_source": "memory",
+            "_docId": "memory:126795",
+            "_rrfScore": 0.01639344262295082
+          },
+          {
+            "_source": "symbol-semantic",
+            "_docId": "symbol-sem:C:\\GIT\\vaultflow\\.claude\\helpers\\skill-loader.mjs:clearCache",
+            "_rrfScore": 0.01639344262295082
+          },
+          {
+            "_source": "memory",
+            "_docId": "memory:128426",
+            "_rrfScore": 0.016129032258064516
+          },
+          {
+            "_source": "symbol-semantic",
+            "_docId": "symbol-sem:C:\\GIT\\vaultflow\\.claude\\helpers\\session.cjs:setInjectedSkill",
+            "_rrfScore": 0.016129032258064516
+          },
+          {
+            "_source": "symbol-semantic",
+            "_docId": "symbol-sem:C:\\GIT\\vaultflow\\.claude\\helpers\\session.cjs:get",
+            "_rrfScore": 0.015873015873015872
+          }
+        ]
+      },
+      {
+        "q": "stack detector tech stack",
+        "ms": 70.22,
+        "total": 6,
+        "sources_in_top5": 2,
+        "top5": [
+          {
+            "_source": "memory",
+            "_docId": "memory:126795",
+            "_rrfScore": 0.01639344262295082
+          },
+          {
+            "_source": "symbol-semantic",
+            "_docId": "symbol-sem:C:\\GIT\\vaultflow\\.claude\\helpers\\db.cjs:searchSimilarPrompts",
+            "_rrfScore": 0.01639344262295082
+          },
+          {
+            "_source": "symbol-semantic",
+            "_docId": "symbol-sem:C:\\GIT\\vaultflow\\.claude\\helpers\\db.cjs:detectStaleVaultTools",
+            "_rrfScore": 0.016129032258064516
+          },
+          {
+            "_source": "symbol-semantic",
+            "_docId": "symbol-sem:C:\\GIT\\vaultflow\\.claude\\helpers\\dashboard\\app.js:loadStacks",
+            "_rrfScore": 0.015873015873015872
+          },
+          {
+            "_source": "symbol-semantic",
+            "_docId": "symbol-sem:C:\\GIT\\vaultflow\\.claude\\helpers\\db.cjs:upsertProjectStack",
+            "_rrfScore": 0.015625
+          }
+        ]
+      },
+      {
+        "q": "unified search merge",
+        "ms": 72.47,
+        "total": 6,
+        "sources_in_top5": 2,
+        "top5": [
+          {
+            "_source": "memory",
+            "_docId": "memory:128426",
+            "_rrfScore": 0.01639344262295082
+          },
+          {
+            "_source": "symbol-semantic",
+            "_docId": "symbol-sem:C:\\GIT\\vaultflow\\.claude\\helpers\\db.cjs:searchSessionSummaries",
+            "_rrfScore": 0.01639344262295082
+          },
+          {
+            "_source": "symbol-semantic",
+            "_docId": "symbol-sem:C:\\GIT\\vaultflow\\.claude\\helpers\\db.cjs:searchPatterns",
+            "_rrfScore": 0.016129032258064516
+          },
+          {
+            "_source": "symbol-semantic",
+            "_docId": "symbol-sem:C:\\GIT\\vaultflow\\.claude\\helpers\\db.cjs:searchMemory",
+            "_rrfScore": 0.015873015873015872
+          },
+          {
+            "_source": "symbol-semantic",
+            "_docId": "symbol-sem:C:\\GIT\\vaultflow\\.claude\\helpers\\db.cjs:searchRetrievalDocs",
+            "_rrfScore": 0.015625
+          }
+        ]
+      },
+      {
+        "q": "watcher chokidar file tracking",
+        "ms": 58.63,
+        "total": 7,
+        "sources_in_top5": 2,
+        "top5": [
+          {
+            "_source": "memory",
+            "_docId": "memory:126795",
+            "_rrfScore": 0.01639344262295082
+          },
+          {
+            "_source": "symbol-semantic",
+            "_docId": "symbol-sem:C:\\GIT\\vaultflow\\.claude\\helpers\\ensure-watcher.mjs:resolveWatchDir",
+            "_rrfScore": 0.01639344262295082
+          },
+          {
+            "_source": "memory",
+            "_docId": "memory:128426",
+            "_rrfScore": 0.016129032258064516
+          },
+          {
+            "_source": "symbol-semantic",
+            "_docId": "symbol-sem:C:\\GIT\\vaultflow\\.claude\\helpers\\watcher.mjs:startDaemon",
+            "_rrfScore": 0.016129032258064516
+          },
+          {
+            "_source": "symbol-semantic",
+            "_docId": "symbol-sem:C:\\GIT\\vaultflow\\.claude\\helpers\\ensure-watcher.mjs:pidFilePath",
+            "_rrfScore": 0.015873015873015872
+          }
+        ]
+      },
+      {
+        "q": "embedding similarity prompt dedup",
+        "ms": 56.37,
+        "total": 5,
+        "sources_in_top5": 1,
+        "top5": [
+          {
+            "_source": "symbol-semantic",
+            "_docId": "symbol-sem:C:\\GIT\\vaultflow\\.claude\\helpers\\db.cjs:upsertSymbolEmbedding",
+            "_rrfScore": 0.01639344262295082
+          },
+          {
+            "_source": "symbol-semantic",
+            "_docId": "symbol-sem:C:\\GIT\\vaultflow\\.claude\\helpers\\db.cjs:recordSkillInjectionDecision",
+            "_rrfScore": 0.016129032258064516
+          },
+          {
+            "_source": "symbol-semantic",
+            "_docId": "symbol-sem:C:\\GIT\\vaultflow\\.claude\\helpers\\db.cjs:getSymbolHashes",
+            "_rrfScore": 0.015873015873015872
+          },
+          {
+            "_source": "symbol-semantic",
+            "_docId": "symbol-sem:C:\\GIT\\vaultflow\\.claude\\helpers\\db.cjs:clearSymbolEmbeddings",
+            "_rrfScore": 0.015625
+          },
+          {
+            "_source": "symbol-semantic",
+            "_docId": "symbol-sem:C:\\GIT\\vaultflow\\.claude\\helpers\\db.cjs:runRetrievalLearningLoop",
+            "_rrfScore": 0.015384615384615385
+          }
+        ]
+      }
+    ]
+  },
+  "delta": {
+    "sources_in_top5": 1.2,
+    "latency_ms": 47.6
+  },
+  "symbol_embeddings_at_test": {
+    "embedded": 626,
+    "code_symbols": 73700,
+    "distinct_symbols": 72688,
+    "coverage_pct": 0.86
+  }
+}

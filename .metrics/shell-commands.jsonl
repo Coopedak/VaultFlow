@@ -1,0 +1,7 @@
+{"ts":"2026-05-05T14:37:36.7713890Z","cmd":"git status","cwd":"C:\\GIT\\vaultflow","shell":"powershell"}
+{"ts":"2026-05-05T14:43:56.6570972Z","cmd":"npm run dashboard","cwd":"C:\\GIT\\vaultflow","shell":"powershell"}
+{"ts":"2026-05-20T13:23:28.9052948Z","cmd":"  cd C:\\GIT\\vaultflow","cwd":"C:\\Users\\DCC","shell":"powershell"}
+{"ts":"2026-05-20T13:23:29.0094006Z","cmd":"  claude --resume b817890a-6e4e-46ae-b19d-6203a4d624c6","cwd":"C:\\GIT\\vaultflow","shell":"powershell"}
+{"ts":"2026-05-20T13:24:21.5806751Z","cmd":"  echo $LASTEXITCODE","cwd":"C:\\GIT\\vaultflow","shell":"powershell"}
+{"ts":"2026-05-20T13:24:23.5452988Z","cmd":"  cd C:\\GIT\\vaultflow","cwd":"C:\\GIT\\vaultflow","shell":"powershell"}
+{"ts":"2026-05-20T13:24:23.5604096Z","cmd":"  claude --resume b817890a-6e4e-46ae-b19d-6203a4d624c6","cwd":"C:\\GIT\\vaultflow","shell":"powershell"}

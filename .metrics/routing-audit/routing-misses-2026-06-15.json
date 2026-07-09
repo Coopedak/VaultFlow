@@ -1,0 +1,207 @@
+{
+  "date": "2026-06-15",
+  "prompts_scanned": 14,
+  "strong_matches": 10,
+  "misses_count": 9,
+  "miss_rate": 0.9,
+  "misses": [
+    {
+      "prompt_id": 3565,
+      "ts": "2026-06-15T06:00:07.023Z",
+      "snippet": "You are the Librarian running a vault maintenance audit. Your job is to find real gaps and generate a prioritized task list. ## What to aud",
+      "candidates": [
+        {
+          "name": "vault-librarian",
+          "rank": -13.62,
+          "use_count": 30
+        },
+        {
+          "name": "customer-expert",
+          "rank": -7.83,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.52,
+          "use_count": 16
+        }
+      ]
+    },
+    {
+      "prompt_id": 3564,
+      "ts": "2026-06-15T01:43:03.914Z",
+      "snippet": "alright i like its lets commit and push the plan",
+      "candidates": [
+        {
+          "name": "database-optimizer",
+          "rank": -5.74,
+          "use_count": 0
+        },
+        {
+          "name": "code-reviewer",
+          "rank": -5.46,
+          "use_count": 0
+        },
+        {
+          "name": "code-reviewer",
+          "rank": -5.46,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3563,
+      "ts": "2026-06-15T01:40:52.933Z",
+      "snippet": "alright lets update our plan",
+      "candidates": [
+        {
+          "name": "psi-wiki",
+          "rank": -5.7,
+          "use_count": 25
+        },
+        {
+          "name": "session-reviewer",
+          "rank": -4.85,
+          "use_count": 0
+        },
+        {
+          "name": "MIGRATION_SUMMARY",
+          "rank": -4.08,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3560,
+      "ts": "2026-06-15T01:31:39.031Z",
+      "snippet": "okay is there anything on git hub that we found that fit my purpose for an app",
+      "candidates": [
+        {
+          "name": "git-workflow-master",
+          "rank": -7.09,
+          "use_count": 0
+        },
+        {
+          "name": "sales-architect",
+          "rank": -5.12,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.52,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3554,
+      "ts": "2026-06-15T00:58:27.067Z",
+      "snippet": "well what is medplum explain it to me",
+      "candidates": [
+        {
+          "name": "quoting-expert",
+          "rank": -5.91,
+          "use_count": 0
+        },
+        {
+          "name": "documenter",
+          "rank": -4.45,
+          "use_count": 15
+        },
+        {
+          "name": "mes-architect",
+          "rank": -3.51,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3553,
+      "ts": "2026-06-15T00:41:48.789Z",
+      "snippet": "# Structured Prompt — EMR-Agnostic PT Visit Briefing, Documentation & Coding-Assist App > Paste everything below the line into a capable re",
+      "candidates": [
+        {
+          "name": "incident-response-commander",
+          "rank": -5.62,
+          "use_count": 0
+        },
+        {
+          "name": "debugger",
+          "rank": -4.1,
+          "use_count": 0
+        },
+        {
+          "name": "debugger",
+          "rank": -4.03,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3552,
+      "ts": "2026-06-15T00:40:28.850Z",
+      "snippet": "well consolidate and only have one please",
+      "candidates": [
+        {
+          "name": "leadtime-planner",
+          "rank": -5.18,
+          "use_count": 0
+        },
+        {
+          "name": "session-reviewer",
+          "rank": -5.06,
+          "use_count": 0
+        },
+        {
+          "name": "codebase-onboarding-engineer",
+          "rank": -4.63,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3550,
+      "ts": "2026-06-15T00:33:50.576Z",
+      "snippet": "role> You are a senior software architect with deep experience in healthcare integration (HL7/FHIR), HIPAA-regulated systems, and EMR intero",
+      "candidates": [
+        {
+          "name": "software-architect",
+          "rank": -13.24,
+          "use_count": 0
+        },
+        {
+          "name": "mes-architect",
+          "rank": -7.93,
+          "use_count": 0
+        },
+        {
+          "name": "mes-architect",
+          "rank": -7.93,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3547,
+      "ts": "2026-06-14T06:00:08.655Z",
+      "snippet": "You are the Librarian running a vault maintenance audit. Your job is to find real gaps and generate a prioritized task list. ## What to aud",
+      "candidates": [
+        {
+          "name": "vault-librarian",
+          "rank": -13.62,
+          "use_count": 30
+        },
+        {
+          "name": "customer-expert",
+          "rank": -7.83,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.52,
+          "use_count": 16
+        }
+      ]
+    }
+  ]
+}

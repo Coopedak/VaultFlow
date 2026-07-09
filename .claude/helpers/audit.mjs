@@ -15,10 +15,11 @@
  *   1 — one or more checks failed (see report)
  */
 
-import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
-import path              from 'node:path';
-import fs                from 'node:fs';
+import { createRequire }              from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import path                           from 'node:path';
+import fs                             from 'node:fs';
+import os                             from 'node:os';
 
 const require   = createRequire(import.meta.url);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -304,37 +305,84 @@ function checkNodeVersion() {
   }
 }
 
+/**
+ * Read + parse a JSON settings file. Returns the parsed object, or null if the
+ * file is missing or unparseable (a malformed file simply contributes no hooks
+ * to the union rather than aborting the whole check).
+ */
+function readSettingsFile(filePath) {
+  try {
+    if (!filePath || !fs.existsSync(filePath)) return null;
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * Compute the UNION of hook event names across any number of settings objects.
+ *
+ * Claude Code merges hooks from every settings scope it reads — project shared
+ * (.claude/settings.json), project local (.claude/settings.local.json), user
+ * global (~/.claude/settings.json) and ~/.claude/settings.local.json. A hook is
+ * "wired" if it is present in ANY of those scopes, so checking only the project
+ * file (as this audit originally did) reports globally-wired, actively-firing
+ * hooks as missing. Pure + side-effect free so it can be unit-tested directly.
+ *
+ * @param   {...(object|null|undefined)} settingsObjects
+ * @returns {Set<string>} set of wired hook event names
+ */
+function wiredHookEvents(...settingsObjects) {
+  const events = new Set();
+  for (const s of settingsObjects) {
+    const hooks = s && typeof s === 'object' ? s.hooks : null;
+    if (hooks && typeof hooks === 'object') {
+      for (const evt of Object.keys(hooks)) events.add(evt);
+    }
+  }
+  return events;
+}
+
 function checkHookWiring() {
   console.log('\n[5] Hook Wiring');
 
-  // Check project-level settings.json
-  const settingsPath = path.resolve(__dirname, '../../.claude/settings.json');
-  if (!fs.existsSync(settingsPath)) {
+  // Project-level settings.json is the canonical wiring template that ships
+  // with the repo. Its absence is a real problem; presence is the baseline.
+  const projectPath = path.resolve(__dirname, '../../.claude/settings.json');
+  if (!fs.existsSync(projectPath)) {
     check('.claude/settings.json present', 'fail',
       'Hook wiring file not found',
       'Run: npm run install-hooks');
     return;
   }
 
-  let settings;
-  try {
-    settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-  } catch (_) {
+  const project = readSettingsFile(projectPath);
+  if (project === null) {
     check('.claude/settings.json parses', 'fail', 'JSON parse error');
     return;
   }
   check('.claude/settings.json parses', 'pass');
 
-  const hooks = settings.hooks || {};
+  // Resolve every scope Claude Code merges hooks from. Lifecycle hooks
+  // (SessionStart/SessionEnd/PostToolUse/UserPromptSubmit/Stop) commonly live
+  // in the user's global settings, not the project file — so the wiring check
+  // must consider the union, or it false-negatives on a healthy install.
+  const home          = os.homedir();
+  const projectLocal  = readSettingsFile(path.resolve(__dirname, '../../.claude/settings.local.json'));
+  const userGlobal    = readSettingsFile(path.join(home, '.claude', 'settings.json'));
+  const userLocal     = readSettingsFile(path.join(home, '.claude', 'settings.local.json'));
+
+  const wired    = wiredHookEvents(project, projectLocal, userGlobal, userLocal);
   const expected = ['SessionStart', 'SessionEnd', 'PostToolUse', 'UserPromptSubmit', 'Stop'];
-  const missing  = expected.filter(e => !hooks[e]);
+  const missing  = expected.filter(e => !wired.has(e));
 
   if (missing.length === 0) {
-    check('All expected hook events wired', 'pass', `(${Object.keys(hooks).length} events)`);
+    check('All expected hook events wired', 'pass',
+      `(${wired.size} events across project + global settings)`);
   } else {
     check('All expected hook events wired', 'warn',
-      `Missing: ${missing.join(', ')}`,
-      'Merge .claude/settings.json hooks block into your Claude Code settings');
+      `Missing everywhere: ${missing.join(', ')}`,
+      'Wire them in ~/.claude/settings.json or .claude/settings.json — see: npm run install-hooks');
   }
 }
 
@@ -420,13 +468,22 @@ function printSummary() {
 
 // ── main ────────────────────────────────────────────────────────────────────
 
-console.log('vaultflow audit' + (DO_FIX ? ' --fix' : ''));
-console.log('─────────────────────────────────────────────');
+// Only run the full audit (and call process.exit) when executed directly as a
+// script. Importing this module — e.g. a unit test pulling in wiredHookEvents —
+// must NOT trigger the audit or exit the process.
+const isMain = import.meta.url === pathToFileURL(process.argv[1] || '').href;
 
-checkConfig();
-checkDb();
-checkParquet();
-checkNodeVersion();
-checkHookWiring();
-checkDiscoveries();
-printSummary();
+if (isMain) {
+  console.log('vaultflow audit' + (DO_FIX ? ' --fix' : ''));
+  console.log('─────────────────────────────────────────────');
+
+  checkConfig();
+  checkDb();
+  checkParquet();
+  checkNodeVersion();
+  checkHookWiring();
+  checkDiscoveries();
+  printSummary();
+}
+
+export { wiredHookEvents, readSettingsFile };

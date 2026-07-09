@@ -1,0 +1,879 @@
+{
+  "date": "2026-07-09",
+  "prompts_scanned": 45,
+  "strong_matches": 40,
+  "misses_count": 40,
+  "miss_rate": 1,
+  "misses": [
+    {
+      "prompt_id": 3810,
+      "ts": "2026-07-09T14:28:57.750Z",
+      "snippet": "check to see that vaultflow is running on this computer also find where its not and fix it also make sure we make an install package that ma",
+      "candidates": [
+        {
+          "name": "reviewer-code",
+          "rank": -6.27,
+          "use_count": 98
+        },
+        {
+          "name": "agent-ado",
+          "rank": -5.97,
+          "use_count": 5
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -5.92,
+          "use_count": 18
+        }
+      ]
+    },
+    {
+      "prompt_id": 3809,
+      "ts": "2026-07-09T13:11:14.751Z",
+      "snippet": "\"C:\\Users\\DakotaCooperFALKPane\\OneDrive - Falk Panel\\Pictures\\Screenshots\\Logo.svg\" this is the branding and the company colors",
+      "candidates": [
+        {
+          "name": "debugger",
+          "rank": -5.18,
+          "use_count": 0
+        },
+        {
+          "name": "agent-communicator",
+          "rank": -3.26,
+          "use_count": 23
+        },
+        {
+          "name": "developer-backend",
+          "rank": -3.26,
+          "use_count": 54
+        }
+      ]
+    },
+    {
+      "prompt_id": 3807,
+      "ts": "2026-07-09T02:03:10.790Z",
+      "snippet": "server js is this sqlite",
+      "candidates": [
+        {
+          "name": "developer-backend",
+          "rank": -5.56,
+          "use_count": 54
+        },
+        {
+          "name": "lsp-index-engineer",
+          "rank": -5.41,
+          "use_count": 0
+        },
+        {
+          "name": "vault-librarian",
+          "rank": -4.75,
+          "use_count": 32
+        }
+      ]
+    },
+    {
+      "prompt_id": 3806,
+      "ts": "2026-07-09T02:02:28.727Z",
+      "snippet": "where are the backend files housed",
+      "candidates": [
+        {
+          "name": "agent-dev-backend-api",
+          "rank": -7.48,
+          "use_count": 0
+        },
+        {
+          "name": "developer-backend",
+          "rank": -5.6,
+          "use_count": 54
+        },
+        {
+          "name": "excalidraw-diagram",
+          "rank": -3.75,
+          "use_count": 4
+        }
+      ]
+    },
+    {
+      "prompt_id": 3804,
+      "ts": "2026-07-09T02:02:28.714Z",
+      "snippet": "# AGENTS.md instructions for C:\\Git\\QuotingTemplate\\quoting-app <INSTRUCTIONS> # QuotingTemplate — Agent Roster **Stack:** unknown ## Av",
+      "candidates": [
+        {
+          "name": "session-reviewer",
+          "rank": -9.55,
+          "use_count": 3
+        },
+        {
+          "name": "git-workflow-master",
+          "rank": -7.15,
+          "use_count": 0
+        },
+        {
+          "name": "workflow-expert",
+          "rank": -4.62,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3803,
+      "ts": "2026-07-08T19:05:57.266Z",
+      "snippet": "show me the front end",
+      "candidates": [
+        {
+          "name": "project-manager",
+          "rank": -9.22,
+          "use_count": 16
+        },
+        {
+          "name": "developer-fullstack",
+          "rank": -8.92,
+          "use_count": 21
+        },
+        {
+          "name": "developer-frontend",
+          "rank": -7.56,
+          "use_count": 3
+        }
+      ]
+    },
+    {
+      "prompt_id": 3801,
+      "ts": "2026-07-08T18:30:39.618Z",
+      "snippet": "no we are fine now is it possible for the customer to be tied to the customer table in BC",
+      "candidates": [
+        {
+          "name": "customer-expert",
+          "rank": -7.42,
+          "use_count": 0
+        },
+        {
+          "name": "sales-architect",
+          "rank": -6.16,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.64,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3799,
+      "ts": "2026-07-08T18:25:11.741Z",
+      "snippet": "yes but we can condense as well less",
+      "candidates": [
+        {
+          "name": "workflow-architect",
+          "rank": -5.45,
+          "use_count": 0
+        },
+        {
+          "name": "threat-detection-engineer",
+          "rank": -5,
+          "use_count": 0
+        },
+        {
+          "name": "agent-ado",
+          "rank": -4.74,
+          "use_count": 5
+        }
+      ]
+    },
+    {
+      "prompt_id": 3798,
+      "ts": "2026-07-08T18:24:32.631Z",
+      "snippet": "from the pasted document you should have gotten pages and fields and all the neuance in the fields",
+      "candidates": [
+        {
+          "name": "leadtime-planner",
+          "rank": -8.12,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -7.26,
+          "use_count": 18
+        },
+        {
+          "name": "project-manager",
+          "rank": -6.18,
+          "use_count": 16
+        }
+      ]
+    },
+    {
+      "prompt_id": 3797,
+      "ts": "2026-07-08T18:12:03.559Z",
+      "snippet": "we also need to make sure we document the workflow",
+      "candidates": [
+        {
+          "name": "test-writer",
+          "rank": -13.02,
+          "use_count": 1
+        },
+        {
+          "name": "test-writer",
+          "rank": -12.8,
+          "use_count": 1
+        },
+        {
+          "name": "pr-shepherd",
+          "rank": -9.6,
+          "use_count": 10
+        }
+      ]
+    },
+    {
+      "prompt_id": 3796,
+      "ts": "2026-07-08T18:11:30.472Z",
+      "snippet": "and flow like the jot forms and all the required fields need to be required",
+      "candidates": [
+        {
+          "name": "mes-architect",
+          "rank": -7.07,
+          "use_count": 0
+        },
+        {
+          "name": "mes-architect",
+          "rank": -7.07,
+          "use_count": 0
+        },
+        {
+          "name": "debugger",
+          "rank": -6.62,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3795,
+      "ts": "2026-07-08T18:10:54.570Z",
+      "snippet": "all the logic needs to work",
+      "candidates": [
+        {
+          "name": "reality-checker",
+          "rank": -9.18,
+          "use_count": 0
+        },
+        {
+          "name": "agent-ado",
+          "rank": -7.13,
+          "use_count": 5
+        },
+        {
+          "name": "researcher",
+          "rank": -6.39,
+          "use_count": 62
+        }
+      ]
+    },
+    {
+      "prompt_id": 3794,
+      "ts": "2026-07-08T18:10:42.326Z",
+      "snippet": "SO lets get the rfq working",
+      "candidates": [
+        {
+          "name": "agent-ado",
+          "rank": -6.47,
+          "use_count": 5
+        }
+      ]
+    },
+    {
+      "prompt_id": 3791,
+      "ts": "2026-07-08T17:21:43.735Z",
+      "snippet": "this should be part of this project as well",
+      "candidates": [
+        {
+          "name": "documenter",
+          "rank": -8.67,
+          "use_count": 22
+        },
+        {
+          "name": "base-template-generator",
+          "rank": -6.9,
+          "use_count": 0
+        },
+        {
+          "name": "dev-team",
+          "rank": -5.77,
+          "use_count": 20
+        }
+      ]
+    },
+    {
+      "prompt_id": 3789,
+      "ts": "2026-07-08T17:19:13.368Z",
+      "snippet": "yes but panels have rules are decisions that a contingient on previous steps",
+      "candidates": [
+        {
+          "name": "leadtime-planner",
+          "rank": -5.32,
+          "use_count": 0
+        },
+        {
+          "name": "configure-devteam",
+          "rank": -4.84,
+          "use_count": 7
+        },
+        {
+          "name": "agent-ado",
+          "rank": -4.74,
+          "use_count": 5
+        }
+      ]
+    },
+    {
+      "prompt_id": 3787,
+      "ts": "2026-07-08T17:15:48.756Z",
+      "snippet": "are you able to tie this to the excel document?",
+      "candidates": [
+        {
+          "name": "project-manager",
+          "rank": -6.18,
+          "use_count": 16
+        },
+        {
+          "name": "document-generator",
+          "rank": -5.37,
+          "use_count": 0
+        },
+        {
+          "name": "pdf-pipeline",
+          "rank": -5.22,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3784,
+      "ts": "2026-07-08T17:04:16.970Z",
+      "snippet": "so with the RFQ we will also need an REQ process as well",
+      "candidates": [
+        {
+          "name": "test-writer",
+          "rank": -8.38,
+          "use_count": 1
+        },
+        {
+          "name": "test-writer",
+          "rank": -8.24,
+          "use_count": 1
+        },
+        {
+          "name": "documenter",
+          "rank": -7.36,
+          "use_count": 22
+        }
+      ]
+    },
+    {
+      "prompt_id": 3783,
+      "ts": "2026-07-08T17:03:19.785Z",
+      "snippet": "it should be installed",
+      "candidates": [
+        {
+          "name": "agent-planner",
+          "rank": -5.48,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -4.28,
+          "use_count": 18
+        },
+        {
+          "name": "sales-architect",
+          "rank": -3.99,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3782,
+      "ts": "2026-07-08T17:03:07.744Z",
+      "snippet": "can we look at the new front end ui?",
+      "candidates": [
+        {
+          "name": "project-manager",
+          "rank": -9.22,
+          "use_count": 16
+        },
+        {
+          "name": "developer-fullstack",
+          "rank": -8.92,
+          "use_count": 21
+        },
+        {
+          "name": "developer-frontend",
+          "rank": -7.56,
+          "use_count": 3
+        }
+      ]
+    },
+    {
+      "prompt_id": 3780,
+      "ts": "2026-07-08T16:49:38.560Z",
+      "snippet": "alright lets make sure we update all documents",
+      "candidates": [
+        {
+          "name": "pr-shepherd",
+          "rank": -9.6,
+          "use_count": 10
+        },
+        {
+          "name": "excalidraw-diagram",
+          "rank": -6.55,
+          "use_count": 4
+        },
+        {
+          "name": "psi-wiki",
+          "rank": -5.76,
+          "use_count": 29
+        }
+      ]
+    },
+    {
+      "prompt_id": 3779,
+      "ts": "2026-07-08T16:40:01.053Z",
+      "snippet": "yes we need to build the branding into the project as we go",
+      "candidates": [
+        {
+          "name": "project-manager",
+          "rank": -8.69,
+          "use_count": 16
+        },
+        {
+          "name": "test-writer",
+          "rank": -8.38,
+          "use_count": 1
+        },
+        {
+          "name": "test-writer",
+          "rank": -8.24,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3778,
+      "ts": "2026-07-08T16:39:09.925Z",
+      "snippet": "\"C:\\Users\\DakotaCooperFALKPane\\OneDrive - Falk Panel\\Pictures\\Screenshots\\Logo.svg\"",
+      "candidates": [
+        {
+          "name": "debugger",
+          "rank": -5.18,
+          "use_count": 0
+        },
+        {
+          "name": "agent-communicator",
+          "rank": -3.26,
+          "use_count": 23
+        },
+        {
+          "name": "developer-backend",
+          "rank": -3.26,
+          "use_count": 54
+        }
+      ]
+    },
+    {
+      "prompt_id": 3777,
+      "ts": "2026-07-08T16:38:36.839Z",
+      "snippet": "so the RFQ should handle all of this. Would you like a photo for branding?",
+      "candidates": [
+        {
+          "name": "quoting-architect",
+          "rank": -12.35,
+          "use_count": 0
+        },
+        {
+          "name": "sales-architect",
+          "rank": -6.49,
+          "use_count": 0
+        },
+        {
+          "name": "agent-code-review-swarm",
+          "rank": -5.6,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3776,
+      "ts": "2026-07-08T16:38:00.741Z",
+      "snippet": "well lets make sure we get the quoting area working first",
+      "candidates": [
+        {
+          "name": "pr-shepherd",
+          "rank": -9.6,
+          "use_count": 10
+        },
+        {
+          "name": "base-template-generator",
+          "rank": -6.9,
+          "use_count": 0
+        },
+        {
+          "name": "excalidraw-diagram",
+          "rank": -6.55,
+          "use_count": 4
+        }
+      ]
+    },
+    {
+      "prompt_id": 3775,
+      "ts": "2026-07-08T16:30:44.654Z",
+      "snippet": "what about demensions",
+      "candidates": [
+        {
+          "name": "psi-wiki",
+          "rank": -5.93,
+          "use_count": 29
+        },
+        {
+          "name": "developer-database",
+          "rank": -4.81,
+          "use_count": 2
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -3.46,
+          "use_count": 18
+        }
+      ]
+    },
+    {
+      "prompt_id": 3774,
+      "ts": "2026-07-08T16:24:07.557Z",
+      "snippet": "so within BC Accounts should be a container and customer could be associated with an account",
+      "candidates": [
+        {
+          "name": "agent-planner",
+          "rank": -5.48,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -4.28,
+          "use_count": 18
+        },
+        {
+          "name": "sales-architect",
+          "rank": -3.99,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3773,
+      "ts": "2026-07-08T16:21:28.133Z",
+      "snippet": "doesnt business central have a employee table?",
+      "candidates": [
+        {
+          "name": "leadtime-planner",
+          "rank": -5.32,
+          "use_count": 0
+        },
+        {
+          "name": "automation-governance-architect",
+          "rank": -5.13,
+          "use_count": 0
+        },
+        {
+          "name": "developer-backend",
+          "rank": -4.71,
+          "use_count": 54
+        }
+      ]
+    },
+    {
+      "prompt_id": 3772,
+      "ts": "2026-07-08T15:33:08.100Z",
+      "snippet": "both fields are required",
+      "candidates": [
+        {
+          "name": "customer-expert",
+          "rank": -6.81,
+          "use_count": 0
+        },
+        {
+          "name": "developer-fullstack",
+          "rank": -4.72,
+          "use_count": 21
+        },
+        {
+          "name": "agent-communicator",
+          "rank": -3.78,
+          "use_count": 23
+        }
+      ]
+    },
+    {
+      "prompt_id": 3771,
+      "ts": "2026-07-08T15:32:16.928Z",
+      "snippet": "Page One / HOme is Sales person dropdown with a sales person ID that is associated to the persons name which is auto generated",
+      "candidates": [
+        {
+          "name": "sales-architect",
+          "rank": -7.41,
+          "use_count": 0
+        },
+        {
+          "name": "wiki-page",
+          "rank": -4.71,
+          "use_count": 0
+        },
+        {
+          "name": "frontend-dev",
+          "rank": -4.26,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3770,
+      "ts": "2026-07-08T15:31:31.824Z",
+      "snippet": "now we can go through it page by page",
+      "candidates": [
+        {
+          "name": "debugger",
+          "rank": -6.96,
+          "use_count": 0
+        },
+        {
+          "name": "workflow-architect",
+          "rank": -5.45,
+          "use_count": 0
+        },
+        {
+          "name": "wiki-page",
+          "rank": -4.71,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3768,
+      "ts": "2026-07-08T15:29:37.472Z",
+      "snippet": "yea we can do that i do have the jotfom order list",
+      "candidates": [
+        {
+          "name": "quoting-expert",
+          "rank": -10.95,
+          "use_count": 0
+        },
+        {
+          "name": "leadtime-planner",
+          "rank": -9.12,
+          "use_count": 0
+        },
+        {
+          "name": "workflow-architect",
+          "rank": -5.45,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3767,
+      "ts": "2026-07-08T15:22:24.197Z",
+      "snippet": "I want to remove jot form and make a front end ui that does what jotform does",
+      "candidates": [
+        {
+          "name": "excalidraw-diagram",
+          "rank": -6.55,
+          "use_count": 4
+        },
+        {
+          "name": "pr-shepherd",
+          "rank": -4.52,
+          "use_count": 10
+        },
+        {
+          "name": "developer-frontend",
+          "rank": -4.31,
+          "use_count": 3
+        }
+      ]
+    },
+    {
+      "prompt_id": 3761,
+      "ts": "2026-07-08T14:09:17.932Z",
+      "snippet": "what would you suggest we map with right now?",
+      "candidates": [
+        {
+          "name": "customer-expert",
+          "rank": -7.54,
+          "use_count": 0
+        },
+        {
+          "name": "pattern-analyst",
+          "rank": -6.43,
+          "use_count": 18
+        },
+        {
+          "name": "leadtime-analyst",
+          "rank": -6.03,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3760,
+      "ts": "2026-07-08T14:07:50.687Z",
+      "snippet": "are you able to see this if we map into the apis?",
+      "candidates": [
+        {
+          "name": "leadtime-planner",
+          "rank": -7.13,
+          "use_count": 0
+        },
+        {
+          "name": "Dev-Team Pipeline (Claude Code, PSI-specific)",
+          "rank": -5.3,
+          "use_count": 0
+        },
+        {
+          "name": "customer-expert",
+          "rank": -5.11,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3759,
+      "ts": "2026-07-08T14:06:44.512Z",
+      "snippet": "so we need to make sure that we know what bc tables and fields bc would have and just make sure that this crm has the same table names and c",
+      "candidates": [
+        {
+          "name": "test-writer",
+          "rank": -13.02,
+          "use_count": 1
+        },
+        {
+          "name": "test-writer",
+          "rank": -12.8,
+          "use_count": 1
+        },
+        {
+          "name": "pr-shepherd",
+          "rank": -9.6,
+          "use_count": 10
+        }
+      ]
+    },
+    {
+      "prompt_id": 3758,
+      "ts": "2026-07-08T14:04:56.233Z",
+      "snippet": "We will want this to eventually tie into Business Central",
+      "candidates": [
+        {
+          "name": "test-writer",
+          "rank": -8.18,
+          "use_count": 1
+        },
+        {
+          "name": "automation-governance-architect",
+          "rank": -5.13,
+          "use_count": 0
+        },
+        {
+          "name": "developer-backend",
+          "rank": -4.71,
+          "use_count": 54
+        }
+      ]
+    },
+    {
+      "prompt_id": 3757,
+      "ts": "2026-07-08T14:04:17.126Z",
+      "snippet": "This will fucntion as a CRM with a configurator.",
+      "candidates": [
+        {
+          "name": "threat-detection-engineer",
+          "rank": -5,
+          "use_count": 0
+        },
+        {
+          "name": "process-manager",
+          "rank": -4.69,
+          "use_count": 0
+        },
+        {
+          "name": "pdf-pipeline",
+          "rank": -3.71,
+          "use_count": 0
+        }
+      ]
+    },
+    {
+      "prompt_id": 3756,
+      "ts": "2026-07-08T14:00:52.484Z",
+      "snippet": "yes we will also want to update the wikis ect",
+      "candidates": [
+        {
+          "name": "documenter",
+          "rank": -7.36,
+          "use_count": 22
+        },
+        {
+          "name": "psi-wiki",
+          "rank": -5.76,
+          "use_count": 29
+        },
+        {
+          "name": "session-reviewer",
+          "rank": -4.94,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3755,
+      "ts": "2026-07-08T13:59:49.303Z",
+      "snippet": "SO we would want to start with a customer, is the customer returning or is the customer. is the customer a distrubitor if so then we would n",
+      "candidates": [
+        {
+          "name": "customer-expert",
+          "rank": -7.42,
+          "use_count": 0
+        },
+        {
+          "name": "sales-architect",
+          "rank": -6.16,
+          "use_count": 0
+        },
+        {
+          "name": "test-writer",
+          "rank": -4.64,
+          "use_count": 1
+        }
+      ]
+    },
+    {
+      "prompt_id": 3754,
+      "ts": "2026-07-08T13:56:51.767Z",
+      "snippet": "So the UI needs a lot of work more of just layout / set up",
+      "candidates": [
+        {
+          "name": "reality-checker",
+          "rank": -9.18,
+          "use_count": 0
+        },
+        {
+          "name": "agent-ado",
+          "rank": -7.13,
+          "use_count": 5
+        },
+        {
+          "name": "materials-expert",
+          "rank": -6.72,
+          "use_count": 1
+        }
+      ]
+    }
+  ]
+}
