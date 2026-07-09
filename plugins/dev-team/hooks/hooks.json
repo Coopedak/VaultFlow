@@ -1,0 +1,39 @@
+{
+  "description": "Dev Team analytics — logs subagent dispatches and session boundaries to the plugin data dir. Never blocks the session.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/analytics/log-event.mjs\" --data \"${CLAUDE_PLUGIN_DATA}\" --project \"${CLAUDE_PROJECT_DIR}\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/analytics/log-event.mjs\" --data \"${CLAUDE_PLUGIN_DATA}\" --project \"${CLAUDE_PROJECT_DIR}\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/analytics/log-event.mjs\" --data \"${CLAUDE_PLUGIN_DATA}\" --project \"${CLAUDE_PROJECT_DIR}\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

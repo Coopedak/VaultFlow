@@ -30,7 +30,9 @@
  *   node scripts/install.mjs --no-nightly     # skip Scheduled Task registration
  *   node scripts/install.mjs --no-link        # skip `npm link`
  *   node scripts/install.mjs --no-watcher     # skip starting the watcher
- *   node scripts/install.mjs --uninstall      # remove global hooks + nightly task
+ *   node scripts/install.mjs --no-dev-team    # skip installing the dev-team plugin
+ *   node scripts/install.mjs --dev-team-only  # install ONLY the dev-team plugin
+ *   node scripts/install.mjs --uninstall      # remove global hooks + nightly task + dev-team
  */
 
 import { spawnSync } from 'node:child_process';
@@ -73,6 +75,8 @@ const HOOKS_ONLY = has('--hooks-only');
 const NO_NIGHTLY = has('--no-nightly');
 const NO_LINK = has('--no-link');
 const NO_WATCHER = has('--no-watcher');
+const NO_DEVTEAM = has('--no-dev-team');
+const DEVTEAM_ONLY = has('--dev-team-only');
 
 const USER_SETTINGS = path.join(os.homedir(), '.claude', 'settings.json');
 const BACKUP_DIR = path.join(os.homedir(), '.claude', 'backups');
@@ -188,16 +192,63 @@ function ensureWatcher() {
   record('watcher', r.status === 0 ? 'ok' : 'warn', r.status === 0 ? 'started' : 'could not start — run `npm run watcher`');
 }
 
+// ── Step 5: dev-team plugin (vendored at plugins/dev-team) ─────────────────
+// Registers the in-repo plugin as a local marketplace and installs it so
+// Claude Code loads the multi-agent dev team (7 agents + skills + /dev-team-report).
+function installDevTeam() {
+  const pluginDir = path.join(ROOT, 'plugins', 'dev-team');
+  const manifest = path.join(pluginDir, '.claude-plugin', 'marketplace.json');
+  if (!fs.existsSync(manifest)) { record('dev-team', 'skip', 'plugins/dev-team not vendored'); return; }
+
+  const claude = (args, opts = {}) =>
+    spawnSync('claude', args, { cwd: ROOT, encoding: 'utf8', shell: true, env: { ...process.env, MSYS_NO_PATHCONV: '1' }, ...opts });
+
+  if (UNINSTALL) {
+    if (DRY) { record('dev-team', 'skip', 'dry-run'); return; }
+    claude(['plugin', 'uninstall', 'dev-team@dev-team']);
+    claude(['plugin', 'marketplace', 'remove', 'dev-team']);
+    record('dev-team', 'ok', 'uninstalled');
+    return;
+  }
+
+  // Idempotent: skip if already installed.
+  const probe = claude(['plugin', 'details', 'dev-team'], { stdio: 'pipe' });
+  if (probe.status === 0 && /dev-team/i.test(probe.stdout || '')) {
+    record('dev-team', 'ok', 'plugin already installed');
+    return;
+  }
+  if (DRY) { record('dev-team', 'skip', 'would add marketplace + install dev-team@dev-team [dry-run]'); return; }
+
+  const which = spawnSync(process.platform === 'win32' ? 'where' : 'which', ['claude'], { stdio: 'ignore', shell: true });
+  if (which.status !== 0) { record('dev-team', 'warn', 'claude CLI not on PATH — skipped'); return; }
+
+  const add = claude(['plugin', 'marketplace', 'add', pluginDir]);
+  const inst = claude(['plugin', 'install', 'dev-team@dev-team', '--scope', 'user']);
+  if (inst.status === 0 || /already installed|Successfully installed/i.test((inst.stdout || '') + (inst.stderr || ''))) {
+    record('dev-team', 'ok', '7 agents + skills + /dev-team-report (restart Claude Code to load)');
+  } else {
+    record('dev-team', 'warn', `install failed — ${((add.stderr || '') + (inst.stderr || '')).trim().split('\n').pop() || 'run scripts/install-local from plugins/dev-team'}`);
+  }
+}
+
 // ── Main ───────────────────────────────────────────────────────────────────
 console.log(c.bold(`\nvaultflow ${UNINSTALL ? 'uninstall' : 'install'}${DRY ? ' (dry-run)' : ''}`));
 console.log(c.dim(`  repo: ${ROOT}`));
 console.log(c.dim(`  user settings: ${USER_SETTINGS}\n`));
+
+if (DEVTEAM_ONLY) {
+  installDevTeam();
+  const failedDt = results.filter((r) => r.status === 'fail').length;
+  console.log(`\n${failedDt ? c.err('failed') : c.ok('done')}${DRY ? c.dim(' — dry-run') : ''}\n`);
+  process.exit(failedDt ? 1 : 0);
+}
 
 installGlobalHooks();
 if (!HOOKS_ONLY) {
   if (!NO_LINK) linkCli(); else record('cli-link', 'skip', '--no-link');
   if (!NO_NIGHTLY) installNightly(); else record('nightly-task', 'skip', '--no-nightly');
   if (!NO_WATCHER) ensureWatcher(); else record('watcher', 'skip', '--no-watcher');
+  if (!NO_DEVTEAM) installDevTeam(); else record('dev-team', 'skip', '--no-dev-team');
 }
 
 if (!UNINSTALL && !DRY && !HOOKS_ONLY) {

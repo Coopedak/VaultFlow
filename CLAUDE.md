@@ -24,16 +24,19 @@ tech stack detection, tool call deduplication, and a Parquet cold archive.
 cd C:\GIT\vaultflow && npm install --ignore-scripts
 
 # Setup / install on this machine (idempotent — safe to re-run)
-npm run setup                  # global hooks + `npm link` CLI + nightly task + watcher, then doctor
+npm run setup                  # global hooks + `npm link` CLI + nightly task + watcher + dev-team plugin, then doctor
 npm run setup:dry-run          # show what would change, write nothing
 npm run setup:hooks-only       # only (re)install the global hooks
-npm run setup:uninstall        # remove global hooks + nightly task
+npm run setup:uninstall        # remove global hooks + nightly task + dev-team plugin
+npm run install-dev-team       # install ONLY the vendored dev-team plugin
 vaultflow install              # same as `npm run setup` once the CLI is linked
 # Installs vaultflow's canonical hook set into ~/.claude/settings.json (USER-global)
 # so hooks fire in EVERY Claude Code project, not just the vaultflow repo. The
 # project's own .claude/settings.json stays minimal; the full lifecycle wiring is
 # defined in scripts/install.mjs (CANONICAL_HOOKS). Backs up prior user settings
 # to ~/.claude/backups/ and preserves other keys (model/theme/etc).
+# Also registers plugins/dev-team as a local marketplace and installs it
+# (--no-dev-team to skip). See "Dev Team plugin" below.
 
 # Dashboard
 npm run dashboard              # http://localhost:7700
@@ -195,7 +198,31 @@ config/
   config.toml             — Codex CLI config (15 enabled / 119 disabled)
   skills/                 — 134 skill directories
   README.md               — agent docs + trigger table
+
+plugins/
+  dev-team/               — vendored Claude Code plugin (multi-agent dev team, self-contained marketplace)
 ```
+
+## Dev Team plugin
+
+`plugins/dev-team/` vendors the **Dev Team** Claude Code plugin (v1.5.1) directly into the
+repo — it is both a plugin and its own marketplace, so it installs from disk with no GitHub
+access. `npm run setup` (or `npm run install-dev-team`) registers `plugins/dev-team` as a
+local marketplace and runs `claude plugin install dev-team@dev-team --scope user`.
+
+It adds a multi-agent team to Claude Code: a **Project Manager** orchestrates a **Researcher**,
+**Code Developer**, **Code Reviewer**, **Documenter**, **Integrator**, and a **Voice of Reason**
+advisor through a Plan → Research → Develop → Review → Document → Integrate pipeline. The
+integrator never pushes/merges without explicit human approval. Ships a shared coding-standards
+interface (override per-repo with `.dev-team/standards.md`) and analytics.
+
+- **Use it:** in any project, "use the dev team to add a customer search feature" — the session
+  becomes the Project Manager and dispatches specialist agents.
+- **Activation:** plugins load at Claude Code session start — restart Claude Code after install.
+- **Report:** `/dev-team-report` shows team activity (needs Node for analytics).
+- **Remove:** `npm run setup:uninstall`, or `/plugin uninstall dev-team@dev-team`.
+- Distinct from vaultflow's own hooks/agents: the plugin runs in Claude Code's plugin namespace
+  with its own `${CLAUDE_PLUGIN_ROOT}` analytics hooks; it does not touch the vaultflow DB.
 
 ## Background Agent Integration
 
