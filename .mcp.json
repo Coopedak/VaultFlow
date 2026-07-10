@@ -3,7 +3,7 @@
     "vaultflow": {
       "command": "node",
       "args": [
-        "C:/GIT/vaultflow/.claude/helpers/mcp-server.cjs"
+        "C:/Git/vaultflow/.claude/helpers/mcp-server.cjs"
       ]
     }
   }
