@@ -10,10 +10,14 @@ function fresh() {
   db.close(); db.initialize(root, 'vaultflow.db'); return root;
 }
 
+// Dates must be computed relative to now: getBrainSnapshots filters on a
+// rolling `days` window, so hardcoded dates silently age out of range.
+const isoDaysAgo = (n) => new Date(Date.now() - n * 864e5).toISOString().slice(0, 10);
+
 test('recordBrainSnapshot then getBrainSnapshots round-trips', () => {
   fresh();
-  db.recordBrainSnapshot('2026-06-10', 'patterns.count', '', 42);
-  db.recordBrainSnapshot('2026-06-11', 'patterns.count', '', 47);
+  db.recordBrainSnapshot(isoDaysAgo(2), 'patterns.count', '', 42);
+  db.recordBrainSnapshot(isoDaysAgo(1), 'patterns.count', '', 47);
   const rows = db.getBrainSnapshots({ metric: 'patterns.count', scope: '', days: 30 });
   assert.equal(rows.length, 2);
   assert.equal(rows[rows.length - 1].value, 47);
@@ -21,8 +25,8 @@ test('recordBrainSnapshot then getBrainSnapshots round-trips', () => {
 
 test('recordBrainSnapshot is idempotent per (date,metric,scope)', () => {
   fresh();
-  db.recordBrainSnapshot('2026-06-10', 'memory.count', '', 100);
-  db.recordBrainSnapshot('2026-06-10', 'memory.count', '', 105); // same key → overwrite
+  db.recordBrainSnapshot(isoDaysAgo(1), 'memory.count', '', 100);
+  db.recordBrainSnapshot(isoDaysAgo(1), 'memory.count', '', 105); // same key → overwrite
   const rows = db.getBrainSnapshots({ metric: 'memory.count', scope: '', days: 30 });
   assert.equal(rows.length, 1);
   assert.equal(rows[0].value, 105);

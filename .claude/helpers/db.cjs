@@ -775,6 +775,9 @@ const SCHEMA_SQL = `
   CREATE INDEX IF NOT EXISTS idx_memory_links_target  ON memory_links(target);
   CREATE INDEX IF NOT EXISTS idx_edit_events_session   ON edit_events(session_id);
   CREATE INDEX IF NOT EXISTS idx_edit_events_timestamp ON edit_events(timestamp);
+  -- Expression index on the separator-normalized path so per-file history
+  -- lookups (pre-read hook fires on EVERY Read) don't scan the whole table.
+  CREATE INDEX IF NOT EXISTS idx_edit_events_path_norm ON edit_events(REPLACE(file_path, '\\', '/'));
   CREATE INDEX IF NOT EXISTS idx_tool_calls_session    ON tool_calls(session_id);
   CREATE INDEX IF NOT EXISTS idx_prompts_session       ON prompts(session_id);
   CREATE INDEX IF NOT EXISTS idx_retrieval_docs_source ON retrieval_docs(source_type, source_id);
@@ -1475,26 +1478,45 @@ function initialize(metricsRoot, dbFile) {
     process.stderr.write(`[db] prompts source backfill warning: ${err.message}\n`);
   }
 
-  try { _db.exec(`INSERT INTO tool_calls_fts(tool_calls_fts) VALUES ('rebuild')`); } catch (err) {
-    if (!err.message.includes('no such table')) {
-      process.stderr.write(`[db] tool_calls_fts rebuild warning: ${err.message}\n`);
+  // One-shot FTS integrity repair. The *_fts tables are trigger-maintained
+  // (see SCHEMA_SQL), so a full rebuild is only needed once — to repair drift
+  // that predates the triggers. Unconditional rebuilds cost ~1.7s per open on
+  // a 400MB DB, and initialize() runs at the start of EVERY hook invocation
+  // (each Read/Edit/prompt paid it). Nightly ftsMaint owns periodic integrity.
+  _db.exec(`CREATE TABLE IF NOT EXISTS vf_meta (key TEXT PRIMARY KEY, value TEXT)`);
+  let ftsRepaired = false;
+  try {
+    ftsRepaired = !!_db.prepare(`SELECT 1 FROM vf_meta WHERE key = 'fts_repair_v1'`).get();
+  } catch (_) { /* treat as not repaired */ }
+
+  if (!ftsRepaired) {
+    try { _db.exec(`INSERT INTO tool_calls_fts(tool_calls_fts) VALUES ('rebuild')`); } catch (err) {
+      if (!err.message.includes('no such table')) {
+        process.stderr.write(`[db] tool_calls_fts rebuild warning: ${err.message}\n`);
+      }
     }
+
+    try { _db.exec(`INSERT INTO session_summaries_fts(session_summaries_fts) VALUES ('rebuild')`); } catch (err) {
+      if (!err.message.includes('no such table')) {
+        process.stderr.write(`[db] session_summaries_fts rebuild warning: ${err.message}\n`);
+      }
+    }
+
+    try { _db.exec(`INSERT INTO retrieval_docs_fts(retrieval_docs_fts) VALUES ('rebuild')`); } catch (err) {
+      if (!err.message.includes('no such table')) {
+        process.stderr.write(`[db] retrieval_docs_fts rebuild warning: ${err.message}\n`);
+      }
+    }
+
+    try {
+      _db.prepare(`INSERT OR REPLACE INTO vf_meta (key, value) VALUES ('fts_repair_v1', ?)`)
+        .run(new Date().toISOString());
+    } catch (_) { /* flag write is best-effort; worst case the repair reruns */ }
   }
 
-  try { _db.exec(`INSERT INTO session_summaries_fts(session_summaries_fts) VALUES ('rebuild')`); } catch (err) {
-    if (!err.message.includes('no such table')) {
-      process.stderr.write(`[db] session_summaries_fts rebuild warning: ${err.message}\n`);
-    }
-  }
-
+  // Cheap when in sync: a 3-count guard short-circuits before any row work.
   try { backfillRetrievalDocs(); } catch (err) {
     process.stderr.write(`[db] retrieval docs backfill warning: ${err.message}\n`);
-  }
-
-  try { _db.exec(`INSERT INTO retrieval_docs_fts(retrieval_docs_fts) VALUES ('rebuild')`); } catch (err) {
-    if (!err.message.includes('no such table')) {
-      process.stderr.write(`[db] retrieval_docs_fts rebuild warning: ${err.message}\n`);
-    }
   }
 }
 
@@ -4496,4 +4518,35 @@ function normalizeModelName(model) {
   // Collapse repeated dashes.
   n = n.replace(/-+/g, '-');
   return n;
+}
+
+// ── CLI entry — background-agent interface ────────────────────────────────
+// agent-context.json points external agents (Codex/Copilot/cron) here:
+//   node {helpers_dir}/db.cjs --search "query" [--limit N] [--json]
+if (require.main === module) {
+  const argv = process.argv.slice(2);
+  const flag = (name) => {
+    const i = argv.indexOf(name);
+    return i >= 0 ? (argv[i + 1] || '') : null;
+  };
+  const query = flag('--search');
+  if (query) {
+    initialize(null, null);
+    const limit = Number(flag('--limit')) || 10;
+    const rows = searchMemory(query, limit);
+    if (argv.includes('--json')) {
+      process.stdout.write(JSON.stringify(rows, null, 2) + '\n');
+    } else if (!rows.length) {
+      process.stdout.write('No memory matches.\n');
+    } else {
+      for (const r of rows) {
+        const body = String(r.body || '').replace(/\s+/g, ' ').slice(0, 160);
+        process.stdout.write(`• ${r.title}  [${r.source}]\n  ${body}\n`);
+      }
+    }
+    close();
+  } else {
+    process.stderr.write('Usage: node db.cjs --search "query" [--limit N] [--json]\n');
+    process.exitCode = 2;
+  }
 }

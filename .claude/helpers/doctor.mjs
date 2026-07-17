@@ -109,6 +109,21 @@ function classifyWatcher(count) {
     : { status: 'WARN', value: 'not running',   detail: 'run `npm run watcher`' };
 }
 
+// Config-path existence. A config copied from another machine (or a renamed
+// user profile) leaves every vault path dangling while all DB-only checks stay
+// green — exactly how this repo ran "healthy" for weeks with a dead
+// C:\Users\<old-user> config. Half-or-more missing is that migration signature.
+function classifyConfigPaths(missing, checked) {
+  if (checked === 0)        return { status: 'WARN', value: 'none',  detail: 'no checkable paths in config' };
+  if (missing.length === 0) return { status: 'OK',   value: `${checked} paths exist`, detail: '' };
+  const names = missing.map(m => m.key).join(', ');
+  const v = `${missing.length}/${checked} missing`;
+  if (missing.length * 2 >= checked) {
+    return { status: 'FAIL', value: v, detail: `config likely from another machine — ${names}` };
+  }
+  return { status: 'WARN', value: v, detail: names };
+}
+
 function classifyDocDrift(n, sections) {
   if (n === 0) return { status: 'OK',   value: '0',       detail: 'CLAUDE.md matches the repo' };
   if (n <= 2)  return { status: 'WARN', value: String(n), detail: sections };
@@ -226,6 +241,27 @@ function runChecks() {
     emit('watcher_daemon', classifyWatcher(count));
   } catch (e) { warn('watcher_daemon', 'err', e.message); }
 
+  // 12. Config-path existence — every paths.* entry must point at something real.
+  try {
+    const yaml = require('js-yaml');
+    const cfgPath = require('../../config/resolve.cjs');
+    const cfg = fs.existsSync(cfgPath) ? yaml.load(fs.readFileSync(cfgPath, 'utf8')) || {} : {};
+    const paths = cfg.paths || {};
+    const missing = [];
+    let checked = 0;
+    for (const [key, value] of Object.entries(paths)) {
+      if (typeof value !== 'string' || !value.trim()) continue; // skip arrays (exclude lists)
+      // Exclusion prefixes may legitimately reference retired drives/machines.
+      if (key.startsWith('exclude')) continue;
+      // Globs: validate the fixed base directory before the first wildcard.
+      const wild = value.search(/[*?]/);
+      const probe = wild === -1 ? value : path.dirname(value.slice(0, wild) + '_');
+      checked++;
+      if (!fs.existsSync(probe)) missing.push({ key, path: probe });
+    }
+    emit('config_paths', classifyConfigPaths(missing, checked));
+  } catch (e) { warn('config_paths', 'err', e.message); }
+
   // 13. Doc drift — latest doc-drift report (written by nightly.mjs)
   try {
     const yaml = require('js-yaml');
@@ -292,6 +328,7 @@ export {
   classifyEmbedQueue,
   classifyCodeGraph,
   classifyWatcher,
+  classifyConfigPaths,
   classifyDocDrift,
   classifyScheduledTask,
 };

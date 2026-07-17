@@ -24,9 +24,24 @@ import {
   classifyEmbedQueue,
   classifyCodeGraph,
   classifyWatcher,
+  classifyConfigPaths,
   classifyDocDrift,
   classifyScheduledTask,
 } from '../.claude/helpers/doctor.mjs';
+
+test('classifyConfigPaths: all-exist ok / some warn / half-or-more fail', () => {
+  const miss = (keys) => keys.map(k => ({ key: k, path: `C:/dead/${k}` }));
+  assert.equal(classifyConfigPaths([], 14).status, 'OK');
+  assert.equal(classifyConfigPaths(miss(['vault_root']), 14).status, 'WARN');
+  assert.equal(classifyConfigPaths(miss(['a','b','c','d','e','f']), 14).status, 'WARN');  // 6/14 < half
+  assert.equal(classifyConfigPaths(miss(['a','b','c','d','e','f','g']), 14).status, 'FAIL'); // 7/14 = half
+  assert.equal(classifyConfigPaths(miss(['a']), 1).status, 'FAIL');   // only path is dead
+  assert.equal(classifyConfigPaths([], 0).status, 'WARN');            // nothing checkable
+  // The FAIL detail must carry the migration hint and the dead keys.
+  const f = classifyConfigPaths(miss(['vault_root','skills_index','vault_domain_dir','user_skills_dir','projects_memory','ai_workflow','vault_tools_index']), 14);
+  assert.ok(f.detail.includes('another machine'));
+  assert.ok(f.detail.includes('vault_root'));
+});
 
 test('classifySchema: complete vs missing tables', () => {
   assert.equal(classifySchema([], 84).status, 'OK');

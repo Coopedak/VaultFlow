@@ -38,6 +38,18 @@ function noop() { process.exit(0); }
   if (!['Grep', 'Glob'].includes(tool)) return noop();
 
   const tin = input.tool_input || {};
+
+  // Telemetry: Grep/Glob calls were never recorded (Bash/Edit/Read/Skill all
+  // are), leaving tool-call analytics blind to exploration activity. Mirrors
+  // the pre-bash recording pattern; failure never blocks the search.
+  try {
+    const db      = require('./db.cjs');
+    const session = require('./session.cjs');
+    db.initialize(null, null);
+    const sess = session.get();
+    if (sess) db.recordToolCall(sess.id, tool, JSON.stringify({ pattern: String(tin.pattern || '').slice(0, 500) }));
+  } catch (_) {}
+
   let hint = null;
 
   if (tool === 'Grep') {
