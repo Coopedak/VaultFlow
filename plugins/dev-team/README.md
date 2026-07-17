@@ -147,4 +147,4 @@ dev-team/
 
 ## Supported stacks
 
-C# / .NET Framework / .NET Core / WPF · Angular · Vue · React / TypeScript
+C# / .NET Framework / .NET Core / WPF · Angular · Vue · React / TypeScript · Python · AL (Business Central)

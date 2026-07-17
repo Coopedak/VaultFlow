@@ -6,7 +6,7 @@ A Claude Code plugin: a multi-agent development team. A **Project Manager** orch
 pipeline. Ships a shared coding-standards interface every agent honors, built-in analytics, and an
 integrator that **never pushes, merges, or force-pushes without explicit human approval**.
 
-Version **1.5.1**. Works across C# / .NET / WPF, Angular, Vue, and React / TypeScript.
+Version **1.5.1**. Works across C# / .NET / WPF, Angular, Vue, React / TypeScript, Python, and AL (Business Central).
 
 ## Requirements
 

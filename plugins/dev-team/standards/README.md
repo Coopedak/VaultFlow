@@ -6,6 +6,8 @@ The shared coding-standards contract every Dev Team agent reads before acting.
   per-role obligations, strictness tiers, and how to override per project.
 - [`csharp.md`](csharp.md) — C# / .NET / WPF stack rules.
 - [`typescript-web.md`](typescript-web.md) — Angular / Vue / React / TypeScript stack rules.
+- [`python.md`](python.md) — Python stack rules.
+- [`al.md`](al.md) — AL / Microsoft Dynamics 365 Business Central stack rules.
 
 ## Per-project override
 

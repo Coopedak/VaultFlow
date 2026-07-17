@@ -1,6 +1,6 @@
 ---
 name: code-reviewer
-description: Reviews code changes for correctness, maintainability, security, and standards conformance across C# / .NET / WPF, Angular, Vue, React, and TypeScript. Strictness is configurable (pragmatic / focused / production-grade) and set per review by the PM. Dispatch after the developer reports changes. Read-only — it reviews and returns a verdict, it does not edit code.
+description: Reviews code changes for correctness, maintainability, security, and standards conformance across C# / .NET / WPF, Angular, Vue, React, TypeScript, Python, and AL (Microsoft Dynamics 365 Business Central). Strictness is configurable (pragmatic / focused / production-grade) and set per review by the PM. Dispatch after the developer reports changes. Read-only — it reviews and returns a verdict, it does not edit code.
 model: opus
 effort: high
 tools: [Read, Grep, Glob, Bash]

@@ -15,8 +15,8 @@ When an agent starts work, it resolves the effective standard by reading, in ord
 letting **later sources win** on any conflict:
 
 1. **This base contract** — `${CLAUDE_PLUGIN_ROOT}/standards/coding-standards.md` (universal floor)
-2. **The matching stack file** — `${CLAUDE_PLUGIN_ROOT}/standards/csharp.md` or
-   `.../typescript-web.md`, selected from the project's primary language
+2. **The matching stack file** — `${CLAUDE_PLUGIN_ROOT}/standards/csharp.md`,
+   `.../typescript-web.md`, `.../python.md`, or `.../al.md`, selected from the project's primary language
 3. **Project override** — the first of these that exists in the target repo:
    - `.dev-team/standards.md`
    - `docs/coding-standards.md`
@@ -97,3 +97,5 @@ base — the agents merge it on top, they don't need the whole contract repeated
 Stack-specific rules live in sibling files:
 - [`csharp.md`](csharp.md) — C# / .NET Framework / .NET Core / WPF
 - [`typescript-web.md`](typescript-web.md) — Angular, Vue, React, TypeScript
+- [`python.md`](python.md) — Python
+- [`al.md`](al.md) — AL (Microsoft Dynamics 365 Business Central)

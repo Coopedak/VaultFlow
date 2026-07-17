@@ -12,7 +12,8 @@ description: >
 
 This skill surfaces the shared standards contract the Dev Team agents follow. The full interface lives in
 [`standards/coding-standards.md`](../../standards/coding-standards.md), with stack-specific rules in
-[`csharp.md`](../../standards/csharp.md) and [`typescript-web.md`](../../standards/typescript-web.md).
+[`csharp.md`](../../standards/csharp.md), [`typescript-web.md`](../../standards/typescript-web.md),
+[`python.md`](../../standards/python.md), and [`al.md`](../../standards/al.md).
 
 ## To view or apply the standards
 
