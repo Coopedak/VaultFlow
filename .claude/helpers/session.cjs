@@ -360,9 +360,17 @@ function metric(name) {
 /**
  * Return the current session object, or null if no session is active.
  *
+ * Falls back to the persisted current-session file: every hook runs in a
+ * fresh process, so the in-memory _session is null unless THIS process
+ * started the session. Without the fallback, all recording gated on get()
+ * (pre-bash Bash telemetry, Read/Grep/Glob telemetry, MCP-call telemetry)
+ * silently no-ops — which is exactly how Bash tool calls went unrecorded
+ * for months. Same pattern as getInjectedSkill/getInjectedSources.
+ *
  * @returns {object|null}
  */
 function get() {
+  if (!_session) _session = readCurrentJson();
   return _session || null;
 }
 

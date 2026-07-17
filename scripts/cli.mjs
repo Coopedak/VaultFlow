@@ -10,6 +10,8 @@ const ROOT = path.resolve(__dirname, '..');
 const COMMANDS = {
   tui:             ['tui', 'index.mjs'],
   'tui:dev':       ['tui', 'index.mjs'],
+  install:         ['scripts', 'install.mjs'],
+  setup:           ['scripts', 'install.mjs'],
   audit:           ['.claude', 'helpers', 'audit.mjs'],
   lint:            ['.claude', 'helpers', 'lint.mjs'],
   backfill:        ['.claude', 'helpers', 'backfill.mjs'],
@@ -37,6 +39,7 @@ function printHelp() {
     `  vault <command> [args]    Run a vaultflow command\n` +
     `  vaultflow [command]       Same as vault\n\n` +
     `Commands:\n` +
+    `  install           Install/repair vaultflow on this machine (global hooks, CLI, nightly, watcher)\n` +
     `  tui               Launch the TUI (default)\n` +
     `  dashboard         Start the dashboard server (http://localhost:7700)\n` +
     `  dashboard:open    Start the dashboard server and open it in the browser\n` +

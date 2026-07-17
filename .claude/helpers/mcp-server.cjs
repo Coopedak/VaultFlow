@@ -734,7 +734,15 @@ async function handleMessage(msg) {
       case 'tools/call': {
         const toolName = (params && params.name)      || '';
         const toolArgs = (params && params.arguments) || {};
-        const result   = await callTool(toolName, toolArgs);
+        // Telemetry: record under the Claude-facing name (mcp__vaultflow__*)
+        // so tool-call analytics and the dashboard's code-graph adoption
+        // metric see MCP usage. Best-effort — never fail the actual call.
+        try {
+          const session = require('./session.cjs');
+          const sess = session.get();
+          if (sess) getDb().recordToolCall(sess.id, `mcp__vaultflow__${toolName}`, JSON.stringify(toolArgs));
+        } catch (_) {}
+        const result = await callTool(toolName, toolArgs);
         return { jsonrpc: '2.0', id, result };
       }
 

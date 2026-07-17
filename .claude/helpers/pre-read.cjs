@@ -78,6 +78,18 @@ async function main() {
   const filePath = input.tool_input && input.tool_input.file_path;
   if (toolName !== 'Read' || !filePath || typeof filePath !== 'string') return noop();
 
+  // Telemetry: record the Read before any gate so small-file reads count too.
+  // Reads were the only major tool with no recording (Bash/Edit/Skill/Task all
+  // record), which left tool-call analytics and the dashboard's code-graph
+  // adoption metric with a permanently empty denominator.
+  try {
+    const dbT      = require('./db.cjs');
+    const sessionT = require('./session.cjs');
+    dbT.initialize(null, null);
+    const sess = sessionT.get();
+    if (sess) dbT.recordToolCall(sess.id, 'Read', JSON.stringify({ file_path: filePath }));
+  } catch (_) { /* telemetry is best-effort — never block the Read */ }
+
   // Gate on file size — claude-mem's "File Read Gate" pattern.
   try {
     const stat = fs.statSync(filePath);
@@ -100,14 +112,18 @@ async function main() {
 
   let edits = [];
   try {
+    // Normalized-only predicate: comparing both sides separator-normalized is
+    // a superset of the old (raw = ? OR normalized = ?) match, and it lets the
+    // idx_edit_events_path_norm expression index serve the lookup instead of a
+    // full edit_events scan on every Read.
     edits = raw.prepare(`
       SELECT file_path, project, change_type, timestamp, session_id
       FROM   edit_events
-      WHERE  (file_path = ? OR REPLACE(file_path,'\\','/') = ?)
+      WHERE  REPLACE(file_path,'\\','/') = ?
         AND  timestamp >= ?
       ORDER  BY timestamp DESC
       LIMIT  ?
-    `).all(filePath, norm, cutoff, MAX_EDITS);
+    `).all(norm, cutoff, MAX_EDITS);
   } catch (_) { /* swallow */ }
 
   // Dedupe by session_id (one row per session, latest first).

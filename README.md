@@ -52,88 +52,49 @@ These do **not** ship in GitHub and are created/configured per machine:
 
 So yes: **other people can clone and install the repo**, but they still need to create their own config and runtime data locally.
 
-### 1. Install dependencies
+### Quick start (fresh machine, one command)
+
+From the repo root, in any PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\install.ps1
+```
+
+Installs whatever's missing — Node.js 22+ and Git via winget, the Claude Code CLI
+via npm — then hands off to the node installer, which does everything else:
+
+1. installs npm dependencies (`--ignore-scripts`, no native build needed)
+2. generates `config/vaultflow.local.yaml` from the example with **your machine's
+   real paths** (gitignored; never overwrites an existing config)
+3. scaffolds the vault + skills skeleton files the config points at
+4. wires the global Claude Code hooks into `~/.claude/settings.json`
+   (backs up your existing settings first, preserves other keys)
+5. `npm link`s the `vaultflow` CLI onto your PATH
+6. registers the nightly maintenance task and starts the watcher daemon
+7. installs the vendored dev-team plugin
+8. finishes with `vaultflow doctor` so you can see the health of the install
+
+Already have Node 22+? `npm run setup` does steps 1–8 directly. Both are
+idempotent — safe to re-run any time.
+
+### Post-install (optional)
+
+- **Seed the index from existing content:** `npm run backfill` crawls your vault,
+  project wikis, and CLAUDE.md files into the FTS5 index. A brand-new machine has
+  nothing to crawl; run it when you bring existing content over.
+- **Historical CLI telemetry:** `npm run backfill:cli-telemetry` imports past
+  Copilot/Codex session metadata.
+- **Tune the config:** open `config/vaultflow.local.yaml` and adjust paths
+  (vault location, watched project root, claude.ai export folder). Run
+  `vaultflow doctor` afterwards — its `config_paths` check flags any path that
+  doesn't exist.
+
+### Verify any time
 
 ```bash
-cd C:\GIT\vaultflow
-npm install
+vaultflow doctor    # 14-check health audit (schema, config paths, heartbeat, embeddings, …)
+npm run flush       # SQLite → Parquet flush; prints counts, non-zero exit on failure
 ```
-
-### 2. Configure paths
-
-`config/vaultflow.yaml` is gitignored — it never ships in the repo. Create it from the example:
-
-```bash
-copy config\vaultflow.example.yaml config\vaultflow.yaml
-```
-
-Then fill in your real paths. At minimum set `paths.metrics_root`.
-
-At minimum set `paths.metrics_root` — everything else uses that as a base:
-
-```yaml
-paths:
-  vault_root:       "C:/Users/YOU/vault"
-  metrics_root:     "C:/Users/YOU/vault/methodology/.metrics"
-  projects_memory:  "C:/Users/YOU/.claude/projects"
-  skills_index:     "C:/Users/YOU/.claude/skills/index.md"
-  wiki_glob:        "C:/GIT/*/wiki/**/*.md"
-  claude_glob:      "C:/GIT/*/CLAUDE.md"
-
-storage:
-  db_file:       "vaultflow.db"     # relative to metrics_root
-  parquet_dir:   "parquet"          # relative to metrics_root
-  discoveries_dir: "discoveries"    # relative to metrics_root
-
-intelligence:
-  pattern_fire_threshold: 3         # subagent completions before DISCOVERY.md is written
-  skill_inject_high_threshold: 0.6  # confidence >= this → inject full skill instructions
-  skill_inject_low_thickness:  0.3  # confidence >= this → inject skill description only
-```
-
-`metrics_root` is the only directory vaultflow writes to. It is created automatically on first run.
-
-### 3. Wire Claude Code hooks
-
-**Option A — fresh install (no existing settings.json):**
-
-```cmd
-copy .claude\settings.json %USERPROFILE%\.claude\settings.json
-```
-
-**Option B — merge into existing settings.json:**
-
-Open `.claude/settings.json` and copy the `hooks` block into your existing `%USERPROFILE%\.claude\settings.json`. Each hook maps a Claude Code lifecycle event to a handler command.
-
-**Option C — project-scoped only:**
-
-Copy `.claude/settings.json` to the root `.claude/settings.json` of any specific project to activate vaultflow only for that project.
-
-### 4. Run initial backfill
-
-Crawls your vault, project wikis, and CLAUDE.md files into the FTS5 index. Required once before skill routing and memory injection work.
-
-```bash
-node .claude/helpers/backfill.mjs
-# or
-npm run backfill
-```
-
-To backfill historical local CLI session metadata from Copilot and Codex into SQLite:
-
-```bash
-npm run backfill:cli-telemetry
-```
-
-### 5. Verify
-
-```bash
-node .claude/helpers/flush-parquet.mjs
-# or
-npm run flush
-```
-
-Both commands print counts on success and exit non-zero on failure.
 
 ---
 

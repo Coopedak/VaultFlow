@@ -1,0 +1,21 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "dev-team",
+  "description": "Multi-agent development team plugin for Claude Code — this repo is both the plugin and its own marketplace.",
+  "owner": {
+    "name": "Progressive Surface IT",
+    "email": "bsummers@progressivesurface.com"
+  },
+  "plugins": [
+    {
+      "name": "dev-team",
+      "description": "Multi-agent development team: a Project Manager orchestrates Researcher, Code Developer, Code Reviewer, Documenter, Integrator, and a Voice of Reason advisor through a Plan-Research-Develop-Review-Document-Integrate pipeline, with a shared coding-standards interface, built-in analytics, and a human-gated integrator.",
+      "author": {
+        "name": "Ben Summers"
+      },
+      "category": "development",
+      "version": "1.5.1",
+      "source": "."
+    }
+  ]
+}

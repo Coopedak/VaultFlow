@@ -4,8 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>vaultflow dashboard</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/cytoscape@3.30.2/dist/cytoscape.min.js"></script>
+  <!-- Vendored (same files the v2 shell uses) — the dashboard must work offline;
+       the CDN copies these replaced failed on machines without internet. -->
+  <script src="/vendor/chart.umd.min.js"></script>
+  <script src="/vendor/cytoscape.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 

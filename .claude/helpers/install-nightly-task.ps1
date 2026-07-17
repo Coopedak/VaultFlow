@@ -43,26 +43,41 @@ if ($Uninstall) {
 $Action  = New-ScheduledTaskAction -Execute $NodeExe -Argument "`"$NightlyMjs`"" -WorkingDirectory $RepoRoot
 $Trigger = New-ScheduledTaskTrigger -Daily -At $Time
 $Settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Minutes 30)
+
 # S4U = "Run whether user is logged on or not" WITHOUT storing a password.
 # Interactive logon type silently skips the 3 AM run whenever the user is
-# logged off overnight (and -StartWhenAvailable does NOT catch up condition
-# misses), which is why nightly maintenance/backup stalled for days. S4U fires
-# regardless of logon state; the limited/no-network token is fine because
-# nightly.mjs operates only on local files.
-$Principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType S4U -RunLevel Limited
+# logged off overnight, which is why nightly maintenance/backup stalled for
+# days. S4U fires regardless of logon state; the limited/no-network token is
+# fine because nightly.mjs operates only on local files.
+#
+# BUT: registering an S4U principal requires elevation. An earlier version of
+# this script unregistered the existing task first and THEN failed on the S4U
+# Register call when run non-elevated — deleting the nightly task outright.
+# So: pick the principal by elevation up front, and overwrite in place with
+# -Force instead of unregister-then-register (no delete-then-fail window).
+$IsElevated = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
-if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
-    Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
+if ($IsElevated) {
+    $LogonType = 'S4U'
+} else {
+    $LogonType = 'Interactive'
+    # NOTE: keep these strings ASCII-only. This file has no BOM, so PS 5.1 reads
+    # it as ANSI; a UTF-8 em-dash decodes to a smart-quote byte that terminates
+    # double-quoted strings mid-line (parse error).
+    Write-Warning "Not elevated - registering with Interactive logon (fires at $Time only while logged on; catches up at next logon)."
+    Write-Warning "For the intended 'runs while logged off' behavior, re-run this script from an elevated PowerShell."
 }
+$Principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType $LogonType -RunLevel Limited
 
 Register-ScheduledTask -TaskName $TaskName `
     -Action $Action `
     -Trigger $Trigger `
     -Settings $Settings `
     -Principal $Principal `
-    -Description 'vaultflow nightly maintenance — session summary backfill, pattern noise purge, vault_tool promotion, retrieval learning loop, parquet flush.' | Out-Null
+    -Description 'vaultflow nightly maintenance — session summary backfill, pattern noise purge, vault_tool promotion, retrieval learning loop, parquet flush.' `
+    -Force | Out-Null
 
-Write-Host "Registered scheduled task: $TaskName (daily @ $Time)"
+Write-Host "Registered scheduled task: $TaskName (daily @ $Time, logon type: $LogonType)"
 Write-Host "  Action: $NodeExe `"$NightlyMjs`""
 Write-Host "  Working dir: $RepoRoot"
 

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "dev-team",
+  "displayName": "Dev Team",
+  "version": "1.5.1",
+  "description": "Multi-agent development team. A Project Manager orchestrates a Researcher, Code Developer, Code Reviewer, Documenter, Integrator, and a Voice of Reason advisor through a Plan-Research-Develop-Review-Document-Integrate pipeline. Ships a shared coding-standards interface every agent honors, built-in analytics, and a gated integrator that never pushes/merges without human approval. Works across C# .NET / WPF, Angular, Vue, and React / TypeScript.",
+  "author": {
+    "name": "Ben Summers",
+    "email": "bsummers@progressivesurface.com"
+  },
+  "homepage": "https://github.com/ProgressiveSurface/dev-team",
+  "repository": "https://github.com/ProgressiveSurface/dev-team",
+  "license": "MIT",
+  "keywords": [
+    "dev-team",
+    "multi-agent",
+    "orchestration",
+    "project-manager",
+    "code-review",
+    "coding-standards",
+    "analytics"
+  ],
+  "hooks": "./hooks/hooks.json"
+}

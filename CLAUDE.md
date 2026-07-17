@@ -13,15 +13,34 @@ tech stack detection, tool call deduplication, and a Parquet cold archive.
 | Runtime | Node.js 22+ (CJS hooks + ESM helpers) |
 | Hot store | SQLite via node:sqlite built-in (FTS5 + WAL) |
 | Cold archive | Apache Parquet via @duckdb/node-api (Lambda architecture) |
-| Dashboard | Express 4 + Chart.js SPA (66 endpoints) |
+| Dashboard | Express 4 + Chart.js SPA (73 endpoints) |
 | AI agents | Codex CLI via `.agents/config.toml` (15 enabled) |
 | Package manager | npm |
 
 ## Run Commands
 
 ```bash
-# Install (first time)
+# Fresh machine (installs required software too: Node 22+, Git, Claude Code CLI via winget/npm,
+# then npm deps, config bootstrap, vault skeleton, hooks, task, watcher, plugin, doctor)
+powershell -ExecutionPolicy Bypass -File scripts/install.ps1
+
+# Install (first time, Node already present) — setup auto-installs npm deps if missing
 cd C:\GIT\vaultflow && npm install --ignore-scripts
+
+# Setup / install on this machine (idempotent — safe to re-run)
+npm run setup                  # prereqs + config bootstrap + vault skeleton + global hooks + `npm link` CLI + nightly task + watcher + dev-team plugin, then doctor
+npm run setup:dry-run          # show what would change, write nothing
+npm run setup:hooks-only       # only (re)install the global hooks
+npm run setup:uninstall        # remove global hooks + nightly task + dev-team plugin
+npm run install-dev-team       # install ONLY the vendored dev-team plugin
+vaultflow install              # same as `npm run setup` once the CLI is linked
+# Installs vaultflow's canonical hook set into ~/.claude/settings.json (USER-global)
+# so hooks fire in EVERY Claude Code project, not just the vaultflow repo. The
+# project's own .claude/settings.json stays minimal; the full lifecycle wiring is
+# defined in scripts/install.mjs (CANONICAL_HOOKS). Backs up prior user settings
+# to ~/.claude/backups/ and preserves other keys (model/theme/etc).
+# Also registers plugins/dev-team as a local marketplace and installs it
+# (--no-dev-team to skip). See "Dev Team plugin" below.
 
 # Dashboard
 npm run dashboard              # http://localhost:7700
@@ -136,12 +155,14 @@ vaultflow doctor                         # health audit
   lint.mjs                   — vaultflow data-hygiene linter
   cleanup.mjs                — repo-hygiene: mangled-path junk, gitignored logs, empty dirs, untracked-doc review
   doc-drift-check.mjs        — verify CLAUDE.md claims against repo reality
-  one-time-cleanup.cjs       — one-time idempotent data cleanup against the live DB
   stack-detector.mjs         — 22-rule tech stack detector
   skill-loader.mjs           — skill content loader + injection builder
   skill-reuse.cjs            — shared skill-relevance scorer (overlap coefficient for find-skill / search_skills / authoring gate)
   flow-catalog.cjs           — flow discovery (entry-point detect + transitive trace + cycle detection + 150-node cap + noise stop-list + quality gate)
   flow-impact.cjs            — upstream/downstream impact + per-flow verdict (affected/affected-handoff/verify/not-affected) + root-cause direction (shallow 2-depth walk + text-match commit correlation)
+  flow-excalidraw.cjs        — pure, deterministic flow → Excalidraw document converter
+  flows-draw.mjs             — batch flow → Excalidraw drawing generator (nightly)
+  export-quartz.mjs          — static Quartz-style HTML export of the Atlas brain view
   gen-context.mjs            — context file generator
   install-git-hooks.mjs      — git hook installer
   sync-csm-names.mjs         — derives friendly session names from prompts → ~/.claude/sessions.json (read by csm TUI; never overwrites user-set names)
@@ -154,15 +175,29 @@ vaultflow doctor                         # health audit
   mcp-server.cjs             — vaultflow MCP (Model Context Protocol) server
   dashboard/
     server.mjs               — Express API server + serves the live SPA (incl. /api/notes for Atlas, /api/health, /api/code-graph/import-graph)
-    index.html               — v1 SPA shell (Brain tab + operational tabs)
+    index.html               — legacy v1 SPA shell (Brain tab + operational tabs, served at /v1)
     app.js                   — v1 Chart.js + Cytoscape dashboard logic
-    index-v2.html            — Synapse v2 shell (modular js/ views, served at /v2)
+    index-v2.html            — Synapse v2 shell (modular js/ views; the default UI at / and /v2)
     js/
       core.js                — v2 SPA core: hash router, view registry, api() fetch, mount
       command-center.js      — v2 Command Center home view + health-score dial (A–F grade)
       charts.js              — v2 Chart.js theme defaults + sparkline/line factories
       format.js              — v2 formatting helpers
       atlas.js               — Atlas view: Quartz-style brain notes (markdown + backlinks + local graph + search)
+      activity-sessions.js   — Sessions list view
+      activity-edits.js      — Hot files (most edited) view
+      activity-prompts.js    — Recent prompts + skill routing view
+      activity-tools.js      — Tool Calls view
+      brain-memory.js        — FTS memory search view
+      brain-graph.js         — Brain Graph view
+      brain-dictionary.js    — Dictionary browser view
+      brain-discoveries.js   — Code pattern discoveries view
+      code-flows.js          — Flows view (Cytoscape flowcharts + declare/annotate forms)
+      code-stacks.js         — Tech stack detection card grid
+      learning-agents.js     — Agent usage list view
+      learning-patterns.js   — Learning patterns view
+      system-control.js      — Control panel view
+      system-health.js       — System health table + unified search
       agents.js              — Agents view: 7-step deterministic wizard (no-LLM) for single-agent creation w/ stack detect + reuse search
       project-store.js       — shared project selector (localStorage 'vf_project', seeded from /api/projects mostActive)
       code-graph.js          — import-dependency Cytoscape view (Folder | Churn coloring, legend, cose layout)
@@ -183,7 +218,31 @@ config/
   config.toml             — Codex CLI config (15 enabled / 119 disabled)
   skills/                 — 134 skill directories
   README.md               — agent docs + trigger table
+
+plugins/
+  dev-team/               — vendored Claude Code plugin (multi-agent dev team, self-contained marketplace)
 ```
+
+## Dev Team plugin
+
+`plugins/dev-team/` vendors the **Dev Team** Claude Code plugin (v1.5.1) directly into the
+repo — it is both a plugin and its own marketplace, so it installs from disk with no GitHub
+access. `npm run setup` (or `npm run install-dev-team`) registers `plugins/dev-team` as a
+local marketplace and runs `claude plugin install dev-team@dev-team --scope user`.
+
+It adds a multi-agent team to Claude Code: a **Project Manager** orchestrates a **Researcher**,
+**Code Developer**, **Code Reviewer**, **Documenter**, **Integrator**, and a **Voice of Reason**
+advisor through a Plan → Research → Develop → Review → Document → Integrate pipeline. The
+integrator never pushes/merges without explicit human approval. Ships a shared coding-standards
+interface (override per-repo with `.dev-team/standards.md`) and analytics.
+
+- **Use it:** in any project, "use the dev team to add a customer search feature" — the session
+  becomes the Project Manager and dispatches specialist agents.
+- **Activation:** plugins load at Claude Code session start — restart Claude Code after install.
+- **Report:** `/dev-team-report` shows team activity (needs Node for analytics).
+- **Remove:** `npm run setup:uninstall`, or `/plugin uninstall dev-team@dev-team`.
+- Distinct from vaultflow's own hooks/agents: the plugin runs in Claude Code's plugin namespace
+  with its own `${CLAUDE_PLUGIN_ROOT}` analytics hooks; it does not touch the vaultflow DB.
 
 ## Background Agent Integration
 

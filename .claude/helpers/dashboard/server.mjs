@@ -74,8 +74,10 @@ function withRawDb(fn) {
 const app = express();
 app.use(express.json({ limit: '1mb' }));
 
-// Serve static dashboard files
-app.use(express.static(__dirname));
+// Serve static dashboard files. index:false — otherwise static serves
+// index.html (legacy v1) as the directory index for '/', shadowing the
+// explicit '/' route that serves the Synapse v2 shell.
+app.use(express.static(__dirname, { index: false }));
 
 // ── middleware: ensure DB open ────────────────────────────────────────────
 
@@ -922,9 +924,12 @@ function computeHealthChecks(conn) {
   const pct = total > 0 ? Math.round(100 * (adoption.graph || 0) / total) : 0;
   checks.push({
     name: 'code_graph_adoption',
-    value: `${pct}%`,
-    detail: `${adoption.graph || 0} MCP graph calls vs ${adoption.explore || 0} Read/Glob/Grep in last 14d`,
-    status: (adoption.graph || 0) === 0 ? 'warn' : pct >= 5 ? 'ok' : 'warn',
+    value: total === 0 ? 'no data' : `${pct}%`,
+    detail: total === 0
+      ? 'no Read/Glob/Grep or MCP graph calls recorded in last 14d — nothing to measure'
+      : `${adoption.graph || 0} MCP graph calls vs ${adoption.explore || 0} Read/Glob/Grep in last 14d`,
+    // 0/0 is absence of telemetry, not evidence of poor adoption — don't warn.
+    status: total === 0 ? 'ok' : (adoption.graph || 0) === 0 ? 'warn' : pct >= 5 ? 'ok' : 'warn',
   });
 
   // 5. stale sessions (ended_at null > 12h)
@@ -935,6 +940,34 @@ function computeHealthChecks(conn) {
     detail: `${stale} sessions still open beyond 12h`,
     status: stale === 0 ? 'ok' : stale <= 3 ? 'warn' : 'fail',
   });
+
+  // 6. config-path existence (parity with `vaultflow doctor`). A config copied
+  // from another machine leaves every vault path dangling while all DB-only
+  // checks stay green — this ran silently broken for weeks once. Half-or-more
+  // missing is that migration signature.
+  try {
+    const cfg = fs.existsSync(CONFIG_PATH) ? yaml.load(fs.readFileSync(CONFIG_PATH, 'utf8')) || {} : {};
+    const missing = [];
+    let checked = 0;
+    for (const [key, value] of Object.entries(cfg.paths || {})) {
+      if (typeof value !== 'string' || !value.trim()) continue;
+      if (key.startsWith('exclude')) continue; // exclusion prefixes may reference retired drives
+      const wild = value.search(/[*?]/);
+      const probe = wild === -1 ? value : path.dirname(value.slice(0, wild) + '_');
+      checked++;
+      if (!fs.existsSync(probe)) missing.push(key);
+    }
+    checks.push({
+      name: 'config_paths',
+      value: missing.length === 0 ? `${checked} paths exist` : `${missing.length}/${checked} missing`,
+      detail: missing.length === 0
+        ? 'every paths.* config entry points at a real location'
+        : `dead config paths: ${missing.join(', ')}`,
+      status: missing.length === 0 ? 'ok' : missing.length * 2 >= checked ? 'fail' : 'warn',
+    });
+  } catch (err) {
+    checks.push({ name: 'config_paths', value: 'err', detail: err.message, status: 'warn' });
+  }
 
   return checks;
 }
@@ -1716,9 +1749,13 @@ app.get('/api/overview', (_req, res) => {
 
 // ── root → dashboard ──────────────────────────────────────────────────────
 
+// Synapse v2 is the default UI. The legacy v1 SPA stays reachable at /v1;
+// /v2 is kept so existing bookmarks and the desktop launcher keep working.
 app.get('/', (_req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+  res.sendFile(path.join(__dirname, 'index-v2.html'));
 });
+
+app.get('/v1', (_req, res) => { res.sendFile(path.join(__dirname, 'index.html')); });
 
 app.get('/v2', (_req, res) => { res.sendFile(path.join(__dirname, 'index-v2.html')); });
 
