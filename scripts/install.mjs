@@ -17,6 +17,10 @@
  *      don't fire Claude Code hooks.
  *
  * This script does all four, idempotently, and finishes by running the doctor.
+ * Before any wiring it also makes the machine fresh-start-ready: verifies
+ * prerequisites (Node 22+, deps installed), generates config/vaultflow.local.yaml
+ * from the example with this machine's real paths (never overwrites), and
+ * scaffolds the vault/skills skeleton files the config points at.
  *
  * The canonical hook set is defined HERE (see CANONICAL_HOOKS), not read from
  * the project's .claude/settings.json — the project file is intentionally
@@ -40,11 +44,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 const ROOT_POSIX = ROOT.split(path.sep).join('/');
 const H = `${ROOT_POSIX}/.claude/helpers`;
+const require = createRequire(import.meta.url);
 
 // Canonical vaultflow hook wiring, parameterized by this repo's location.
 // Every command is an absolute path so it works from any project's cwd.
@@ -108,6 +114,131 @@ function backupUserSettings() {
   const dest = path.join(BACKUP_DIR, `settings.json.${stamp}.bak`);
   fs.copyFileSync(USER_SETTINGS, dest);
   return dest;
+}
+
+// ── Step 0a: prerequisites ─────────────────────────────────────────────────
+// Node version is a hard gate (can't be fixed from inside a running node —
+// scripts/install.ps1 handles installing Node itself on a fresh machine).
+// Missing npm dependencies are INSTALLED here, not just reported: npm is
+// guaranteed present alongside node, and --ignore-scripts avoids node-gyp.
+function checkPrereqs() {
+  const major = Number(process.versions.node.split('.')[0]);
+  if (major < 22) {
+    record('prereqs', 'fail', `Node ${process.versions.node} — vaultflow needs Node 22+ (node:sqlite). Run scripts/install.ps1 to upgrade.`);
+    return false;
+  }
+  const nm = path.join(ROOT, 'node_modules');
+  const probes = ['express', 'js-yaml', '@duckdb/node-api', 'chokidar'];
+  const missing = probes.filter((p) => !fs.existsSync(path.join(nm, p)));
+  if (missing.length) {
+    if (DRY) { record('prereqs', 'skip', `would run \`npm install --ignore-scripts\` (missing: ${missing.join(', ')}) [dry-run]`); return true; }
+    console.log(c.dim(`  installing npm dependencies (missing: ${missing.join(', ')}) …`));
+    const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+    const r = spawnSync(npm, ['install', '--ignore-scripts'], {
+      cwd: ROOT, stdio: 'inherit', shell: process.platform === 'win32',
+    });
+    if (r.status !== 0) {
+      record('prereqs', 'fail', '`npm install --ignore-scripts` failed — fix the npm error above and re-run');
+      return false;
+    }
+    const still = probes.filter((p) => !fs.existsSync(path.join(nm, p)));
+    if (still.length) { record('prereqs', 'fail', `still missing after install: ${still.join(', ')}`); return false; }
+    record('prereqs', 'ok', `node ${process.versions.node}, dependencies installed`);
+    return true;
+  }
+  record('prereqs', 'ok', `node ${process.versions.node}, dependencies present`);
+  return true;
+}
+
+// ── Step 0b: config bootstrap ──────────────────────────────────────────────
+// A fresh clone has no config/vaultflow.local.yaml, so everything silently
+// runs off vaultflow.example.yaml's "C:/Users/YOU" placeholders — the exact
+// dead-path failure the doctor's config_paths check exists to catch. Generate
+// a real local config from the example with this machine's paths. Never
+// overwrites an existing config.
+function bootstrapConfig() {
+  const cfgDir  = path.join(ROOT, 'config');
+  const localA  = path.join(cfgDir, 'vaultflow.local.yaml');
+  const localB  = path.join(cfgDir, 'vaultflow.yaml');
+  const example = path.join(cfgDir, 'vaultflow.example.yaml');
+
+  if (fs.existsSync(localA) || fs.existsSync(localB)) {
+    record('config', 'ok', `already present (${fs.existsSync(localA) ? 'vaultflow.local.yaml' : 'vaultflow.yaml'})`);
+    return;
+  }
+  if (!fs.existsSync(example)) { record('config', 'warn', 'vaultflow.example.yaml missing — cannot bootstrap'); return; }
+
+  const home    = os.homedir().split(path.sep).join('/');
+  const gitRoot = path.dirname(ROOT).split(path.sep).join('/');
+  let text = fs.readFileSync(example, 'utf8');
+
+  // Order matters: replace the repo-specific placeholder before the generic
+  // git-root one, and pin metrics_root next to the repo (self-contained
+  // install; the example's vault-relative location assumes a vault exists).
+  text = text
+    .replace(/metrics_root:\s*"[^"]*"/, `metrics_root: "${ROOT_POSIX}/.metrics"`)
+    .replace(/C:\/GIT\/vaultflow/g, ROOT_POSIX)
+    .replace(/C:\/GIT/g, gitRoot)
+    .replace(/C:\/Users\/YOU/g, home)
+    .replace(
+      '# Copy this file to config/vaultflow.local.yaml and fill in your paths.',
+      `# Generated by scripts/install.mjs on ${new Date().toISOString().slice(0, 10)} — adjust paths as needed.`,
+    );
+
+  if (DRY) { record('config', 'skip', 'would generate config/vaultflow.local.yaml [dry-run]'); return; }
+  fs.writeFileSync(localA, text);
+  record('config', 'ok', `generated vaultflow.local.yaml (home: ${home}, projects: ${gitRoot})`);
+}
+
+// ── Step 0c: vault + skills skeleton ───────────────────────────────────────
+// Create the minimal files the config points at so every pipeline (dictionary
+// import, tool/agent registries, skill router) starts functional instead of
+// silently dead. Only creates what's missing — never touches existing content.
+function scaffoldSkeleton() {
+  let cfg = {};
+  try {
+    const yaml = require('js-yaml');
+    const cfgPath = require('../config/resolve.cjs');
+    cfg = yaml.load(fs.readFileSync(cfgPath, 'utf8')) || {};
+  } catch (e) { record('skeleton', 'warn', `cannot read config — ${e.message}`); return; }
+
+  const p = cfg.paths || {};
+  const stubs = [
+    [p.metrics_root, null],      // directories only —
+    [p.projects_memory, null],   // Claude Code creates this lazily; empty is fine
+    [p.claude_export_dir, null], // watched drop-folder for claude.ai chat exports
+    [p.vault_root && path.join(p.vault_root, 'index.md'),
+      '# Vault\n\nKnowledge vault consumed by vaultflow. Subdirs: tools/, agents/, domain/, methodology/.\n'],
+    [p.vault_tools_index,
+      '# Reusable Tools (Flat Structure)\n\nRegistry of reusable tools — one `### tool-name` section per tool.\n'],
+    [p.vault_agents_index,
+      '# Agent Registry\n\nRegistry of reusable agents — one `### agent-name` section per agent.\n'],
+    [p.vault_domain_dir && path.join(p.vault_domain_dir, 'README.md'),
+      '# Domain Knowledge\n\nMarkdown dropped here is auto-imported into the vaultflow dictionary nightly.\n'],
+    [p.ai_workflow,
+      '# AI Workflow\n\nModel tier routing guidance for model-router.cjs. Defaults apply until customized.\n'],
+    [p.skills_index,
+      '# User Skills Index\n\nUser-level Claude Code skills index, read by the vaultflow router.\n'],
+  ];
+
+  let created = 0, present = 0;
+  for (const [target, content] of stubs) {
+    if (!target) continue;
+    try {
+      if (content === null) {
+        if (!fs.existsSync(target)) { if (!DRY) fs.mkdirSync(target, { recursive: true }); created++; }
+        else present++;
+        continue;
+      }
+      if (fs.existsSync(target)) { present++; continue; }
+      if (!DRY) {
+        fs.mkdirSync(path.dirname(target), { recursive: true });
+        fs.writeFileSync(target, content);
+      }
+      created++;
+    } catch (_) { /* per-item best effort */ }
+  }
+  record('skeleton', 'ok', `${created} created, ${present} already present${DRY ? ' [dry-run]' : ''}`);
 }
 
 // ── Step 1: global hooks ──────────────────────────────────────────────────
@@ -241,6 +372,19 @@ if (DEVTEAM_ONLY) {
   const failedDt = results.filter((r) => r.status === 'fail').length;
   console.log(`\n${failedDt ? c.err('failed') : c.ok('done')}${DRY ? c.dim(' — dry-run') : ''}\n`);
   process.exit(failedDt ? 1 : 0);
+}
+
+// Fresh-start groundwork (install only): verify prereqs, then make sure a
+// real config + the files it points at exist before wiring anything to them.
+if (!UNINSTALL) {
+  if (!checkPrereqs()) {
+    console.log(`\n${c.err('aborted')} — fix prerequisites and re-run\n`);
+    process.exit(1);
+  }
+  if (!HOOKS_ONLY) {
+    bootstrapConfig();
+    scaffoldSkeleton();
+  }
 }
 
 installGlobalHooks();
