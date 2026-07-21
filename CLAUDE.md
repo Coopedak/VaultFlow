@@ -58,6 +58,21 @@ vaultflow install              # same as `npm run setup` once the CLI is linked
 powershell -ExecutionPolicy Bypass -File scripts/install.ps1
 powershell -ExecutionPolicy Bypass -File scripts/install.ps1 --dry-run   # flags forward to install.mjs
 
+# Weekly archive backup — working drive (C:\GIT) into the long-term archive (D:\GIT)
+npm run backup                 # run once now
+npm run backup:dry-run         # show what would copy, write nothing
+npm run backup:install         # register the weekly Scheduled Task (Sunday 19:00)
+npm run backup:uninstall       # remove the task
+# ADDITIVE ONLY, BY DESIGN. The two drives hold different populations, not two
+# views of one tree: C:\GIT is the active working set, D:\GIT is the archive and
+# holds many projects that exist NOWHERE else. A mirroring copy (robocopy /MIR
+# or /PURGE) would delete every archive-only project on the first run, so the
+# script refuses those switches outright. /XO also prevents an older working
+# copy from overwriting newer archived content. Generated trees (node_modules,
+# bin/obj, .metrics, dist) are skipped; .git IS copied — history is the point.
+# `vaultflow doctor` reports `archive_backup` freshness from the run heartbeat,
+# so a backup that silently stops is visible rather than assumed.
+
 # Dashboard
 npm run dashboard              # http://localhost:7700
 

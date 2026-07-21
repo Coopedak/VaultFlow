@@ -22,6 +22,7 @@ import {
   classifyHeartbeat,
   classifyEmbeddingCoverage,
   classifyEmbedQueue,
+  classifyArchiveBackup,
   classifyCodeGraph,
   classifyWatcher,
   classifyConfigPaths,
@@ -82,6 +83,30 @@ test('classifyEmbeddingCoverage: live coverage + orphan-bloat detection', () => 
   assert.equal(classifyEmbeddingCoverage(100, 60, 0).status, 'WARN');     // 60% live
   assert.equal(classifyEmbeddingCoverage(100, 1200, 1200).status, 'FAIL');// orphan flood
   assert.equal(classifyEmbeddingCoverage(100, 700, 600).status, 'WARN');  // >500 orphans
+});
+
+test('classifyArchiveBackup: fresh ok / overdue warn / long-dead fail', () => {
+  // Weekly cadence, so the OK window has to span more than 7 days or every
+  // slightly-late run reports a problem and the check gets ignored.
+  assert.equal(classifyArchiveBackup(0, 0).status,   'OK');
+  assert.equal(classifyArchiveBackup(7.5, 0).status, 'OK');   // normal weekly run
+  assert.equal(classifyArchiveBackup(9, 0).status,   'OK');   // grace boundary
+  assert.equal(classifyArchiveBackup(12, 0).status,  'WARN');
+  assert.equal(classifyArchiveBackup(25, 0).status,  'FAIL');
+});
+
+test('classifyArchiveBackup: a failed copy fails even when the run was recent', () => {
+  // The dangerous state is a backup that RAN but did not copy — it looks fresh
+  // while silently protecting nothing.
+  assert.equal(classifyArchiveBackup(0, 2).status, 'FAIL');
+  assert.match(classifyArchiveBackup(0, 2).detail, /failed to copy/);
+});
+
+test('classifyArchiveBackup: never-run is a warning, not a failure', () => {
+  // Not everyone has an archive drive; absence is a prompt, not a defect.
+  const r = classifyArchiveBackup(null, 0);
+  assert.equal(r.status, 'WARN');
+  assert.equal(r.value, 'never');
 });
 
 test('classifyEmbedQueue: empty ok / fresh ok / large warn / stale fail', () => {

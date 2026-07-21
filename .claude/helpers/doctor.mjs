@@ -101,6 +101,19 @@ function classifyEmbedQueue(n, ageH) {
 // A blank machine has an empty code graph BY DEFINITION, and greeting a new
 // user with a red FAIL for correctly-completed setup teaches them to ignore the
 // doctor. On an established install an empty graph is still a real failure.
+// Weekly archive backup freshness. A backup is trusted, so a backup that stops
+// running silently is worse than none at all — the nightly task once sat dead
+// for 99h with nothing surfacing it. Grace is generous (9d) because the task is
+// weekly and may legitimately catch up a day or two late after time off.
+function classifyArchiveBackup(ageDays, failed) {
+  if (ageDays === null)  return { status: 'WARN', value: 'never',  detail: 'install via `npm run backup:install`' };
+  const v = `${ageDays.toFixed(1)}d ago`;
+  if (failed > 0)        return { status: 'FAIL', value: v, detail: `${failed} project(s) failed to copy` };
+  if (ageDays <= 9)      return { status: 'OK',   value: v, detail: '' };
+  if (ageDays <= 21)     return { status: 'WARN', value: v, detail: 'weekly backup is overdue' };
+  return { status: 'FAIL', value: v, detail: 'archive backup has not run in 3+ weeks' };
+}
+
 function classifyCodeGraph(files, symbols, calls, isFresh) {
   if (files > 0) return { status: 'OK', value: `${files}f / ${symbols}s / ${calls}c`, detail: 'files / symbols / call edges' };
   return isFresh
@@ -225,6 +238,25 @@ function runChecks() {
     }
   } catch (e) { fail('nightly_heartbeat', 'err', e.message); }
 
+  // 7b. Weekly archive backup (working drive -> long-term archive drive)
+  try {
+    const yaml = require('js-yaml');
+    const cfgPath = require('../../config/resolve.cjs');
+    const cfg = fs.existsSync(cfgPath) ? yaml.load(fs.readFileSync(cfgPath, 'utf8')) || {} : {};
+    const metrics = cfg.paths && cfg.paths.metrics_root;
+    const hbPath = metrics && path.join(metrics, 'archive-backup-heartbeat.json');
+    if (!hbPath || !fs.existsSync(hbPath)) {
+      emit('archive_backup', classifyArchiveBackup(null, 0));
+    } else {
+      // stripBom: PowerShell 5.1's `Set-Content -Encoding utf8` writes a BOM,
+      // which JSON.parse rejects. The writer avoids it now; tolerate old files.
+      const raw = fs.readFileSync(hbPath, 'utf8').replace(/^﻿/, '');
+      const hb = JSON.parse(raw);
+      const ageDays = (Date.now() - new Date(hb.last_run_at).getTime()) / 86_400_000;
+      emit('archive_backup', classifyArchiveBackup(ageDays, hb.failed || 0));
+    }
+  } catch (e) { warn('archive_backup', 'err', e.message); }
+
   // 8. Embedding coverage of LIVE entries + orphan-bloat detection
   try {
     const total   = conn.prepare('SELECT COUNT(*) AS n FROM memory_entries').get().n;
@@ -344,6 +376,7 @@ export {
   classifyHeartbeat,
   classifyEmbeddingCoverage,
   classifyEmbedQueue,
+  classifyArchiveBackup,
   classifyCodeGraph,
   classifyWatcher,
   classifyConfigPaths,

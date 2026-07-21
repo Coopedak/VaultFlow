@@ -64,7 +64,11 @@
     "tui:dev": "node --enable-source-maps tui/index.mjs",
     "tui:browse": "node .claude/helpers/sync-csm-names.mjs && csm",
     "tui:sync": "node .claude/helpers/sync-csm-names.mjs",
-    "export:quartz": "node .claude/helpers/export-quartz.mjs"
+    "export:quartz": "node .claude/helpers/export-quartz.mjs",
+    "backup": "powershell -ExecutionPolicy Bypass -File scripts/backup-to-archive.ps1",
+    "backup:dry-run": "powershell -ExecutionPolicy Bypass -File scripts/backup-to-archive.ps1 -DryRun",
+    "backup:install": "powershell -ExecutionPolicy Bypass -File scripts/install-backup-task.ps1",
+    "backup:uninstall": "powershell -ExecutionPolicy Bypass -File scripts/install-backup-task.ps1 -Uninstall"
   },
   "dependencies": {
     "@duckdb/node-api": "^1.5.2-r.1",
