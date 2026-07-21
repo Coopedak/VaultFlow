@@ -35,8 +35,16 @@ function loadConfig() {
 }
 
 const cfg         = loadConfig();
-// M1: METRICS is the module-level disk-read path; startServer({metricsRoot}) param overrides this in tests and fails safely to 0/null in fixtures.
-const METRICS     = (cfg.paths   && cfg.paths.metrics_root)   || path.join(process.env.USERPROFILE || os.homedir(), 'vault', 'methodology', '.metrics');
+// M1: METRICS is the module-level disk-read path used by every handler that
+// touches the metrics directory (rawDb, parquet flush, heartbeat, watcher pid).
+//
+// It is `let`, not `const`, because startServer({ metricsRoot }) must be able to
+// re-point it: previously that option only re-initialized the db.cjs singleton,
+// leaving these ~20 disk reads pinned to the config path resolved at import
+// time. On a machine with no local config that path is the example file's
+// "C:/Users/YOU/…", so rawDb() threw "unable to open database file" and
+// /api/overview returned 500 — a fresh clone could not pass its own test suite.
+let METRICS       = (cfg.paths   && cfg.paths.metrics_root)   || path.join(process.env.USERPROFILE || os.homedir(), 'vault', 'methodology', '.metrics');
 const DB_FILE     = cfg.storage && cfg.storage.db_file      || 'vaultflow.db';
 const PARQUET_DIR = cfg.storage && cfg.storage.parquet_dir  || 'parquet';
 const PORT        = cfg.dashboard && cfg.dashboard.port     || 7700;
@@ -1766,7 +1774,12 @@ app.get('/v2', (_req, res) => { res.sendFile(path.join(__dirname, 'index-v2.html
 // auto-listens — only a direct `node server.mjs` invocation does (below).
 export function startServer(opts = {}) {
   if (opts.metricsRoot) {
-    // Test override: re-point the shared db singleton at an isolated fixture root.
+    // Test override: re-point BOTH the shared db singleton and the module-level
+    // metrics path. Re-pointing only the singleton left every raw disk read
+    // (rawDb, heartbeat, watcher pid, parquet) aimed at the configured root, so
+    // fixtures silently read the developer's real metrics dir — or, with no
+    // local config, a nonexistent "C:/Users/YOU/…" path that 500s.
+    METRICS = opts.metricsRoot;
     db.close?.();
     db.initialize(opts.metricsRoot, DB_FILE);
   }

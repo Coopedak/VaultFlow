@@ -23,6 +23,31 @@ function seedRoot() {
   return dir;
 }
 
+test('startServer({metricsRoot}) re-points raw disk reads, not just the db singleton', async () => {
+  // Regression: METRICS was a `const` captured from config at import time, so
+  // this override moved only the db.cjs singleton. Every raw read (rawDb,
+  // heartbeat, watcher pid, parquet) stayed aimed at the configured root — the
+  // developer's real metrics dir, or on a machine with no local config the
+  // example file's nonexistent "C:/Users/YOU/…". /api/overview then 500'd, so a
+  // fresh clone could not pass its own suite. /api/status both goes through
+  // withRawDb (the call that threw) and reports the path it opened, so it
+  // observes the override directly.
+  const metricsRoot = seedRoot();
+  const { startServer } = await import('../.claude/helpers/dashboard/server.mjs');
+  const srv = startServer({ port: 0, metricsRoot });
+  await new Promise(r => srv.on('listening', r));
+  try {
+    const r = await fetch(`http://127.0.0.1:${srv.address().port}/api/status`);
+    assert.equal(r.status, 200, 'status must not 500 on an isolated fixture root');
+    const body = await r.json();
+    assert.equal(
+      path.resolve(path.dirname(body.db)),
+      path.resolve(metricsRoot),
+      'raw disk reads must use the fixture root, not the configured one',
+    );
+  } finally { srv.close(); }
+});
+
 test('GET /api/overview returns the documented shape', async () => {
   const metricsRoot = seedRoot();
   const { startServer } = await import('../.claude/helpers/dashboard/server.mjs');
