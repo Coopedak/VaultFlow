@@ -54,6 +54,10 @@ paths:
   # User-level Claude Code skills
   user_skills_dir: "C:/Users/YOU/.claude/skills"
 
+  # User-level Claude Code agents (~/.claude/agents). Dispatchable in EVERY
+  # project, so these are the most reusable agents on the machine.
+  user_agents_dir: "C:/Users/YOU/.claude/agents"
+
   # Glob for project-level .claude/agents/ markdown files
   project_agents_glob: "C:/GIT/*/.claude/agents/*.md"
 

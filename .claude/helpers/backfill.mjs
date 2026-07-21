@@ -589,6 +589,52 @@ async function backfillAgents(cfg, dryRun) {
     }
   }
 
+  // ── User-global agents from ~/.claude/agents/*.md ─────────────────────
+  // Agents placed here are dispatchable in EVERY project, which makes them the
+  // most reusable things on the machine — and exactly what the reuse finder
+  // must surface first. They were previously invisible to it: the scan covered
+  // user *skills* and *project* agents, but nothing read the global agents dir.
+  const userAgentsDir = cfg.paths && cfg.paths.user_agents_dir;
+  if (userAgentsDir && existsSync(userAgentsDir)) {
+    const fs2 = createRequire(import.meta.url)('fs');
+    let uaCount = 0;
+    const seenGlobalAgents = new Set();
+    for (const entry of fs2.readdirSync(userAgentsDir, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith('.md')) continue;
+      const agentName = entry.name.replace(/\.md$/, '');
+      let descText = '';
+      try {
+        // BOM-tolerant: several agent files were authored by PowerShell and
+        // begin with U+FEFF, which defeats a naive frontmatter check.
+        const raw = readFileSync(path.join(userAgentsDir, entry.name), 'utf8').replace(/^﻿/, '');
+        descText = resolveSkillDescription(parseFrontmatter(raw).description, raw).slice(0, 500);
+      } catch (_) { /* unreadable — register by name so it is still findable */ }
+      seenGlobalAgents.add(agentName);
+      if (!dryRun) {
+        try {
+          db.upsertVaultAgent(agentName, agentName, 'user-agent', descText, descText);
+          registered++; uaCount++;
+        } catch (err) {
+          process.stderr.write(`[backfill] user-agent upsert error '${agentName}': ${err.message}\n`);
+        }
+      } else { registered++; uaCount++; }
+    }
+    console.log(`[backfill] User agents registered: ${uaCount}${dryRun ? ' (dry-run)' : ''}`);
+
+    // Same partial-scan guard the user-skill prune uses: never let an empty or
+    // failed directory read delete the whole registry.
+    const MIN_FOR_PRUNE = 5;
+    if (!dryRun && seenGlobalAgents.size >= MIN_FOR_PRUNE) {
+      const raw = db.raw();
+      const existing = raw.prepare(`SELECT agent_id FROM vault_agents WHERE source='user-agent'`).all().map(r => r.agent_id);
+      const orphans = existing.filter(id => !seenGlobalAgents.has(id));
+      if (orphans.length) {
+        raw.prepare(`DELETE FROM vault_agents WHERE source='user-agent' AND agent_id IN (${orphans.map(() => '?').join(',')})`).run(...orphans);
+        console.log(`[backfill] User-agent orphans pruned: ${orphans.length}`);
+      }
+    }
+  }
+
   // ── Project agents from C:/GIT/*/.claude/agents/*.md ─────────────────
   const projectAgentsGlob = cfg.paths && cfg.paths.project_agents_glob;
   if (projectAgentsGlob) {

@@ -58,6 +58,22 @@ vaultflow install              # same as `npm run setup` once the CLI is linked
 powershell -ExecutionPolicy Bypass -File scripts/install.ps1
 powershell -ExecutionPolicy Bypass -File scripts/install.ps1 --dry-run   # flags forward to install.mjs
 
+# Harvest per-project agents into ~/.claude/agents so they work in EVERY project
+npm run harvest-agents                    # from the default source (D:/GIT)
+npm run harvest-agents -- --from D:/GIT,C:/GIT --dry-run
+npm run harvest-agents -- --uninstall     # remove only harvested copies
+# Agents authored in a project's .claude/agents/ are dispatchable ONLY in that
+# project, so the same agent gets copy-pasted between repos (branch-vault-sync
+# was in 11) while new projects start with none. ~/.claude/agents is user-global.
+# Identical copies collapse; DRIFTED copies of one name are genuinely different
+# agents, so the newest/richest takes the bare name and every other variant is
+# kept as `<name>--<project>` — nothing is silently discarded. Files lacking
+# name+description frontmatter are skipped (Claude Code cannot dispatch them),
+# and the `name:` field is rewritten to match the filename slug so the agent is
+# addressable by the name it is stored under. Hand-authored agents already in
+# ~/.claude/agents are never overwritten. Run `npm run backfill -- --skills-only`
+# afterwards so the reuse finder indexes them (config: paths.user_agents_dir).
+
 # Weekly archive backup — working drive (C:\GIT) into the long-term archive (D:\GIT)
 npm run backup                 # run once now
 npm run backup:dry-run         # show what would copy, write nothing

@@ -68,7 +68,8 @@
     "backup": "powershell -ExecutionPolicy Bypass -File scripts/backup-to-archive.ps1",
     "backup:dry-run": "powershell -ExecutionPolicy Bypass -File scripts/backup-to-archive.ps1 -DryRun",
     "backup:install": "powershell -ExecutionPolicy Bypass -File scripts/install-backup-task.ps1",
-    "backup:uninstall": "powershell -ExecutionPolicy Bypass -File scripts/install-backup-task.ps1 -Uninstall"
+    "backup:uninstall": "powershell -ExecutionPolicy Bypass -File scripts/install-backup-task.ps1 -Uninstall",
+    "harvest-agents": "node scripts/harvest-agents.mjs"
   },
   "dependencies": {
     "@duckdb/node-api": "^1.5.2-r.1",
