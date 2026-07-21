@@ -97,10 +97,15 @@ function classifyEmbedQueue(n, ageH) {
   return { status: 'OK', value: String(n), detail: `draining (oldest ${ageH.toFixed(1)}h)` };
 }
 
-function classifyCodeGraph(files, symbols, calls) {
-  return files > 0
-    ? { status: 'OK',   value: `${files}f / ${symbols}s / ${calls}c`, detail: 'files / symbols / call edges' }
-    : { status: 'FAIL', value: '0', detail: 'no files indexed — run watcher or nightly' };
+// `isFresh` = this install has no history at all (no sessions recorded yet).
+// A blank machine has an empty code graph BY DEFINITION, and greeting a new
+// user with a red FAIL for correctly-completed setup teaches them to ignore the
+// doctor. On an established install an empty graph is still a real failure.
+function classifyCodeGraph(files, symbols, calls, isFresh) {
+  if (files > 0) return { status: 'OK', value: `${files}f / ${symbols}s / ${calls}c`, detail: 'files / symbols / call edges' };
+  return isFresh
+    ? { status: 'OK',   value: 'pending', detail: 'fresh install — indexes on first watcher/nightly run' }
+    : { status: 'FAIL', value: '0',       detail: 'no files indexed — run watcher or nightly' };
 }
 
 function classifyWatcher(count) {
@@ -150,6 +155,15 @@ function runChecks() {
   db.initialize(null, null);
   const conn = db.raw();
 
+  // A machine that has recorded no sessions has simply not been used yet. Some
+  // checks measure accumulated history, and on a brand-new install those are
+  // legitimately empty — reporting them as FAIL makes a correct setup look
+  // broken and trains new users to distrust the doctor.
+  let isFreshInstall = false;
+  try {
+    isFreshInstall = conn.prepare('SELECT COUNT(*) AS n FROM sessions').get().n === 0;
+  } catch (_) { /* schema check below reports the real problem */ }
+
   // 1. DB tables present
   try {
     const expected = ['edit_events','sessions','memory_entries','tool_calls','prompts','code_symbols','code_imports','code_calls','git_commits','memory_embeddings','prompt_embeddings','embed_queue'];
@@ -198,7 +212,11 @@ function runChecks() {
     if (!metrics) warn('nightly_heartbeat', 'no-metrics-root');
     else {
       const hbPath = path.join(metrics, 'nightly-heartbeat.json');
-      if (!fs.existsSync(hbPath)) fail('nightly_heartbeat', 'never', 'install via `npm run nightly:install`');
+      if (!fs.existsSync(hbPath)) {
+        // Distinguish "never installed" from "installed but has not run yet".
+        if (isFreshInstall) emit('nightly_heartbeat', { status: 'OK', value: 'pending', detail: 'fresh install — first run is scheduled for 03:00' });
+        else fail('nightly_heartbeat', 'never', 'install via `npm run nightly:install`');
+      }
       else {
         const hb = JSON.parse(fs.readFileSync(hbPath, 'utf8'));
         const ageH = (Date.now() - new Date(hb.last_run_at).getTime()) / 3_600_000;
@@ -231,7 +249,7 @@ function runChecks() {
     const f = conn.prepare('SELECT COUNT(DISTINCT file) AS n FROM code_symbols').get().n;
     const s = conn.prepare('SELECT COUNT(*) AS n FROM code_symbols').get().n;
     const c = conn.prepare('SELECT COUNT(*) AS n FROM code_calls').get().n;
-    emit('code_graph', classifyCodeGraph(f, s, c));
+    emit('code_graph', classifyCodeGraph(f, s, c, isFreshInstall));
   } catch (e) { fail('code_graph', 'err', e.message); }
 
   // 11. Watcher daemon

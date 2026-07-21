@@ -1,26 +1,5 @@
 {
-  "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Read",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node C:/GIT/vaultflow/.claude/helpers/pre-read.cjs"
-          }
-        ]
-      },
-      {
-        "matcher": "Skill",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node C:/GIT/vaultflow/.claude/helpers/hook-handler.cjs pre-skill"
-          }
-        ]
-      }
-    ]
-  },
+  "_comment": "Intentionally minimal. vaultflow's lifecycle hooks are installed USER-GLOBAL into ~/.claude/settings.json by scripts/install.mjs (CANONICAL_HOOKS) so they fire in every project. Duplicating them here made pre-read and pre-skill run TWICE per event inside this repo, and hardcoded an absolute path that breaks on any clone located elsewhere.",
   "denyList": [
     "Read(./.env)",
     "Read(./.env.*)",

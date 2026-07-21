@@ -19,9 +19,15 @@
 # NOTE: keep this file ASCII-only. It has no BOM, so Windows PowerShell 5.1
 # reads it as ANSI and UTF-8 punctuation becomes parse-breaking smart quotes.
 
-[CmdletBinding()]
+# NOTE: no [CmdletBinding()] here, and $Forward must stay last.
+# With CmdletBinding, PowerShell rejects unknown arguments outright, so
+# `install.ps1 --dry-run` died with "A positional parameter cannot be found"
+# instead of forwarding the flag to install.mjs. ValueFromRemainingArguments
+# collects every unbound argument so the documented passthrough actually works.
 param(
-    [switch]$SkipClaude   # skip installing the Claude Code CLI
+    [switch]$SkipClaude,                                   # skip installing the Claude Code CLI
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$Forward = @()                               # passed straight through to install.mjs
 )
 
 $ErrorActionPreference = 'Stop'
@@ -95,5 +101,11 @@ if ($SkipClaude) {
 # does config bootstrap, vault skeleton, hooks, nightly task, watcher,
 # dev-team plugin, and finishes with the doctor.
 Step 'vaultflow setup (scripts/install.mjs)'
-& node (Join-Path $RepoRoot 'scripts\install.mjs') @args
+$InstallMjs = Join-Path $RepoRoot 'scripts\install.mjs'
+if ($Forward.Count -gt 0) {
+    Note "forwarding to install.mjs: $($Forward -join ' ')"
+    & node $InstallMjs @Forward
+} else {
+    & node $InstallMjs
+}
 exit $LASTEXITCODE

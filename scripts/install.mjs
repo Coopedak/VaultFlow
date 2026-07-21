@@ -10,10 +10,15 @@
  *      If they only live in the project, vaultflow intercepts events ONLY while
  *      you work inside the vaultflow repo and is silent in every other project.
  *   2. CLI ON PATH   — `npm link` so `vaultflow …` / `vault …` work everywhere.
- *   3. NIGHTLY TASK  — a Scheduled Task so maintenance (session summary, embed
+ *   3. MCP SERVER    — registered in ~/.claude.json (user scope). The repo's
+ *      .mcp.json is project scope, so without this the vaultflow MCP tools
+ *      (find_symbol, blast_radius, search_memory …) exist only inside this repo.
+ *   4. SKILLS        — the curated .agents/skills set copied into
+ *      ~/.claude/skills so the CLI can use them from any project.
+ *   5. NIGHTLY TASK  — a Scheduled Task so maintenance (session summary, embed
  *      queue drain, orphan purge, parquet flush) actually runs. Without it the
  *      embed queue starves and the heartbeat goes stale.
- *   4. WATCHER       — the chokidar daemon that catches edits from tools that
+ *   6. WATCHER       — the chokidar daemon that catches edits from tools that
  *      don't fire Claude Code hooks.
  *
  * This script does all four, idempotently, and finishes by running the doctor.
@@ -33,6 +38,8 @@
  *   node scripts/install.mjs --hooks-only     # only install global hooks
  *   node scripts/install.mjs --no-nightly     # skip Scheduled Task registration
  *   node scripts/install.mjs --no-link        # skip `npm link`
+ *   node scripts/install.mjs --no-mcp         # skip user-scope MCP registration
+ *   node scripts/install.mjs --no-skills      # skip copying curated skills
  *   node scripts/install.mjs --no-watcher     # skip starting the watcher
  *   node scripts/install.mjs --no-dev-team    # skip installing the dev-team plugin
  *   node scripts/install.mjs --dev-team-only  # install ONLY the dev-team plugin
@@ -83,6 +90,8 @@ const NO_LINK = has('--no-link');
 const NO_WATCHER = has('--no-watcher');
 const NO_DEVTEAM = has('--no-dev-team');
 const DEVTEAM_ONLY = has('--dev-team-only');
+const NO_MCP = has('--no-mcp');
+const NO_SKILLS = has('--no-skills');
 
 const USER_SETTINGS = path.join(os.homedir(), '.claude', 'settings.json');
 const BACKUP_DIR = path.join(os.homedir(), '.claude', 'backups');
@@ -242,32 +251,66 @@ function scaffoldSkeleton() {
 }
 
 // ── Step 1: global hooks ──────────────────────────────────────────────────
+// A vaultflow hook is any command that runs a script under THIS repo's
+// .claude/helpers. That is the identity used to add, refresh, and remove our
+// entries without touching anyone else's.
+function isVaultflowHook(entry) {
+  return (entry?.hooks || []).some((h) => typeof h?.command === 'string' && h.command.includes(`${H}/`));
+}
+
+/**
+ * Merge the canonical vaultflow hooks into an existing hooks object.
+ *
+ * Replacing `user.hooks` wholesale (the previous behavior) silently deleted
+ * every hook the user or another tool had configured — a backup file is not a
+ * substitute for not destroying live config. Merging keeps foreign entries and
+ * replaces only vaultflow's own, so re-running the installer is safe and
+ * re-pointing a moved repo still cleans up the stale commands.
+ */
+function mergeHooks(existing) {
+  const merged = {};
+  for (const [event, entries] of Object.entries(existing || {})) {
+    const foreign = (entries || []).filter((e) => !isVaultflowHook(e));
+    if (foreign.length) merged[event] = foreign;
+  }
+  for (const [event, entries] of Object.entries(CANONICAL_HOOKS)) {
+    merged[event] = [...(merged[event] || []), ...entries];
+  }
+  return merged;
+}
+
 function installGlobalHooks() {
   const user = readJson(USER_SETTINGS) || {};
 
   if (UNINSTALL) {
     if (!user.hooks) { record('global-hooks', 'skip', 'no global hooks to remove'); return; }
     const backup = backupUserSettings();
-    delete user.hooks;
+    const kept = {};
+    for (const [event, entries] of Object.entries(user.hooks)) {
+      const foreign = (entries || []).filter((e) => !isVaultflowHook(e));
+      if (foreign.length) kept[event] = foreign;
+    }
+    if (Object.keys(kept).length) user.hooks = kept; else delete user.hooks;
     if (!DRY) {
       fs.mkdirSync(path.dirname(USER_SETTINGS), { recursive: true });
       fs.writeFileSync(USER_SETTINGS, JSON.stringify(user, null, 2) + '\n');
     }
-    record('global-hooks', 'ok', `removed${backup ? ` (backup: ${path.basename(backup)})` : ''}`);
+    record('global-hooks', 'ok', `vaultflow hooks removed, ${Object.keys(kept).length} foreign event(s) kept${backup ? ` (backup: ${path.basename(backup)})` : ''}`);
     return;
   }
 
-  const already = JSON.stringify(user.hooks || null) === JSON.stringify(CANONICAL_HOOKS);
-  if (already) { record('global-hooks', 'ok', 'already up to date'); return; }
+  const next = mergeHooks(user.hooks);
+  if (JSON.stringify(user.hooks || null) === JSON.stringify(next)) { record('global-hooks', 'ok', 'already up to date'); return; }
 
+  const foreignCount = Object.values(next).flat().filter((e) => !isVaultflowHook(e)).length;
   const backup = backupUserSettings();
-  user.hooks = CANONICAL_HOOKS;
+  user.hooks = next;
   if (!DRY) {
     fs.mkdirSync(path.dirname(USER_SETTINGS), { recursive: true });
     fs.writeFileSync(USER_SETTINGS, JSON.stringify(user, null, 2) + '\n');
   }
   const events = Object.keys(CANONICAL_HOOKS).length;
-  record('global-hooks', 'ok', `${events} events → ~/.claude/settings.json${backup ? ` (backup: ${path.basename(backup)})` : ''}${DRY ? ' [dry-run]' : ''}`);
+  record('global-hooks', 'ok', `${events} events → ~/.claude/settings.json${foreignCount ? `, ${foreignCount} foreign hook(s) preserved` : ''}${backup ? ` (backup: ${path.basename(backup)})` : ''}${DRY ? ' [dry-run]' : ''}`);
 }
 
 // ── Step 2: npm link (CLI on PATH) ─────────────────────────────────────────
@@ -307,20 +350,138 @@ function installNightly() {
 }
 
 // ── Step 4: watcher daemon ─────────────────────────────────────────────────
+// Start via ensure-watcher.mjs, NOT `watcher.mjs --start`. watcher.mjs treats
+// any unrecognized argument as "run in the foreground", so the old --start call
+// under spawnSync blocked the installer forever on every machine where the
+// watcher was not already running — i.e. on exactly the fresh installs this
+// script exists to serve. ensure-watcher.mjs spawns a detached daemon and exits.
 function ensureWatcher() {
   const watcher = path.join(ROOT, '.claude', 'helpers', 'watcher.mjs');
-  const status = spawnSync(process.execPath, [watcher, '--status'], { cwd: ROOT, stdio: 'pipe', encoding: 'utf8' });
-  const running = /running/i.test(status.stdout || '');
+  const ensure  = path.join(ROOT, '.claude', 'helpers', 'ensure-watcher.mjs');
+  const status = spawnSync(process.execPath, [watcher, '--status'], { cwd: ROOT, stdio: 'pipe', encoding: 'utf8', timeout: 20_000 });
+  const running = /Status: running/i.test(status.stdout || '');
   if (UNINSTALL) {
     if (DRY) { record('watcher', 'skip', 'dry-run'); return; }
-    spawnSync(process.execPath, [watcher, '--stop'], { cwd: ROOT, stdio: 'ignore' });
+    spawnSync(process.execPath, [watcher, '--stop'], { cwd: ROOT, stdio: 'ignore', timeout: 20_000 });
     record('watcher', 'ok', 'stopped');
     return;
   }
   if (running) { record('watcher', 'ok', (status.stdout || '').trim().split('\n')[0]); return; }
-  if (DRY) { record('watcher', 'skip', 'would start watcher [dry-run]'); return; }
-  const r = spawnSync(process.execPath, [watcher, '--start'], { cwd: ROOT, stdio: 'ignore' });
-  record('watcher', r.status === 0 ? 'ok' : 'warn', r.status === 0 ? 'started' : 'could not start — run `npm run watcher`');
+  if (DRY) { record('watcher', 'skip', 'would start watcher daemon [dry-run]'); return; }
+  const launcher = fs.existsSync(ensure) ? [ensure] : [watcher, '--daemon'];
+  const r = spawnSync(process.execPath, launcher, { cwd: ROOT, stdio: 'ignore', timeout: 60_000 });
+  record('watcher', r.status === 0 ? 'ok' : 'warn', r.status === 0 ? 'daemon started' : 'could not start — run `npm run watcher`');
+}
+
+// ── Step 4b: vaultflow MCP server, user scope ──────────────────────────────
+// The repo's .mcp.json is PROJECT scope: it gives find_symbol / search_memory /
+// blast_radius only while cwd is the vaultflow repo. Registering the same
+// server in ~/.claude.json's top-level mcpServers makes vaultflow's tools
+// available from every project on the machine — which is the whole point of a
+// machine-wide brain. Idempotent: rewrites only when the entry is absent or
+// points at a different path (e.g. the repo moved).
+function installMcpServer() {
+  const claudeJson = path.join(os.homedir(), '.claude.json');
+  const serverPath = `${ROOT_POSIX}/.claude/helpers/mcp-server.cjs`;
+  const desired = { type: 'stdio', command: 'node', args: [serverPath], env: {} };
+
+  const cfg = readJson(claudeJson);
+  if (!cfg) {
+    // No ~/.claude.json yet — Claude Code writes it on first run. Creating a
+    // file with only mcpServers is safe and is merged with defaults later.
+    if (UNINSTALL) { record('mcp-server', 'skip', 'no ~/.claude.json'); return; }
+    if (DRY) { record('mcp-server', 'skip', 'would create ~/.claude.json with vaultflow server [dry-run]'); return; }
+    fs.writeFileSync(claudeJson, JSON.stringify({ mcpServers: { vaultflow: desired } }, null, 2) + '\n');
+    record('mcp-server', 'ok', 'registered user-scope (new ~/.claude.json)');
+    return;
+  }
+
+  cfg.mcpServers = cfg.mcpServers || {};
+  if (UNINSTALL) {
+    if (!cfg.mcpServers.vaultflow) { record('mcp-server', 'skip', 'not registered'); return; }
+    if (DRY) { record('mcp-server', 'skip', 'dry-run'); return; }
+    delete cfg.mcpServers.vaultflow;
+    fs.writeFileSync(claudeJson, JSON.stringify(cfg, null, 2) + '\n');
+    record('mcp-server', 'ok', 'unregistered');
+    return;
+  }
+
+  const current = cfg.mcpServers.vaultflow;
+  if (current && JSON.stringify(current.args || []) === JSON.stringify(desired.args)) {
+    record('mcp-server', 'ok', 'already registered user-scope');
+    return;
+  }
+  if (DRY) { record('mcp-server', 'skip', `would register vaultflow MCP in ~/.claude.json [dry-run]`); return; }
+  cfg.mcpServers.vaultflow = desired;
+  fs.writeFileSync(claudeJson, JSON.stringify(cfg, null, 2) + '\n');
+  record('mcp-server', 'ok', `${current ? 're-pointed' : 'registered'} user-scope → tools available in every project`);
+}
+
+// ── Step 4c: curated skills → ~/.claude/skills ─────────────────────────────
+// .agents/skills/ holds 134 vendored skill folders, but only the ones marked
+// `enabled = true` in .agents/config.toml are the curated set. Those were
+// reachable from Codex only; Claude Code reads ~/.claude/skills. Copy the
+// enabled set there so the same skills are usable from the CLI in every
+// project. Copies (not symlinks) because symlink creation on Windows needs
+// either elevation or Developer Mode.
+function installUserSkills() {
+  const skillsDir = path.join(os.homedir(), '.claude', 'skills');
+  const srcRoot   = path.join(ROOT, '.agents', 'skills');
+  const tomlPath  = path.join(ROOT, '.agents', 'config.toml');
+  if (!fs.existsSync(tomlPath) || !fs.existsSync(srcRoot)) { record('user-skills', 'skip', '.agents not vendored'); return; }
+
+  const enabled = parseEnabledSkillPaths(tomlPath);
+  if (UNINSTALL) {
+    if (DRY) { record('user-skills', 'skip', 'dry-run'); return; }
+    let removed = 0;
+    for (const name of enabled) {
+      const dest = path.join(skillsDir, name);
+      // Only remove copies we installed — the marker file proves provenance.
+      if (fs.existsSync(path.join(dest, '.vaultflow-managed'))) { fs.rmSync(dest, { recursive: true, force: true }); removed++; }
+    }
+    record('user-skills', 'ok', `removed ${removed} vaultflow-managed skill(s)`);
+    return;
+  }
+
+  if (DRY) { record('user-skills', 'skip', `would install ${enabled.length} curated skills → ~/.claude/skills [dry-run]`); return; }
+
+  let copied = 0, skipped = 0;
+  for (const name of enabled) {
+    const src  = path.join(srcRoot, name);
+    const dest = path.join(skillsDir, name);
+    if (!fs.existsSync(path.join(src, 'SKILL.md'))) continue;
+    // Never clobber a hand-authored skill of the same name.
+    if (fs.existsSync(dest) && !fs.existsSync(path.join(dest, '.vaultflow-managed'))) { skipped++; continue; }
+    try {
+      fs.mkdirSync(dest, { recursive: true });
+      fs.cpSync(src, dest, { recursive: true });
+      fs.writeFileSync(path.join(dest, '.vaultflow-managed'), 'Installed by vaultflow scripts/install.mjs. Safe to delete.\n');
+      copied++;
+    } catch (_) { /* per-skill best effort */ }
+  }
+  record('user-skills', 'ok', `${copied} curated skill(s) → ~/.claude/skills${skipped ? `, ${skipped} user-authored left alone` : ''}`);
+}
+
+/**
+ * Names of `.agents/skills/*` folders marked `enabled = true` in config.toml.
+ * Minimal TOML reading — the file only ever uses `[[skills.config]]` blocks
+ * with `path` and `enabled` keys, so a full TOML parser would be a new dep for
+ * no gain. Mirrors parseCodexConfig() in .claude/helpers/backfill.mjs.
+ */
+function parseEnabledSkillPaths(tomlPath) {
+  const out = [];
+  let cur = null;
+  for (const line of fs.readFileSync(tomlPath, 'utf8').split('\n')) {
+    const t = line.trim();
+    if (t === '[[skills.config]]') { if (cur?.enabled && cur.path) out.push(path.basename(cur.path)); cur = { path: null, enabled: false }; continue; }
+    if (!cur) continue;
+    const p = t.match(/^path\s*=\s*"(.+)"$/);
+    const e = t.match(/^enabled\s*=\s*(true|false)$/);
+    if (p) cur.path = p[1];
+    if (e) cur.enabled = e[1] === 'true';
+  }
+  if (cur?.enabled && cur.path) out.push(path.basename(cur.path));
+  return out;
 }
 
 // ── Step 5: dev-team plugin (vendored at plugins/dev-team) ─────────────────
@@ -390,6 +551,8 @@ if (!UNINSTALL) {
 installGlobalHooks();
 if (!HOOKS_ONLY) {
   if (!NO_LINK) linkCli(); else record('cli-link', 'skip', '--no-link');
+  if (!NO_MCP) installMcpServer(); else record('mcp-server', 'skip', '--no-mcp');
+  if (!NO_SKILLS) installUserSkills(); else record('user-skills', 'skip', '--no-skills');
   if (!NO_NIGHTLY) installNightly(); else record('nightly-task', 'skip', '--no-nightly');
   if (!NO_WATCHER) ensureWatcher(); else record('watcher', 'skip', '--no-watcher');
   if (!NO_DEVTEAM) installDevTeam(); else record('dev-team', 'skip', '--no-dev-team');

@@ -17,6 +17,7 @@
 
 const fs   = require('fs');
 const path = require('path');
+const { canonicalizePath } = require('./path-filter.cjs');
 
 // ── excluded path prefixes (loaded once from config) ─────────────────────
 // Prevents snapshot copies (D:/vaultflow) from polluting the code graph.
@@ -241,6 +242,23 @@ function purgeCodeGraph(db, opts = {}) {
   for (const r of conn.prepare('SELECT DISTINCT file FROM code_imports').all())        if (r.file)        files.add(r.file);
   for (const r of conn.prepare('SELECT DISTINCT caller_file FROM code_calls').all())   if (r.caller_file) files.add(r.caller_file);
 
+  // Collapse Windows path-casing duplicates: the same file indexed as both
+  // C:\Git\… and C:\GIT\… appears as two nodes, so find_symbol returns every
+  // symbol twice and blast_radius misses importers filed under the other
+  // spelling (167 of 727 files were duplicated this way). indexFile now
+  // canonicalizes on write; this clears the non-canonical rows already stored.
+  //
+  // Safe to DELETE rather than filter — unlike edit_events, the code graph is
+  // derived data rebuilt from source by the indexer, so a dropped row returns
+  // on the next pass. Only the spellings that are NOT the canonical one go.
+  let casingDupes = 0;
+  const byLower = new Map();
+  for (const f of files) {
+    const k = f.toLowerCase();
+    if (!byLower.has(k)) byLower.set(k, []);
+    byLower.get(k).push(f);
+  }
+
   let junkFiles = 0, missingFiles = 0;
   const tx = conn.prepare('BEGIN'), co = conn.prepare('COMMIT'), rb = conn.prepare('ROLLBACK');
   tx.run();
@@ -256,12 +274,23 @@ function purgeCodeGraph(db, opts = {}) {
       if (db.clearSymbolEmbeddings) { try { db.clearSymbolEmbeddings(f); } catch (_) {} }
       if (reason === 'junk') junkFiles++; else missingFiles++;
     }
+
+    for (const variants of byLower.values()) {
+      if (variants.length < 2) continue;
+      const canonical = canonicalizePath(variants[0]);
+      for (const v of variants) {
+        if (v === canonical) continue;
+        clearFile(conn, v);
+        if (db.clearSymbolEmbeddings) { try { db.clearSymbolEmbeddings(v); } catch (_) {} }
+        casingDupes++;
+      }
+    }
     co.run();
   } catch (err) {
     try { rb.run(); } catch (_) {}
     throw err;
   }
-  return { filesPurged: junkFiles + missingFiles, junkFiles, missingFiles };
+  return { filesPurged: junkFiles + missingFiles, junkFiles, missingFiles, casingDupes };
 }
 
 // Reserved words that look like function calls in regex but aren't —
@@ -368,6 +397,15 @@ function isNoiseCallee(name) {
 
 function indexFile(db, filePath, project) {
   if (!shouldIndex(filePath)) return { skipped: true };
+
+  // Index under the filesystem's own casing so one file is one node.
+  //
+  // Callers reach here with different spellings of the same Windows path —
+  // the Claude hook passes the session cwd's casing (C:\Git\…), the watcher
+  // passes the watch root's (C:\GIT\…). Left alone, 167 of 727 indexed files
+  // existed twice: find_symbol returned every symbol twice, and blast_radius
+  // silently missed importers filed under the other spelling.
+  filePath = canonicalizePath(filePath);
 
   let stat;
   try { stat = fs.statSync(filePath); }

@@ -102,6 +102,16 @@ test('classifyCodeGraph: indexed ok / empty fail', () => {
   assert.equal(classifyCodeGraph(0, 0, 0).status, 'FAIL');
 });
 
+test('classifyCodeGraph: an empty graph on a fresh install is pending, not failed', () => {
+  // A machine that has recorded no sessions has an empty code graph by
+  // definition. Greeting a new user with FAIL for correctly-completed setup
+  // teaches them to ignore the doctor.
+  assert.equal(classifyCodeGraph(0, 0, 0, true).status, 'OK');
+  assert.match(classifyCodeGraph(0, 0, 0, true).detail, /fresh install/);
+  // ...but once there IS history, an empty graph is still a real failure.
+  assert.equal(classifyCodeGraph(0, 0, 0, false).status, 'FAIL');
+});
+
 test('classifyPatternQuality: none ok / noise fail / real signal ok', () => {
   assert.equal(classifyPatternQuality(null).status, 'OK');
   assert.equal(classifyPatternQuality('wal::db').status, 'FAIL');   // infrastructure noise

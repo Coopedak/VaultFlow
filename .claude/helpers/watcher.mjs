@@ -110,48 +110,42 @@ function ensureSession(db) {
 
 // ── logging ───────────────────────────────────────────────────────────────
 
+// Rotate at 8MB, keep one generation. The watcher logs every filesystem event
+// it sees, so an un-rotated log grows without bound (41MB observed) — it is a
+// debug tail, not an archive, and the durable record is edit_events in SQLite.
+const LOG_MAX_BYTES = 8 * 1024 * 1024;
+
+function rotateLogIfNeeded() {
+  try {
+    if (fs.statSync(LOG_FILE).size < LOG_MAX_BYTES) return;
+    fs.renameSync(LOG_FILE, `${LOG_FILE}.1`);   // clobbers the previous .1 — one generation only
+  } catch (_) { /* missing file, or a concurrent rotate won the race */ }
+}
+
 function log(msg) {
   const line = `${new Date().toISOString()} ${msg}\n`;
   process.stderr.write(`[watcher] ${msg}\n`);
   try {
     fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true });
+    rotateLogIfNeeded();
     fs.appendFileSync(LOG_FILE, line);
   } catch (_) {}
 }
 
 // ── file filter ───────────────────────────────────────────────────────────
 
-// Ignore patterns — generated/binary/IDE noise
-const IGNORE_PATTERNS = [
-  /node_modules/,
-  /\.git\//,
-  /\.git\\/,
-  /dist\//,
-  /dist\\/,
-  /build\//,
-  /build\\/,
-  /\.parquet$/,
-  /\.db$/,
-  /\.db-shm$/,
-  /\.db-wal$/,
-  /\.duckdb\.wal$/,
-  /\.wal$/,
-  /\.pid$/,
-  /\.log$/,
-  /\.png$/,
-  /\.jpg$/,
-  /\.gif$/,
-  /\.ico$/,
-  /\.ttf$/,
-  /\.woff/,
-  /\/__pycache__\//,
-  /\.pyc$/,
-  /\.DS_Store/,
-];
+// What counts as a real, authored edit lives in path-filter.cjs — shared with
+// db.cjs so the WRITE-time filter here and the READ-time filter used by
+// queryEditFrequency can never drift apart.
+const { isNoiseEditPath, isGitIgnoredDir } = require('./path-filter.cjs');
 
 function shouldIgnore(filePath) {
-  return IGNORE_PATTERNS.some(r => r.test(filePath));
+  return isNoiseEditPath(filePath);
 }
+
+// Exported for tests only — importing this module is side-effect free because
+// the entry point below is guarded on process.argv[1].
+export { shouldIgnore, isGitIgnoredDir };
 
 // Shared with post-edit / session / copilot-resume — see project-id.cjs.
 const { deriveProject } = require('./project-id.cjs');
@@ -1050,7 +1044,10 @@ if (process.argv[1] === thisPath) {
     stopDaemon();
   } else if (cmd === '--status' || cmd === 'status') {
     daemonStatus();
-  } else if (cmd === '--daemon' || cmd === 'daemon') {
+  } else if (cmd === '--daemon' || cmd === 'daemon' || cmd === '--start' || cmd === 'start') {
+    // `--start` is an alias, not a synonym for "run": callers that meant
+    // "make sure it's running" previously fell through to the foreground
+    // branch below and blocked their parent (spawnSync) forever.
     const watchDir = args[1] || undefined;
     startDaemon(watchDir);
   } else {

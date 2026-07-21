@@ -11,7 +11,7 @@
  * detached. argv[2] = sess.cwd, argv[3] = sess.project (optional).
  */
 
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { spawn }                    from 'node:child_process';
 import { createRequire }            from 'node:module';
 import path                         from 'node:path';
@@ -139,4 +139,56 @@ const project = process.argv[3] || path.basename(cwd);
   } catch (err) {
     safeWrite(`[vaultflow:bg] watcher start error — ${err.message}\n`);
   }
+
+  // ── nightly catch-up ────────────────────────────────────────────────────
+  catchUpNightly(cfg);
 })();
+
+/**
+ * Run nightly maintenance if the Scheduled Task has not run recently.
+ *
+ * WHY: the 3 AM task is registered with an Interactive principal whenever the
+ * installer runs non-elevated (S4U needs admin), and an Interactive task is
+ * silently skipped while the user is logged off. Observed here: 4 missed runs,
+ * 99h since the last heartbeat, and 1759 symbol embeddings stranded in
+ * embed_queue because nightly is their only drainer. Tying the health of the
+ * whole pipeline to one scheduler entry is also the wrong shape for a tool
+ * meant to be deployed onto arbitrary machines.
+ *
+ * So: whenever a session starts and the heartbeat is stale, run nightly
+ * detached. nightly.mjs is idempotent and writes the heartbeat itself, so a
+ * successful catch-up run stops the next session from starting another. The
+ * Scheduled Task stays the primary path; this is the safety net.
+ */
+function catchUpNightly(cfg) {
+  const STALE_HOURS = 26;   // > 24 so a task that fired on time never triggers a catch-up
+  try {
+    const metrics = cfg?.paths?.metrics_root;
+    if (!metrics) return;
+
+    const hbPath = path.join(metrics, 'nightly-heartbeat.json');
+    let ageH = Infinity;
+    if (existsSync(hbPath)) {
+      const last = JSON.parse(readFileSync(hbPath, 'utf8')).last_run_at;
+      if (last) ageH = (Date.now() - new Date(last).getTime()) / 3_600_000;
+    }
+    if (ageH < STALE_HOURS) return;
+
+    // Guard against two sessions opening at once both spawning a run. The lock
+    // is advisory and self-expiring, so a crashed run cannot wedge it shut.
+    const lockPath = path.join(metrics, '.nightly-catchup.lock');
+    if (existsSync(lockPath)) {
+      const lockAgeH = (Date.now() - Number(readFileSync(lockPath, 'utf8').trim() || 0)) / 3_600_000;
+      if (lockAgeH < 2) return;
+    }
+    writeFileSync(lockPath, String(Date.now()), 'utf8');
+
+    const child = spawn(process.execPath, [path.join(__dirname, 'nightly.mjs')], {
+      detached: true, stdio: 'ignore', env: { ...process.env, VAULTFLOW_NIGHTLY_CATCHUP: '1' },
+    });
+    child.unref();
+    safeWrite(`[vaultflow:bg] nightly catch-up started (heartbeat ${Math.round(ageH)}h stale)\n`);
+  } catch (err) {
+    safeWrite(`[vaultflow:bg] nightly catch-up error — ${err.message}\n`);
+  }
+}

@@ -95,8 +95,33 @@ function firstBodyParagraph(raw) {
  */
 function resolveSkillDescription(frontmatterDesc, raw) {
   if (!isStubDescription(frontmatterDesc)) return frontmatterDesc;
+  // The vendored .agents/skills/* files wrap their original agent definition
+  // verbatim, so the real description sits in a SECOND frontmatter block right
+  // after the generated stub one. Prefer that over the raw body — otherwise the
+  // "first paragraph" fallback indexes a YAML blob (type:/color:/capabilities:)
+  // as the skill's description.
+  const nested = nestedFrontmatterDescription(raw);
+  if (nested && !isStubDescription(nested)) return nested;
   const body = firstBodyParagraph(raw);
   return body || frontmatterDesc || '';
+}
+
+/**
+ * Extract `description` from a frontmatter block that begins the BODY of a file
+ * whose own frontmatter has already been stripped.
+ *
+ * @param {string} raw  Full file contents, including the outer frontmatter.
+ * @returns {string} The nested description, or '' when there is no nested block.
+ */
+function nestedFrontmatterDescription(raw) {
+  if (!raw || !raw.startsWith('---')) return '';
+  const end = raw.indexOf('\n---', 3);
+  if (end === -1) return '';
+  const after = raw.indexOf('\n', end + 1);
+  if (after === -1) return '';
+  const body = raw.slice(after + 1).replace(/^\s*\n/, '');
+  if (!body.startsWith('---')) return '';
+  return String(parseFrontmatter(body).description || '').trim();
 }
 
 // ── config ────────────────────────────────────────────────────────────────
@@ -406,6 +431,7 @@ function parseCodexConfig(configPath) {
     .filter(s => s.enabled && s.path)
     .map(s => ({
       name:     path.basename(s.path),
+      relPath:  s.path,          // needed to locate the skill's SKILL.md for its description
       triggers: s.triggers,
     }));
 }
@@ -447,11 +473,24 @@ async function backfillAgents(cfg, dryRun) {
   const codexConfig  = agentsDir ? path.join(agentsDir, 'config.toml') : null;
   if (codexConfig && existsSync(codexConfig)) {
     const codexSkills = parseCodexConfig(codexConfig);
-    for (const { name, triggers } of codexSkills) {
+    const repoRoot = path.resolve(agentsDir, '..');
+    for (const { name, relPath, triggers } of codexSkills) {
       const triggerPattern = triggers.join(', ');
+      // Read the skill's own SKILL.md for its description. This used to pass a
+      // hardcoded '' — which left all 15 curated codex skills searchable by NAME
+      // ONLY, silently gutting the reuse-before-build finder (find-skill /
+      // search_skills) that ranks on name + description.
+      let descText = '';
+      const skillFile = path.join(repoRoot, relPath, 'SKILL.md');
+      if (existsSync(skillFile)) {
+        try {
+          const raw = readFileSync(skillFile, 'utf8');
+          descText = resolveSkillDescription(parseFrontmatter(raw).description, raw).slice(0, 500);
+        } catch (_) { /* unreadable skill file — fall back to name-only matching */ }
+      }
       if (!dryRun) {
         try {
-          db.upsertVaultAgent(name, name, 'codex', '', triggerPattern);
+          db.upsertVaultAgent(name, name, 'codex', descText, triggerPattern);
           registered++;
         } catch (err) {
           process.stderr.write(`[backfill] codex agent upsert error '${name}': ${err.message}\n`);

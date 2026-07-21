@@ -28,19 +28,35 @@ powershell -ExecutionPolicy Bypass -File scripts/install.ps1
 cd C:\GIT\vaultflow && npm install --ignore-scripts
 
 # Setup / install on this machine (idempotent — safe to re-run)
-npm run setup                  # prereqs + config bootstrap + vault skeleton + global hooks + `npm link` CLI + nightly task + watcher + dev-team plugin, then doctor
+npm run setup                  # prereqs + config + vault skeleton + global hooks + CLI link + user-scope MCP
+                               # + curated skills + nightly task + watcher + dev-team plugin, then doctor
 npm run setup:dry-run          # show what would change, write nothing
 npm run setup:hooks-only       # only (re)install the global hooks
-npm run setup:uninstall        # remove global hooks + nightly task + dev-team plugin
+npm run setup:uninstall        # remove everything vaultflow installed (see below)
 npm run install-dev-team       # install ONLY the vendored dev-team plugin
 vaultflow install              # same as `npm run setup` once the CLI is linked
-# Installs vaultflow's canonical hook set into ~/.claude/settings.json (USER-global)
-# so hooks fire in EVERY Claude Code project, not just the vaultflow repo. The
-# project's own .claude/settings.json stays minimal; the full lifecycle wiring is
-# defined in scripts/install.mjs (CANONICAL_HOOKS). Backs up prior user settings
-# to ~/.claude/backups/ and preserves other keys (model/theme/etc).
-# Also registers plugins/dev-team as a local marketplace and installs it
-# (--no-dev-team to skip). See "Dev Team plugin" below.
+#
+# What "install" makes machine-wide (the point is that NONE of it is repo-local):
+#   hooks   → vaultflow's canonical hook set is merged into ~/.claude/settings.json
+#             (USER-global) so hooks fire in EVERY project. Hooks belonging to other
+#             tools are PRESERVED — install merges, it does not replace the hooks
+#             object. The project's own .claude/settings.json deliberately declares
+#             no lifecycle hooks; duplicating them there makes each one fire twice.
+#             Canonical set lives in scripts/install.mjs (CANONICAL_HOOKS).
+#   MCP     → registered in ~/.claude.json under mcpServers (user scope). The repo's
+#             .mcp.json is PROJECT scope only, so without this the vaultflow MCP tools
+#             (find_symbol, blast_radius, search_memory …) exist only inside this repo.
+#   skills  → the skills marked `enabled = true` in .agents/config.toml are copied to
+#             ~/.claude/skills so the CLI can use them from any project. Copies carry a
+#             .vaultflow-managed marker; a hand-authored skill of the same name is never
+#             overwritten, and uninstall removes only marked copies.
+# Prior user settings are backed up to ~/.claude/backups/; other keys (model/theme/…)
+# are preserved. Skip steps with --no-mcp / --no-skills / --no-dev-team / --no-nightly.
+# Also registers plugins/dev-team as a local marketplace. See "Dev Team plugin" below.
+
+# Fresh machine, start to finish (installs Node/Git/Claude CLI first, then the above)
+powershell -ExecutionPolicy Bypass -File scripts/install.ps1
+powershell -ExecutionPolicy Bypass -File scripts/install.ps1 --dry-run   # flags forward to install.mjs
 
 # Dashboard
 npm run dashboard              # http://localhost:7700
@@ -115,6 +131,7 @@ vaultflow doctor                         # health audit
 9. **Flow catalog is APPROXIMATE** — discovered from call-graph (bare-name identifier resolution) and router-import hinting; partial by design (decorators, dynamic dispatch, DB/event/queue couplings not auto-detected). Every flow carries `confidence` (auto|manual|declared) and `source` markers; per-node `ambiguous` flags signal bare-name collisions. User-declared entry points (`vaultflow flows declare <file> <symbol>`) form the recall floor (prune-exempt, re-traced nightly). Human annotation (name/description/user_notes) marks a flow manual and reads authoritatively as the ground truth for the agent. Flows are stored in `flows`/`flow_nodes`/`flow_edges` tables with a 150-node transitive limit per flow + cycle detection. Dashboard "Flows" tab surfaces each flow as a Cytoscape flowchart; declare/annotate forms are available for human curation. See ADR-003 for design.
 10. **Agent creation is deterministic, not LLM-powered** — the Agents wizard in Synapse v2 (dashboard/js/agents.js + agent-authoring.mjs) fills SKILL.md + agents/*.md templates via schema validation and file merging, with zero model calls. Stack auto-detection reuses existing stack-detector.mjs; reuse search reuses existing skill-reuse.cjs. New agents write to ~/.claude (Claude Code's config), not the project. Newly created agents are dispatchable after Claude Code restart and appear in reuse-search after `npm run backfill --skills-only`. v1 creates single agents only; teams are deferred to v2. See ADR-004 for design.
 11. **CodeFlow code-intelligence features** — churn, health-score, and visualization layers (code-graph, treemap) use hybrid git/edit-events churn measurement and a deterministic 5-term health formula with data-unavailable guards. No new dependencies: squarified treemap is pure JS (~60 lines), Cytoscape is vendored. All critical logic (parseGitNameOnly, countCycles, scoreFromStats, squarify) is pure and separately unit-testable; WHY comments explain intent, not mechanics. See ADR-005 for architecture, formula rationale, and data-integrity guards (path containment, SQL binding, honest unavailability signals).
+12. **`edit_events` is an append-only log; the analytics view is filtered, not the table** — `edit_events` feeds hot-files, churn, the treemap, and the health score, so anything recorded there is ranked as if a human authored it. Three invariants keep it honest, all defined once in `path-filter.cjs` and applied at BOTH write time (`watcher.mjs`) and read time (`db.queryEditFrequency`): (a) *noise rejection* — pattern-based (`.metrics/`, `node_modules`, `.duckdb`/`.sqlite`, `.git-*/`, build output) PLUS per-repo `git check-ignore`, because no global list can decide `public/` (authored in React, generated by Quartz); the git check is directory-level and cached by ancestor, so an ignored tree costs one subprocess. (b) *path canonicalization* — Windows reports the same file as `C:\Git\…` (Claude hook, session cwd) and `C:\GIT\…` (watcher, watch root); `realpathSync.native` converges new rows, `mergePathCasing` folds historical ones at read time. (c) *no double counting* — `flushToParquet` COPIES rows without deleting, so Parquet is a strict SUBSET of SQLite; the union in `queryEditFrequency` must dedupe on `edit_events.id`, never `UNION ALL`. Rows are never purged: the log stays auditable and tightening a rule retroactively fixes every consumer.
 
 ## File Map
 
@@ -140,6 +157,9 @@ vaultflow doctor                         # health audit
   git-context.cjs            — surface current git state at session start
   focus.cjs                  — load and write the per-project "current focus" file
   project-id.cjs             — resolve canonical project name from a file path
+  path-filter.cjs            — single definition of "is this a real, authored edit?" (pattern + gitignore
+                               noise rejection, Windows path-casing canonicalization). Shared by
+                               watcher.mjs at WRITE time and db.cjs at READ time so they cannot drift.
   copilot-resume.cjs         — prints a brief session resume block to stderr
   auto-memory-hook.mjs       — vault/domain/ import → FTS memory
   dict.mjs                   — dictionary import/search/CLI

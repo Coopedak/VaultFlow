@@ -1531,13 +1531,15 @@ function initialize(metricsRoot, dbFile) {
 function recordEdit(sessionId, filePath, project, changeType, agent) {
   if (!_db) throw new Error('db.recordEdit: call initialize() first');
 
+  const canonical = canonicalizePath(filePath);
+
   _db.prepare(`
     INSERT INTO edit_events (timestamp, session_id, file_path, project, change_type)
     VALUES (@timestamp, @session_id, @file_path, @project, @change_type)
   `).run({
     timestamp:   new Date().toISOString(),
     session_id:  sessionId,
-    file_path:   filePath,
+    file_path:   canonical,
     project:     project    || null,
     change_type: changeType || 'edit',
   });
@@ -1955,11 +1957,17 @@ async function flushToParquet(metricsRoot, parquetDir) {
   return result;
 }
 
+// Shared with watcher.mjs — one definition of "is this a real, authored edit?".
+// The watcher applies it at WRITE time to keep new junk out; queryEditFrequency
+// applies it at READ time to hide rows recorded before the rule was tightened.
+const { isNoiseEditPath, canonicalizePath, mergePathCasing } = require('./path-filter.cjs');
+
 /**
  * Query edit frequency for files edited in the last N days.
  *
  * Unions the Parquet archive (history) with the live SQLite table (current)
- * via DuckDB so the result always reflects complete history.
+ * via DuckDB so the result always reflects complete history. Generated and
+ * binary paths are filtered out via isNoiseEditPath().
  *
  * @param {string} metricsRoot   Absolute path to metrics directory.
  * @param {string} parquetDir    Subdirectory name for Parquet files.
@@ -1972,6 +1980,9 @@ async function queryEditFrequency(metricsRoot, parquetDir, days) {
   const pDir = parquetDir  || (cfg && cfg.storage && cfg.storage.parquet_dir) || 'parquet';
 
   if (!root) throw new Error('db.queryEditFrequency: metricsRoot is required');
+  // Drop generated/binary paths, then fold case-variant spellings of the same
+  // file together. Both are read-time repairs for data already on disk.
+  const keepReal = (rows) => mergePathCasing(rows.filter((r) => !isNoiseEditPath(r.file_path)));
 
   const pDirFull     = path.join(root, pDir);
   const editsParquet = path.join(pDirFull, 'edit_events.parquet');
@@ -1990,24 +2001,42 @@ async function queryEditFrequency(metricsRoot, parquetDir, days) {
 
     if (fs.existsSync(editsParquet) || hasParquetArchive(pDirFull, 'edit_events')) {
       const ep_ = duckEsc(editsGlob);
+      // Deduplicate by edit_events.id before counting.
+      //
+      // flushToParquet COPIES rows to Parquet but never deletes them from
+      // SQLite, so the archive is a strict SUBSET of the live table, not a
+      // disjoint older half. A plain UNION ALL therefore counted every flushed
+      // edit twice: measured 604,413 for a 30-day window that holds 322,113
+      // real events (1.88x). That inflation flowed straight into hot-files,
+      // churn coloring, the treemap, and the health score.
+      //
+      // Grouping by the primary key first collapses each event to exactly one
+      // row no matter how many sources contain it, and stays correct if a
+      // retention pass later prunes SQLite so the two sides become disjoint.
       return duckQuery(conn, `
         SELECT   file_path,
                  project,
                  COUNT(*) AS edit_count
         FROM (
-          SELECT file_path, project, timestamp
-          FROM   read_parquet('${ep_}')
-          WHERE  timestamp >= '${cut_}'
+          SELECT   id,
+                   any_value(file_path) AS file_path,
+                   any_value(project)   AS project
+          FROM (
+            SELECT id, file_path, project, timestamp
+            FROM   read_parquet('${ep_}')
+            WHERE  timestamp >= '${cut_}'
 
-          UNION ALL
+            UNION ALL
 
-          SELECT file_path, project, timestamp
-          FROM   sqlite_scan('${db_}', 'edit_events')
-          WHERE  timestamp >= '${cut_}'
-        ) combined
+            SELECT id, file_path, project, timestamp
+            FROM   sqlite_scan('${db_}', 'edit_events')
+            WHERE  timestamp >= '${cut_}'
+          ) both_sources
+          GROUP BY id
+        ) deduped
         GROUP  BY file_path, project
         ORDER  BY edit_count DESC
-      `);
+      `).then(keepReal);
     } else {
       return duckQuery(conn, `
         SELECT   file_path,
@@ -2017,7 +2046,7 @@ async function queryEditFrequency(metricsRoot, parquetDir, days) {
         WHERE    timestamp >= '${cut_}'
         GROUP  BY file_path, project
         ORDER  BY edit_count DESC
-      `);
+      `).then(keepReal);
     }
   });
 }
@@ -4074,6 +4103,9 @@ module.exports = {
   // edit + session telemetry
   recordEdit,
   upsertSession,
+  isNoiseEditPath,
+  canonicalizePath,
+  mergePathCasing,
   // patterns + DISCOVERY pipeline
   upsertPattern,
   getPendingPromotions,

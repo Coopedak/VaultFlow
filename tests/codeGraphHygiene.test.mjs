@@ -94,6 +94,38 @@ test('purgeCodeGraph removes junk-path rows and keeps real source untouched', ()
   assert.equal(conn.prepare('SELECT COUNT(*) c FROM code_calls').get().c, 1, 'junk calls cleared, real kept');
 });
 
+test('purgeCodeGraph collapses Windows path-casing duplicates of one file', () => {
+  // The Claude hook reports the session cwd's casing (C:\Git\…) and the watcher
+  // the watch root's (C:\GIT\…), so one file was indexed as two nodes: 167 of
+  // 727 files. find_symbol then returned every symbol twice, and blast_radius
+  // missed importers filed under the other spelling.
+  freshDb();
+  const conn = db.raw();
+  const canonical = fileURLToPath(import.meta.url);          // real file, so canonicalize resolves it
+  const variant   = canonical.toUpperCase();                  // same file, different spelling
+  seedFile(conn, canonical);
+  seedFile(conn, variant);
+  assert.equal(conn.prepare('SELECT COUNT(*) c FROM code_symbols').get().c, 2);
+
+  const res = cg.purgeCodeGraph(db, { checkExistence: false });
+  assert.equal(res.casingDupes, 1, 'exactly one non-canonical spelling removed');
+
+  const left = conn.prepare('SELECT file FROM code_symbols').all().map(r => r.file);
+  assert.equal(left.length, 1, 'one file, one node');
+  assert.equal(left[0], canonical, 'the filesystem casing is the one that survives');
+  assert.equal(conn.prepare('SELECT COUNT(*) c FROM code_imports').get().c, 1);
+  assert.equal(conn.prepare('SELECT COUNT(*) c FROM code_calls').get().c, 1);
+});
+
+test('purgeCodeGraph leaves a single-spelling file alone', () => {
+  freshDb();
+  const conn = db.raw();
+  seedFile(conn, fileURLToPath(import.meta.url));
+  const res = cg.purgeCodeGraph(db, { checkExistence: false });
+  assert.equal(res.casingDupes, 0, 'no duplicates to collapse');
+  assert.equal(conn.prepare('SELECT COUNT(*) c FROM code_symbols').get().c, 1);
+});
+
 test('purgeCodeGraph removes rows for files that no longer exist on disk', () => {
   const root = freshDb();
   const conn = db.raw();
