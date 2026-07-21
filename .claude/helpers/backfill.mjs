@@ -124,6 +124,23 @@ function nestedFrontmatterDescription(raw) {
   return String(parseFrontmatter(body).description || '').trim();
 }
 
+/**
+ * Cap on the stored description for a skill or agent.
+ *
+ * Was 500, which made sense only while the router divided by max(prompt,
+ * description): under that formula a longer description scored strictly worse,
+ * so truncating cost nothing. The router now weights terms by IDF, meaning the
+ * description IS the match surface and every distinctive term that survives
+ * truncation improves routing.
+ *
+ * Concretely, 500 chars cut a rewritten security-auditor description at 2,212
+ * chars down to its first paragraph, discarding the exact terms prompts match
+ * on — credentials, path traversal, CORS, JWT, file upload. At ~80 agents the
+ * storage difference is a few hundred KB; the routing difference is total
+ * silence versus a hit.
+ */
+const MAX_DESCRIPTION_CHARS = 2000;
+
 // ── config ────────────────────────────────────────────────────────────────
 
 const CONFIG_PATH = require('../../config/resolve.cjs');
@@ -529,7 +546,7 @@ async function backfillAgents(cfg, dryRun) {
       if (existsSync(skillFile)) {
         try {
           const raw = readFileSync(skillFile, 'utf8');
-          descText = resolveSkillDescription(parseFrontmatter(raw).description, raw).slice(0, 500);
+          descText = resolveSkillDescription(parseFrontmatter(raw).description, raw).slice(0, MAX_DESCRIPTION_CHARS);
         } catch (_) { /* unreadable skill file — fall back to name-only matching */ }
       }
       if (!dryRun) {
@@ -583,7 +600,7 @@ async function backfillAgents(cfg, dryRun) {
         const fm = parseFrontmatter(raw);
         // Stub descriptions (empty / too short / auto-generated) give the FTS
         // search nothing to match on — fall back to the skill's body text.
-        descText = resolveSkillDescription(fm.description, raw).slice(0, 500);
+        descText = resolveSkillDescription(fm.description, raw).slice(0, MAX_DESCRIPTION_CHARS);
       }
 
       if (!skillName) continue;
@@ -651,7 +668,7 @@ async function backfillAgents(cfg, dryRun) {
         // BOM-tolerant: several agent files were authored by PowerShell and
         // begin with U+FEFF, which defeats a naive frontmatter check.
         const raw = readFileSync(path.join(userAgentsDir, entry.name), 'utf8').replace(/^﻿/, '');
-        descText = resolveSkillDescription(parseFrontmatter(raw).description, raw).slice(0, 500);
+        descText = resolveSkillDescription(parseFrontmatter(raw).description, raw).slice(0, MAX_DESCRIPTION_CHARS);
       } catch (_) { /* unreadable — register by name so it is still findable */ }
       seenGlobalAgents.add(agentName);
       if (!dryRun) {
@@ -709,7 +726,7 @@ async function backfillAgents(cfg, dryRun) {
         const raw = readFileSync(agentFile, 'utf8');
         const fm  = parseFrontmatter(raw);
         // Stub-description fallback to body text — same reasoning as user skills.
-        descText  = resolveSkillDescription(fm.description, raw).slice(0, 500);
+        descText  = resolveSkillDescription(fm.description, raw).slice(0, MAX_DESCRIPTION_CHARS);
       } catch (_) {}
 
       if (!dryRun) {

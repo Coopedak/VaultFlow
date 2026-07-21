@@ -94,6 +94,25 @@ foreach ($p in $projects) {
     if ($status -eq 'FAIL') { Warn "$label -- robocopy exit $code" } else { Ok "$label -- $status" }
 }
 
+# -- Claude Code config: the curated agent/skill library -------------------
+# ~/.claude/agents and ~/.claude/skills hold hand-authored and harvested agents
+# that exist NOWHERE else — they are not inside any project, so the loop above
+# never sees them. Losing them loses the tooling itself, which is the exact
+# thing this backup exists to prevent. Excludes the bulky regenerable parts of
+# ~/.claude (session history, caches, plugin downloads).
+$claudeRoot = Join-Path $env:USERPROFILE '.claude'
+foreach ($sub in @('agents', 'skills')) {
+    $src = Join-Path $claudeRoot $sub
+    if (-not (Test-Path $src)) { continue }
+    $dest = Join-Path (Join-Path $Archive '_claude-config') $sub
+    $args = @($src, $dest) + $Switches + @('/XD') + $ExcludeDirs + @('/XF') + $ExcludeFiles
+    & robocopy @args | Out-Null
+    $code = $LASTEXITCODE
+    $status = if ($code -ge 8) { 'FAIL' } elseif ($code -eq 0) { 'up-to-date' } else { 'copied' }
+    $results += [pscustomobject]@{ Project = "_claude-config/$sub"; Status = $status; New = $false; Code = $code }
+    if ($status -eq 'FAIL') { Warn "_claude-config/$sub -- robocopy exit $code" } else { Ok "_claude-config/$sub -- $status" }
+}
+
 $failed = @($results | Where-Object { $_.Status -eq 'FAIL' })
 
 # Heartbeat, so `vaultflow doctor` can report whether the backup is actually
