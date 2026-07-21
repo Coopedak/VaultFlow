@@ -322,6 +322,30 @@ function parseMemoryFile(filePath, content) {
  *   3. Bold list:    - **name** — description
  *   4. H3 section:   ### name\n...\ndescription paragraph  (vault tools format)
  */
+/**
+ * True when an index entry is a category heading rather than a dispatchable
+ * skill.
+ *
+ * Index files group skills under human-readable section titles, and the
+ * line/section parsers below cannot always tell a title from an entry. The ones
+ * that leaked through were not harmless: "Domain (PSI / Manufacturing)",
+ * "Writing & Documentation" and "README" were registered as routable skills and
+ * won router matches against real prompts.
+ *
+ * Skill and agent identifiers are slugs — Claude Code dispatches by them — so a
+ * name containing whitespace, parentheses or an ampersand is prose, not an id.
+ *
+ * @param {string} name
+ * @returns {boolean}
+ */
+function isSectionHeading(name) {
+  const n = String(name || '').trim();
+  if (!n) return true;
+  if (/[\s()&/]/.test(n)) return true;              // prose, not a slug
+  if (/^readme$/i.test(n)) return true;             // doc file, not a skill
+  return false;
+}
+
 function parseIndexFile(content) {
   const entries = [];
   const seen    = new Set();
@@ -451,8 +475,10 @@ async function backfillAgents(cfg, dryRun) {
   const indexPath = cfg.paths && cfg.paths.skills_index;
   if (indexPath && existsSync(indexPath)) {
     const content = readFileSync(indexPath, 'utf8');
-    const entries = parseIndexFile(content);
+    const entries = parseIndexFile(content).filter(e => !isSectionHeading(e.name));
+    const seenClaude = new Set();
     for (const { name, desc } of entries) {
+      seenClaude.add(name);
       if (!dryRun) {
         try {
           db.upsertVaultAgent(name, name, 'claude', desc, null);
@@ -462,6 +488,24 @@ async function backfillAgents(cfg, dryRun) {
         }
       } else {
         registered++;
+      }
+    }
+
+    // Orphan prune. Unlike the user-skill/user-agent prunes there is NO
+    // minimum-count guard here, because the index file existing is itself the
+    // proof that the scan succeeded: an index present but listing nothing is a
+    // legitimately empty index, not a failed read. Without this, entries from a
+    // previous machine survived forever — 15 rows from a since-deleted profile
+    // were still being offered to the router, and category headings among them
+    // ("Domain (PSI / Manufacturing)", "Writing & Documentation") actively won
+    // routing matches against real prompts.
+    if (!dryRun) {
+      const raw = db.raw();
+      const existing = raw.prepare(`SELECT agent_id FROM vault_agents WHERE source='claude'`).all().map(r => r.agent_id);
+      const orphans = existing.filter(id => !seenClaude.has(id));
+      if (orphans.length) {
+        raw.prepare(`DELETE FROM vault_agents WHERE source='claude' AND agent_id IN (${orphans.map(() => '?').join(',')})`).run(...orphans);
+        console.log(`[backfill] Claude-skill orphans pruned: ${orphans.length}`);
       }
     }
   } else {

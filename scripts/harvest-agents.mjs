@@ -99,6 +99,10 @@ function discover() {
         let raw; try { raw = fs.readFileSync(file, 'utf8'); } catch { continue; }
         const fm = frontmatter(raw);
         if (!fm || !fm.name || !fm.description) continue;   // not dispatchable
+        // Documents that happen to carry frontmatter are not agents. README and
+        // MIGRATION_SUMMARY both parsed as "valid" and would be installed as
+        // dispatchable agents, adding noise to every session's agent list.
+        if (/^(readme|changelog|migration[_-]?summary|index|notes?|todo)$/i.test(path.basename(file, '.md'))) continue;
         found.push({
           project: proj.name, file, raw, slug: slugOf(file),
           hash: crypto.createHash('md5').update(raw.replace(/^﻿/, '')).digest('hex'),
